@@ -1,0 +1,21 @@
+[project]
+name = "ru-polish-enhance"
+version = "0"
+description = "Throwaway spike: variant B, Silero xenia -> resemble-enhance"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "resemble-enhance==0.0.1",
+    "huggingface-hub",
+]
+
+[tool.uv]
+package = false
+# resemble-enhance pins torch 2.1.1, deepspeed and gradio for training/demo only;
+# inference runs on the torch Chatterbox uses (deepspeed is stubbed in enhance.py).
+override-dependencies = [
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "torchvision==0.21.0",
+    "deepspeed; sys_platform == 'never'",
+    "gradio; sys_platform == 'never'",
+]

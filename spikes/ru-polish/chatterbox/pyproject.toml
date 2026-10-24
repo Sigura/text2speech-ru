@@ -1,0 +1,14 @@
+[project]
+name = "ru-polish-chatterbox"
+version = "0"
+description = "Throwaway spike: variant D, Chatterbox Multilingual straight from Russian text"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "chatterbox-tts==0.1.7",
+    "soundfile",
+    "huggingface-hub",
+    "setuptools<81",  # resemble-perth imports pkg_resources
+]
+
+[tool.uv]
+package = false

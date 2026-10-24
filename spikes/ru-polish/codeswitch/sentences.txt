@@ -1,0 +1,8 @@
+# Inline English terms in Russian text
+Я установил Docker и запустил контейнер на сервере.
+Этот скрипт написан на Python, а фронтенд на React.
+Она открыла ноутбук и зашла в Google Docs.
+Мы обсудили deadline проекта и roadmap на следующий квартал.
+Он сказал: «It's not my problem», — и вышел из комнаты.
+Компания Apple представила новый iPhone.
+Протокол HTTP работает поверх TCP.

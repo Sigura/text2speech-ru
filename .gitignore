@@ -33,5 +33,8 @@ htmlcov/
 
 # Spike downloads and outputs
 spikes/*/models/
-spikes/*/out/
+spikes/**/out/
 spikes/*/.venv/
+
+/inputs/**/
+/outputs/**/
