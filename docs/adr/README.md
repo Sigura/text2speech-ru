@@ -2,7 +2,7 @@
 
 Each ADR records one significant decision: its context, the decision, and its
 consequences. ADRs are immutable once accepted; a later ADR supersedes an earlier one
-instead of editing it. Format: [Michael Nygard's template](https://github.com/joelparkerhenderson/architecture-decision-record/blob/main/locales/en/templates/decision-record-template-by-michael-nygard/index.md).
+instead of editing it. Format: [Michael Nygard's format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 Every ADR also appears in the SPEC.md decision log (§13.1).
 
 | ADR | Title | Status |
