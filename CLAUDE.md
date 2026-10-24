@@ -43,11 +43,12 @@ Guidance for Claude Code sessions working in this repository.
 
 ## Local environment
 
-- Use `uv` (installed at `~/.local/bin/uv`) with Python 3.11+. The system
-  `python3` is 3.7 (conda) — never use it for this project.
-- GPUs: RTX 4090 (24 GB) + RTX 3090 Ti (24 GB); 128 CPU cores, 377 GB RAM. For T0
-  (CPU tier) benchmarks, restrict to 4 cores / 8 GB (e.g. `taskset`, cgroup) and
-  hide GPUs (`CUDA_VISIBLE_DEVICES=""`).
+- Use `uv` (installed at `~/.local/bin/uv`) with Python 3.11+. The `python3` on
+  PATH is 3.7 (conda env `t110`) — never use it for this project; uv may pick it
+  up too, so pass `--python 3.11` (or 3.12, `/usr/bin/python3.12`) explicitly.
+- GPUs: 3× RTX 4090 (24 GB) + RTX 3090 Ti (24 GB); 128 CPU cores, 377 GB RAM. For
+  T0 (CPU tier) benchmarks, restrict to 4 cores / 8 GB (e.g. `taskset`, cgroup)
+  and hide GPUs (`CUDA_VISIBLE_DEVICES=""`).
 - `ffmpeg` currently only exists inside a conda env (`t110`); prefer a system
-  ffmpeg and resolve it via `doctor`. `espeak-ng` is not installed yet
-  (`sudo apt install espeak-ng`).
+  ffmpeg and resolve it via `doctor`. `espeak-ng` is installed (`/usr/bin`).
+- Language order: **Russian first** (M2), English second (M4) — ADR-0008.

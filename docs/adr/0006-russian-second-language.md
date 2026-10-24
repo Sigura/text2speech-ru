@@ -1,6 +1,6 @@
 # 0006. Russian as the second language
 
-- **Status:** Accepted
+- **Status:** Superseded in part by [ADR-0008](0008-russian-first-language.md) (milestone order)
 - **Date:** 2026-10-24
 - **Spec references:** §6.6.5 (Russian), §8, §11 (M4)
 

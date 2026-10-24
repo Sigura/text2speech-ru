@@ -12,7 +12,8 @@ Every ADR also appears in the SPEC.md decision log (§13.1).
 | [0003](0003-per-language-components.md) | No universal model: per-language components | Accepted |
 | [0004](0004-isolated-backend-workers.md) | Isolated TTS backend workers | Accepted |
 | [0005](0005-mp3-default-section-split.md) | MP3 default with per-section split and single-file fallback | Accepted |
-| [0006](0006-russian-second-language.md) | Russian as the second language | Accepted |
+| [0006](0006-russian-second-language.md) | Russian as the second language | Superseded in part by 0008 |
 | [0007](0007-personal-use-offline-quality-priority.md) | Personal use: offline first, quality second, license not a criterion | Accepted |
+| [0008](0008-russian-first-language.md) | Russian as the first language | Accepted |
 
 New ADR: copy [template.md](template.md), take the next number, open a PR.

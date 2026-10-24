@@ -1,8 +1,8 @@
 # Adding a Language
 
-> **Draft.** Written against SPEC.md 1.0-M0 before implementation; commands and
-> interfaces will be finalized in M0 and verified when the Russian pack is built in
-> M4.
+> **Draft.** Written against SPEC.md 1.2-M0 before implementation; commands and
+> interfaces will be finalized in M0, shaped by the Russian pack (M2, the first
+> language) and verified when the English pack is generated from the template in M4.
 
 A language in Text2Audio is a **language pack**: an independent Python package that
 chooses the best components for that language and supplies its text rules. There is
@@ -33,6 +33,9 @@ uvx cookiecutter templates/lang          # asks for code (e.g. "de") and name
 
 This creates `text2audio-lang-<code>/` with `pyproject.toml`, the language profile,
 tests and CI.
+
+The template is extracted from the Russian pack at the end of M2 (ADR-0008); the
+Russian pack itself is the only one written by hand.
 
 ## 3. Fill in the profile
 

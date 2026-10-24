@@ -13,8 +13,8 @@ local neural text-to-speech. After installation it runs with no network access.
 
 - **Fully offline** after install; air-gapped install via an exportable bundle.
 - **Best-of-breed per language** — each language picks its own TTS model, text
-  normalization, stress/pronunciation and quality-check speech recognition. English
-  first, Russian second.
+  normalization, stress/pronunciation and quality-check speech recognition. Russian
+  first, English second.
 - **Zero-config quality** — language and content profiles choose voices, pauses,
   normalization and models automatically; configuration only overrides.
 - **Expressive narration** — structural prosody and a separate dialogue voice by
@@ -28,7 +28,7 @@ local neural text-to-speech. After installation it runs with no network access.
 ## Planned usage
 
 ```bash
-./install.sh --lang en --tier fast          # downloads everything once
+./install.sh --lang ru --tier fast          # downloads everything once
 text2audio run "War and Peace.fb2.zip"      # → output/War and Peace/*.mp3
 text2audio run books/ --format mp3,m4b      # one folder per book
 text2audio doctor                           # offline readiness check

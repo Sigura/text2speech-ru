@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.1-M0 |
+| Document version | 1.2-M0 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
@@ -24,6 +24,7 @@
 | 0.8 | 2026-10-24 | **Principle: no universal model.** Every language-dependent pipeline stage is pluggable per language (§6.6.1); per-language component matrix; mixed-language routing across different backends; per-language overrides in config; install only the languages you need. |
 | 1.0-M0 | 2026-10-24 | Approved for M0. License default recorded as proposed (MIT core). Companion docs added: README, CLAUDE.md, CONTRIBUTING, CHANGELOG, ADRs 0001–0006, `docs/adding-a-language.md`. |
 | 1.1-M0 | 2026-10-24 | **Decision:** personal use only. Component priority is offline → quality → everything else; licenses are informational. Non-commercial models (IndexTTS-2, XTTS-v2, ESpeech, Silero v5, MMS) become full candidates; PDF reader chosen by M1 benchmark; licensing risk removed. |
+| 1.2-M0 | 2026-10-24 | **Decision:** Russian is the **first** language (M2), English second (M4) — ADR-0008. Russian benchmark protocol moves to M2; isolation proof (FR-07) moves to English. QA gate (§6.9) made per-language; pack paths aligned with §10. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -79,7 +80,7 @@ Design pillars:
 
 1. Convert `.txt`, `.fb2`, `.epub` and `.pdf` into normalized Markdown.
 2. Synthesize high-quality speech from Markdown, **entirely offline**.
-3. Support **multiple languages**: English first (v1), **Russian second** (M4).
+3. Support **multiple languages**: **Russian first** (M2), English second (M4).
 4. Allow new languages and models to be added as **independent packages** without
    modifying the core, with **a different model family and toolchain per language**
    where that gives better results.
@@ -218,8 +219,8 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-03 | Extract metadata: title, author(s), language, series, cover image. | Must | Metadata from FB2 `<title-info>` and EPUB OPF appears in `metadata.json` and in output tags. |
 | FR-04 | Run **100% offline** after installation. | Must | Full test suite passes inside a network namespace with no interfaces (§12). |
 | FR-05 | Provide a CLI (§6.11) and an importable Python API with the same capabilities. | Must | Every CLI command has an equivalent public API function covered by tests. |
-| FR-06 | Support **English** end-to-end in v1, on both hardware tiers (§9). | Must | An English audiobook is produced from each input format on T0 and T1 hardware. |
-| FR-07 | Discover languages, TTS backends and per-stage components (normalizer, G2P/stress, ASR, emotion) as **plugins via Python entry points** (§6.6.1); each language may use a different implementation for every stage; adding one requires no core change. | Must | Russian is added in M4 with zero diff under `src/text2audio/core/`. |
+| FR-06 | Support **Russian** (M2) and **English** (M4) end-to-end in v1, on both hardware tiers (§9). | Must | A Russian and an English audiobook are produced from each input format on T0 and T1 hardware. |
+| FR-07 | Discover languages, TTS backends and per-stage components (normalizer, G2P/stress, ASR, emotion) as **plugins via Python entry points** (§6.6.1); each language may use a different implementation for every stage; adding one requires no core change. | Must | English is added in M4 (after Russian) with zero diff under `src/text2audio/core/`. |
 | FR-08 | Persist `book.md` and `segments.jsonl` so users can inspect and edit before synthesis; re-running picks up edits. | Must | Editing one paragraph re-synthesizes only the affected segments. |
 | FR-09 | Output **MP3** by default (ID3v2 tags, embedded cover). **M4B** (AAC, chapter markers, cover), **Opus** and **WAV** are optional and can be produced alongside MP3. | Must | Default run produces MP3 only; `--format m4b` adds an M4B whose chapter list `ffprobe` shows; output plays in at least two common players. |
 | FR-10 | **Resume / incremental rendering**: segments are cached by content hash; interrupted jobs continue where they stopped. | Must | Killing a job mid-chapter and restarting loses at most one segment of work. |
@@ -347,12 +348,12 @@ as one option a language may choose, not as the design centre.
 
 **Per-language plug points**
 
-| Stage | Entry-point group | Why it differs by language | English (v1) | Russian (M4) |
+| Stage | Entry-point group | Why it differs by language | English (M4) | Russian (M2, first) |
 |---|---|---|---|---|
 | Sentence segmentation | `text2audio.segmenters` | Abbreviation and punctuation conventions | pySBD `en` | pySBD `ru` + pack rules |
 | Text normalization | `text2audio.normalizers` | Number grammar, date/currency formats | NeMo TN or pack rules | rutextnorm (after audit) + pack rules |
 | Stress / G2P | `text2audio.g2p` | Unwritten stress, heteronyms, diacritics | misaki + espeak-ng | RUAccent (silero-stress fallback) |
-| TTS backend (per tier) | `text2audio.backends` | Model quality and voice availability per language | Kokoro / Chatterbox | Piper or Silero v5 / Chatterbox Multilingual or Qwen3-TTS (M4 benchmark) |
+| TTS backend (per tier) | `text2audio.backends` | Model quality and voice availability per language | Kokoro / Chatterbox | Piper or Silero v5 / Chatterbox Multilingual or Qwen3-TTS (M2 benchmark) |
 | QA ASR | `text2audio.asr` | ASR accuracy per language | faster-whisper | GigaAM-v3 |
 | Emotion classifier (E2) | `text2audio.emotion` | Trained per language | TBD (M3) | TBD |
 | Content heuristics | part of the language pack | Chapter/dialogue/drama conventions | "Chapter", quotes | "Глава", dialogue dash |
@@ -382,7 +383,7 @@ back to the core's generic implementation (§6.6.5, "Generic fallback").
    downloads only the Russian fast-tier components; adding a language later never
    requires reinstalling others.
 5. **Swapping a component is benchmarked, not guessed.** Each pack keeps its benchmark
-   set (see the Russian M4 protocol) so a new model can be compared with the current
+   set (see the Russian M2 protocol) so a new model can be compared with the current
    default using the same metrics before the default changes.
 6. **Review the catalog every release** (§8): the best choice per language is expected to
    change over time.
@@ -434,7 +435,7 @@ ONNX-based Kokoro or Piper) for lower overhead. The protocol is versioned
 #### 6.6.4 Language pack manifest
 
 ```toml
-# langs/en/text2audio-lang.toml
+# plugins/lang-en/text2audio-lang.toml
 [language]
 code = "en"
 name = "English"
@@ -505,7 +506,7 @@ its source (`# from profile:ru`), so users can see exactly what to change.
 
 ##### Built-in profiles
 
-**English (`en`, v1 — Must)**
+**English (`en`, second language, M4 — Must)**
 - G2P with [misaki](https://github.com/hexgrad/misaki) (Apache-2.0, used by Kokoro)
   and [espeak-ng](https://github.com/espeak-ng/espeak-ng) fallback; heteronyms
   (*read*, *lead*, *live*) resolved by part of speech.
@@ -517,14 +518,14 @@ its source (`# from profile:ru`), so users can see exactly what to change.
 - Dialogue: straight and curly double quotes; attribution after a closing quote
   ("…," she said) goes to the narrator voice.
 
-**Russian (`ru`, second language — confirmed; FB2 is primarily a Russian-language
-format)**
+**Russian (`ru`, first language, M2 — Must; FB2 is primarily a Russian-language
+format; ADR-0008)**
 
 Russian TTS has problems English barely has: **lexical stress is not written**,
 **ё is usually printed as е**, and **numbers must agree in case and gender** with
 the surrounding words. These are solved in the language pack, before synthesis, so any
 backend benefits. Component choices below come from public sources (§16) and are
-validated by the M4 benchmark. All of them run locally; they are downloaded only at
+validated by the M2 benchmark. All of them run locally; they are downloaded only at
 install time.
 
 | Area | Default | Alternative / fallback | Notes |
@@ -532,7 +533,7 @@ install time.
 | **Stress + ё** | [RUAccent](https://github.com/Den4ikAI/ruaccent) (MIT) | [silero-stress](https://github.com/snakers4/silero-stress) (MIT) — smaller and faster | RUAccent resolves context-dependent homographs (*зáмок/замóк*) and ambiguous *все/всё* from context; its [COLING 2025 paper](https://aclanthology.org/2025.coling-main.444/) self-reports 0.96 accuracy on homographs and 0.97 on other words. silero-stress leaves ambiguous ё-homographs untouched. Stress marks already in the source (`´`, `+`) are always respected. |
 | **Normalization** | [rutextnorm](https://libraries.io/pypi/rutextnorm) (MIT, rule-based, no dependencies) — **after a code audit** | Rules in the pack + [num2words](https://github.com/savoirfairelinux/num2words) `ru` | Covers numbers, dates, currency, units, fractions **with case agreement** (*с 5 книгами* → "с пятью книгами", *с 2010 года* → "с две тысячи десятого года"). Its `flag_uncertain()` returns spans the rules cannot resolve; these are logged in `report.json` and can be fixed via the per-book lexicon. Its upstream ([shigabeev/russian_tts_normalization](https://github.com/shigabeev/russian_tts_normalization)) is a small project whose README says it was written with ChatGPT's help, so it is pinned, audited and covered by the pack's own normalization test set; if it fails the audit the pack owns its rules instead. |
 | **Stress-aware G2P** | Backend's own front end fed with stress-marked text | espeak-ng `ru` | Stress is passed in the format each backend understands (`+` before the vowel, or U+0301 combining acute); the backend adapter converts. |
-| **QA ASR** | [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT) | faster-whisper `large-v3-turbo` | Vendor and third-party reports favour GigaAM over Whisper on Russian; confirmed by measurement in M4. QA ASR is therefore **per language** (`qa.asr_model` in the profile). |
+| **QA ASR** | [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT) | faster-whisper `large-v3-turbo` | Vendor and third-party reports favour GigaAM over Whisper on Russian; confirmed by measurement in M2. QA ASR is therefore **per language** (`qa.asr_model` in the profile). |
 
 Text rules:
 
@@ -549,7 +550,7 @@ Text rules:
 - Prosody: slightly longer default paragraph pause (800 ms); `—` inside a sentence gets
   a short pause; `…` a longer one.
 - QA bounds: higher WER threshold than English (rich morphology makes ASR endings
-  noisier) — starting value 0.18, tuned in M4.
+  noisier) — starting value 0.18, tuned in M2.
 
 **Backend shortlist for Russian** (details in §8):
 
@@ -557,7 +558,7 @@ Text rules:
 |---|---|---|
 | fast (CPU) | [Piper](https://github.com/OHF-Voice/piper1-gpl) `ru_RU` voices; [Silero TTS v5](https://github.com/snakers4/silero-models) | Kokoro has **no official Russian**; community Kokoro-ru fine-tunes are experimental. Silero v5 is fast with many Russian voices; it loads through `torch.hub`, so its files must be pre-fetched (see below). |
 | expressive (GPU) | [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) (MIT, Russian officially supported); [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Russian listed) | Chatterbox Multilingual has no paralinguistic tags (`<laugh>` etc.), so E2 uses the `exaggeration` scalar only. |
-| expressive (GPU), additional | [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune trained on Russian); [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (Russian supported, voice cloning) | Russian-specific training may beat multilingual models on naturalness; XTTS-v2 is older but well proven for Russian. Both enter the M4 benchmark on equal terms. |
+| expressive (GPU), additional | [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune trained on Russian); [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (Russian supported, voice cloning) | Russian-specific training may beat multilingual models on naturalness; XTTS-v2 is older but well proven for Russian. Both enter the M2 benchmark on equal terms. |
 
 **Offline asset checklist (Russian).** Several Russian components download weights
 on first use (RUAccent from Hugging Face, Silero via `torch.hub`, GigaAM on first
@@ -565,7 +566,7 @@ load). The `ru` pack MUST list every one of them in `models.lock` and load them 
 the model store explicitly. The offline CI job (§12) runs the full Russian fixture set
 with networking disabled to prove nothing is fetched at runtime.
 
-**M4 benchmark protocol (decides the Russian defaults).**
+**M2 benchmark protocol (decides the Russian defaults).**
 
 1. Test set (public-domain Russian prose and poetry, e.g. Pushkin, Chekhov, Tolstoy):
    ≥ 200 sentences including ≥ 50 stress homographs, ≥ 50 ё-words, ≥ 50 numbers needing
@@ -687,13 +688,14 @@ frames for players that support them.
 
 Each synthesized segment goes through:
 
-1. **ASR round-trip** — transcribe with
-   [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT; model size
-   configurable, `small` default on T0, `large-v3-turbo` on T1), normalize both texts,
-   compute WER.
+1. **ASR round-trip** — transcribe with the language profile's QA ASR
+   (`qa.asr_model`: [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) for `ru`,
+   [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for `en` — `small` on
+   T0, `large-v3-turbo` on T1), normalize both texts, compute WER.
 2. **Sanity checks** — duration vs. expected speaking rate (characters per second
    within language-specific bounds), clipping, long internal silences.
-3. **Retry policy** — if WER > threshold (default 0.15) or a sanity check fails,
+3. **Retry policy** — if WER > threshold (from the language profile: `ru` 0.18,
+   `en` 0.12; core default 0.15) or a sanity check fails,
    re-synthesize with a new seed, up to 3 attempts; then keep the best attempt and flag
    it in `report.json` for manual review.
 
@@ -852,18 +854,18 @@ and **expressive** (GPU recommended, emotion control).
 
 | Backend | Tier | Languages | Emotion capability | Cloning | Code / weights license | Status in plan |
 |---|---|---|---|---|---|---|
-| [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | fast | en (US/GB) + ~7 others | none | No (preset voices) | Apache-2.0 | **Default fast — English v1** |
+| [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | fast | en (US/GB) + ~7 others | none | No (preset voices) | Apache-2.0 | **Default fast — English (M4)** |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | fast | 30+ incl. ru (voice-dependent) | none | No | GPL-3.0 code (repo moved from MIT `rhasspy/piper`, archived Oct 2025); per-voice licenses | Fallback fast; low-end / ARM; **Russian fast-tier candidate** |
-| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Unclear (informational); loads via `torch.hub` | **Russian fast-tier candidate** (M4) |
-| [Chatterbox](https://github.com/resemble-ai/chatterbox) | expressive | en; Multilingual variant (23 languages incl. ru) | scalar (`exaggeration`) | Yes (≈5 s reference) | MIT | **Default expressive — English v1; Russian expressive candidate** |
+| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Unclear (informational); loads via `torch.hub` | **Russian fast-tier candidate** (M2) |
+| [Chatterbox](https://github.com/resemble-ai/chatterbox) | expressive | en; Multilingual variant (23 languages incl. ru) | scalar (`exaggeration`) | Yes (≈5 s reference) | MIT | **Russian expressive candidate (M2); default expressive — English (M4)** |
 | [Orpheus TTS](https://github.com/canopyai/Orpheus-TTS) | expressive | en (+ multilingual research releases) | tags | Limited | Apache-2.0 code; weights derived from Llama 3.2 → Llama community license | Optional plugin |
-| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | expressive | 10 languages incl. ru | prompt | Yes | Apache-2.0 (verify) | **Russian expressive candidate** (M4) |
-| [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) | expressive | ru | none | Yes (F5-style reference) | Card: Apache-2.0; base F5-TTS weights CC-BY-NC-4.0 | **Russian expressive candidate** (M4) |
-| [IndexTTS-2](https://github.com/index-tts/index-tts) | expressive | zh, en | vector (8 emotions) | Yes | Custom, non-commercial | **English expressive candidate** — strongest emotion control; benchmarked against Chatterbox in M2/M3 |
+| [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | expressive | 10 languages incl. ru | prompt | Yes | Apache-2.0 (verify) | **Russian expressive candidate** (M2) |
+| [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) | expressive | ru | none | Yes (F5-style reference) | Card: Apache-2.0; base F5-TTS weights CC-BY-NC-4.0 | **Russian expressive candidate** (M2) |
+| [IndexTTS-2](https://github.com/index-tts/index-tts) | expressive | zh, en | vector (8 emotions) | Yes | Custom, non-commercial | **English expressive candidate** — strongest emotion control; benchmarked against Chatterbox in M4 |
 | [Parler-TTS](https://github.com/huggingface/parler-tts) | expressive | en (+ multilingual variant) | prompt | No | Apache-2.0 | Optional |
 | [MeloTTS](https://github.com/myshell-ai/MeloTTS) | fast | en, es, fr, zh, ja, ko | none | No | MIT | Optional |
 | [MMS-TTS](https://huggingface.co/facebook/mms-tts) | fast | 1,100+ | none | No | CC-BY-NC-4.0 | Long-tail languages without a better option |
-| [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (community fork) | expressive | 17 | reference-audio style | Yes | CPML (non-commercial); Coqui closed, community fork maintained | Optional; **Russian expressive candidate** (M4) |
+| [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (community fork) | expressive | 17 | reference-audio style | Yes | CPML (non-commercial); Coqui closed, community fork maintained | Optional; **Russian expressive candidate** (M2) |
 | [ChatTTS](https://github.com/2noise/ChatTTS) | expressive | zh, en | tags | No | Weights CC-BY-NC-4.0 | Optional (mainly Chinese) |
 | Bark | — | — | — | — | — | **Removed** (unmaintained) |
 
@@ -878,8 +880,8 @@ Targets are provisional and will be validated on reference machines in M2.
 
 | Tier | Reference hardware | Default backends | Target RTF | Disk (models) |
 |---|---|---|---|---|
-| **T0 — CPU** | 4-core x86_64/arm64, 8 GB RAM, no GPU | Kokoro (or Piper), faster-whisper `small` | ≤ 0.5 | ~2 GB |
-| **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | Chatterbox, faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
+| **T0 — CPU** | 4-core x86_64/arm64, 8 GB RAM, no GPU | ru: Piper `ru` or Silero v5 + GigaAM-v3; en: Kokoro (or Piper) + faster-whisper `small` | ≤ 0.5 | ~2 GB |
+| **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | ru: M2 benchmark winner + GigaAM-v3; en: Chatterbox + faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
 
 ---
 
@@ -898,9 +900,9 @@ text2audio/
 │   ├── models/          # model store, models.lock handling, bundle
 │   └── cli.py
 ├── plugins/             # first-party plugins, each its own package & venv
-│   ├── lang-en/
-│   ├── backend-kokoro/
-│   └── backend-chatterbox/
+│   ├── lang-ru/         # M2
+│   ├── lang-en/         # M4
+│   └── backend-<name>/  # one per backend (Russian winners in M2, Kokoro/Chatterbox in M4)
 ├── templates/lang/      # cookiecutter for new language packs
 ├── tests/
 │   ├── fixtures/        # small public-domain books in every format
@@ -927,10 +929,10 @@ The model store defaults to `~/.local/share/text2audio/models` (overridable with
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **M0 — Scaffold** | Repo, CI, CLI skeleton, plugin discovery, model store + `models.lock`, `doctor`, worker protocol stub. | `doctor` passes; offline CI job green; a dummy backend synthesizes a sine-wave "segment" through a worker. |
-| **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest; PDF reader benchmark (Docling / pymupdf4llm / Marker). | Golden-file tests pass for all formats on the fixture corpus. |
-| **M2 — English TTS** | Kokoro + Chatterbox backends (IndexTTS-2 benchmarked as expressive alternative), English normalization, audio assembly, MP3 output with split plan, optional M4B, QA gate, resume. | Full public-domain novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged. |
-| **M3 — Expression** | E1 structural rules, multi-voice dialogue, E3 directives, E2 classifier plugin. | A/B listening test meets the §6.7 threshold for E1; E2 result documented (ship or defer). |
-| **M4 — Russian** | Russian language pack `ru` generated from the template: stress, ё-restoration, number agreement, dialogue dashes; backend chosen by benchmark (fast: Piper `ru`, Silero v5; expressive: Chatterbox Multilingual, Qwen3-TTS, ESpeech, XTTS-v2). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
+| **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest; PDF reader benchmark (Docling / pymupdf4llm / Marker). Russian fixtures first (cp1251 FB2, `.fb2.zip`, "Глава" TXT headings). | Golden-file tests pass for all formats on the fixture corpus, including a Russian fixture per format. |
+| **M2 — Russian TTS** | Russian language pack `ru`: stress + ё (RUAccent), number agreement, dialogue dashes, GigaAM-v3 QA; backend chosen by the M2 benchmark (fast: Piper `ru`, Silero v5; expressive: Chatterbox Multilingual, Qwen3-TTS, ESpeech, XTTS-v2); audio assembly, MP3 output with split plan, optional M4B, QA gate, resume; language-pack template extracted from `ru`. | Full public-domain Russian novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged; benchmark winners recorded in §13.1. |
+| **M3 — Expression** | E1 structural rules, multi-voice dialogue (Russian dialogue dashes and author's remarks), E3 directives, E2 classifier plugin. | A/B listening test meets the §6.7 threshold for E1; E2 result documented (ship or defer). |
+| **M4 — English** | English language pack `en` generated from the template: misaki/espeak-ng G2P, English normalization, faster-whisper QA; Kokoro + Chatterbox backends (IndexTTS-2 benchmarked as expressive alternative). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
 | **M5 — Hardening & v1.0** | Air-gapped bundle, security tests, docs, performance tuning. | Definition of Done (§14) complete; v1.0.0 tagged. |
 | **v2 (later)** | OCR for scanned PDFs ([OCRmyPDF](https://github.com/ocrmypdf/OCRmyPDF) / Docling OCR), DOCX/HTML input, character-voice assignment by speaker attribution, local web UI. | — |
 
@@ -986,9 +988,10 @@ Commits](https://www.conventionalcommits.org/), and
 |---|---|---|
 | 2026-10-24 | **No universal model**: every language-dependent stage (normalization, stress/G2P, TTS, QA ASR, emotion) is chosen per language through plugins ([ADR-0003](docs/adr/0003-per-language-components.md)). | Decided |
 | 2026-10-24 | Offline runtime contract ([ADR-0002](docs/adr/0002-offline-runtime-contract.md)), isolated backend workers ([ADR-0004](docs/adr/0004-isolated-backend-workers.md)), MP3 default with per-section split ([ADR-0005](docs/adr/0005-mp3-default-section-split.md)). | Decided |
-| 2026-10-24 | Second language is **Russian** (`ru`), delivered in M4 ([ADR-0006](docs/adr/0006-russian-second-language.md)). | Decided |
-| 2026-10-24 | Russian text front end: RUAccent (stress + ё), rutextnorm (normalization, after audit), GigaAM-v3 (QA ASR) as defaults, subject to the M4 benchmark. | Proposed |
-| — | Russian backend per tier (fast: Piper / Silero v5; expressive: Chatterbox Multilingual / Qwen3-TTS / ESpeech / XTTS-v2). | Open — decided by M4 benchmark |
+| 2026-10-24 | Second language is **Russian** (`ru`), delivered in M4 ([ADR-0006](docs/adr/0006-russian-second-language.md)). | Superseded |
+| 2026-10-24 | **Russian is the first language** (M2), English second (M4); isolation proof (FR-07) moves to English ([ADR-0008](docs/adr/0008-russian-first-language.md)). | Decided |
+| 2026-10-24 | Russian text front end: RUAccent (stress + ё), rutextnorm (normalization, after audit), GigaAM-v3 (QA ASR) as defaults, subject to the M2 benchmark. | Proposed |
+| — | Russian backend per tier (fast: Piper / Silero v5; expressive: Chatterbox Multilingual / Qwen3-TTS / ESpeech / XTTS-v2). | Open — decided by M2 benchmark |
 | 2026-10-24 | **Personal use only.** Licenses are informational, not a selection criterion. Component priority: offline (hard requirement) → quality → everything else ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)). | Decided |
 | 2026-10-24 | Reference hardware: development machine (RTX 4090 24 GB) for T1; CPU-only run of the same machine, limited to 4 cores / 8 GB, for T0. | Proposed |
 
@@ -999,13 +1002,13 @@ Commits](https://www.conventionalcommits.org/), and
 - [ ] `install.sh` completes on a clean Linux machine and downloads every asset listed in `models.lock`, verifying hashes.
 - [ ] `bundle export` → `bundle import` works on a machine with networking disabled.
 - [ ] TXT, FB2, EPUB and PDF fixtures convert to the expected Markdown (golden tests green).
-- [ ] English books synthesize to tagged MP3 (with cover) on both tiers: one file per section when the split checks pass, a single file otherwise; M4B with chapters is produced when requested.
+- [ ] Russian and English books synthesize to tagged MP3 (with cover) on both tiers: one file per section when the split checks pass, a single file otherwise; M4B with chapters is produced when requested.
 - [ ] Whole test suite passes in a network-disabled environment.
 - [ ] QA gate flags ≤ 5% of segments on the reference corpus; flagged segments are listed in `report.json`.
 - [ ] Running with an empty `text2audio.toml` produces QA-passing audio for every supported language, using that language's profile.
 - [ ] Interrupted jobs resume without re-synthesizing completed segments.
 - [ ] Each input book gets its own folder under the output root, named after the input file; batch runs and name clashes behave as in §5.2.
-- [ ] The Russian language pack exists, was generated from the template, and required no change to `core/`; it uses **different components from English in at least the normalization, stress/G2P and QA-ASR stages**; Russian FB2 fixtures pass the QA gate.
+- [ ] The Russian language pack exists and Russian FB2 fixtures pass the QA gate; the English pack, added after it, was generated from the template, required no change to `core/`, and uses **different components from Russian in at least the normalization, stress/G2P and QA-ASR stages**.
 - [ ] README covers install (online and air-gapped), CLI usage, configuration, voices, expression levels; `docs/adding-a-language.md` covers the extension recipe.
 
 ---
