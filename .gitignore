@@ -30,3 +30,8 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Spike downloads and outputs
+spikes/*/models/
+spikes/*/out/
+spikes/*/.venv/

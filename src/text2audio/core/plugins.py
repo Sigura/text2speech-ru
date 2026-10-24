@@ -18,6 +18,7 @@ GROUPS = (
     "g2p",
     "asr",
     "emotion",
+    "polishers",
     "covers",
 )
 

@@ -1,0 +1,19 @@
+# Conda environment for text2audio (alternative to uv; uv.lock stays the source of truth).
+#
+#   conda env create -f environment.yaml     # run from the repository root
+#   conda activate text2audio
+#   text2audio doctor
+#
+# Conda supplies Python and the system tools (FFmpeg, espeak-ng); pip installs the
+# locked Python packages exported from uv.lock. TTS backends are NOT installed here:
+# each runs in its own environment (ADR-0004).
+name: text2audio
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ffmpeg>=6
+  - espeak-ng
+  - pip
+  - pip:
+      - -r requirements-dev.txt

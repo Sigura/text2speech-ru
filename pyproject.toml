@@ -28,6 +28,7 @@ dev = [
 
 [tool.uv.workspace]
 members = ["plugins/*"]
+exclude = ["spikes/*"]
 
 [tool.uv.sources]
 text2audio-backend-sine = { workspace = true }

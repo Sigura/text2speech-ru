@@ -26,8 +26,13 @@ All notable changes to this project are documented here. The format follows
   typographic) and the loopback-only local-service exception.
 - SPEC.md: the editable `<book>.md` lives next to the audio; the original input is
   copied into `_work/` for `convert --reconvert`; `.md` input accepted.
-- CI (lint, format, types, tests, strict offline job) and pre-commit hooks.
+- CI (lint, format, types, tests, strict offline job, requirements freshness) and
+  pre-commit hooks.
+- `environment.yaml` (conda) and `requirements.txt` / `requirements-dev.txt` (pip),
+  exported from `uv.lock` by `scripts/export-requirements.sh`.
 
 ### Changed
 
+- README rewritten as a solution description with usage examples, open questions and
+  a TODO list; Russian narrator voice defaults to female.
 - QA gate ASR model and WER threshold come from the language profile (SPEC.md §6.9).
