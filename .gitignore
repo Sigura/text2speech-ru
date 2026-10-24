@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Model store and downloaded assets (never committed).
+# Anchored to the root: src/text2audio/models/ is a source package.
+/models/
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+
+# Generated audiobooks and bundles
+/output/
+*.tar.zst
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
