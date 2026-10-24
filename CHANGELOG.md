@@ -40,4 +40,6 @@ All notable changes to this project are documented here. The format follows
 
 - README rewritten as a solution description with usage examples, open questions and
   a TODO list; Russian narrator voice defaults to female.
+- README keeps the solution description, installation, usage and open questions; the
+  roadmap checklist and improvement ideas moved to `TODO.md`.
 - QA gate ASR model and WER threshold come from the language profile (SPEC.md §6.9).

@@ -7,10 +7,11 @@ editable Markdown text and then into an audiobook: MP3 files, one per book secti
 with tags and a cover. It uses local neural text-to-speech (TTS) and needs no network
 after installation. It is for personal use only (ADR-0007).
 
-> **Status:** milestone **M0 (scaffold) done** on branch `m0-scaffold`: CLI, plugin
-> discovery, model store, offline contract, worker protocol, resource planning.
-> Conversion (M1) and Russian speech (M2) are next. [SPEC.md](SPEC.md) is the full
-> specification.
+> **Status:** M0 (scaffold) and the Russian smoke spike are done and merged into
+> `main`: CLI, plugin discovery, model store, offline contract, worker protocol,
+> resource planning, `install.sh` with pinned Russian weights. Next: conversion (M1),
+> then Russian speech (M2). Plans and ideas: [TODO.md](TODO.md); full specification:
+> [SPEC.md](SPEC.md).
 
 ## Solution overview
 
@@ -37,14 +38,16 @@ book.fb2 ─► detect & parse ─► <book>.md ─► normalize ─► stress/�
 |---|---|---|
 | Stress + ё | RUAccent (silero-stress fallback) | Context homographs (*зáмок / замóк*), *все / всё*. |
 | Normalization | rutextnorm after audit, else own rules + num2words | Numbers must agree in case and gender (*с 5 книгами* → «с пятью книгами»). |
-| TTS, fast (CPU) | **Silero v5, female voice `xenia`** (to confirm in the spike); Piper `ru_RU-irina` as baseline | Russian-trained, built-in stress/ё, fast on CPU, fully local. |
+| TTS, fast (CPU) | **Silero v5.6, female voice `xenia`**; Piper `ru_RU-irina` as baseline | Russian-trained, built-in stress/ё; spike: WER 0.057, 12× real time on 4 CPU cores ([findings](spikes/ru-smoke/FINDINGS.md)). |
 | TTS, expressive (GPU) | M2 benchmark: ESpeech / F5-TTS Russian, Chatterbox Multilingual, Qwen3-TTS, XTTS-v2 | Russian-specific training may win on naturalness. |
-| QA ASR | GigaAM-v3 (Sber, open weights) | Best open Russian ASR. |
+| QA ASR | GigaAM-v3 `rnnt` (Sber, open weights) | Best open Russian ASR; the `rnnt` branch writes numbers as words, so correctly read numbers are not flagged. |
 
 Yandex SpeechKit and Sber SaluteSpeech synthesis are cloud-only, so they cannot be
 used. Sber's open model GigaAM (speech recognition) is used for the quality check.
 
-## Installation
+## Installation and usage
+
+### Installation
 
 One command installs everything, including the model weights (≈ 1.1 GB for Russian):
 
@@ -74,7 +77,7 @@ pip install -r requirements-dev.txt       # + tests, lint, the sine test backend
 `requirements*.txt` are generated from `uv.lock` by `scripts/export-requirements.sh`;
 CI fails when they are stale.
 
-## Usage examples
+### Usage examples
 
 Available now (M0):
 
@@ -123,7 +126,7 @@ max_workers = 2
 g2p = "silero-stress"                # override one stage for one language
 ```
 
-## Book folder
+### Book folder
 
 ```text
 output/Война и мир/
@@ -141,45 +144,20 @@ output/Война и мир/
 |---|---|---|
 | 1 | Russian fast-tier voice: spike says **Silero v5.6 `xenia`** (WER 0.057, 12× real time on 4 cores; [findings](spikes/ru-smoke/FINDINGS.md)). Open: does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`. | Owner listening, then the M2 benchmark |
 | 2 | Russian expressive backend: ESpeech / F5-TTS Russian vs Chatterbox Multilingual vs Qwen3-TTS vs XTTS-v2. Voice-cloning models need a **female reference clip** whose use is allowed. | M2 benchmark + listening test |
-| 3 | Silero weights come from `models.silero.ai`, not Hugging Face: extend `models.lock` with URL + SHA-256 sources. | M2 |
-| 4 | Does rutextnorm pass the code audit, or does the pack own its number rules? | M2 |
-| 5 | Cover prompts for Russian books: FB2 genre mapping only, or offline ru→en translation (e.g. Opus-MT) of title and annotation? | M2 |
-| 6 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
-| 7 | Default PDF reader: Docling vs pymupdf4llm vs Marker. | M1 benchmark |
-| 8 | Two-stage "polish": does voice conversion (Chatterbox VC / Seed-VC / OpenVoice) on top of Silero sound better without breaking stress? Is enhancement (resemble-enhance) worth its time? | Spike, then M2 listening test |
-| 9 | Female **reference clip** for voice conversion / cloning (polish stage, expressive backends): whose voice, with permission? | Owner |
-
-## TODO
-
-- [x] **M0 — Scaffold:** CLI, plugins, model store, offline contract, worker protocol,
-  resource planning, CI.
-- [x] **Spike `ru-smoke`:** RUAccent + Silero v5.6 (female) + Piper + GigaAM, fully
-  offline, GPU and 4-core CPU ([findings](spikes/ru-smoke/FINDINGS.md)); Russian
-  weights pinned in `models.lock`; `install.sh`.
-- [ ] Spike follow-up: stress listening (Silero own vs RUAccent), polish stage
-  (enhancement first; voice conversion once a reference clip is chosen).
-- [ ] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB, TXT ("Глава 1"), PDF, MD →
-  `<book>.md`; metadata; embedded cover extraction; `convert --reconvert`.
-- [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
-  dashes), backend benchmark, per-backend environments, MP3 + split plan, QA gate,
-  resume, covers (SD WebUI + typographic); extract the language-pack template.
-- [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
-  voice, `<!-- t2a: … -->` directives, emotion classifier.
-- [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
-  - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
-  - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and
-    ordinals, Roman numerals;
-  - [ ] components: misaki + espeak-ng G2P, NeMo TN or rules, faster-whisper QA;
-  - [ ] backends: Kokoro (fast), Chatterbox (expressive), IndexTTS-2 benchmarked;
-  - [ ] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
-  - [ ] female narrator + contrasting dialogue voice; listening test; record in SPEC §13.1.
-- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs, v1.0.
+| 3 | Does rutextnorm pass the code audit, or does the pack own its number rules? | M2 |
+| 4 | Cover prompts for Russian books: FB2 genre mapping only, or offline ru→en translation (e.g. Opus-MT) of title and annotation? | M2 |
+| 5 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
+| 6 | Default PDF reader: Docling vs pymupdf4llm vs Marker. | M1 benchmark |
+| 7 | Two-stage "polish": does voice conversion (Chatterbox VC / Seed-VC / OpenVoice) on top of Silero sound better without breaking stress? Is enhancement (resemble-enhance) worth its time? | Spike, then M2 listening test |
+| 8 | Female **reference clip** for voice conversion / cloning (polish stage, expressive backends): whose voice, with permission? | Owner |
 
 ## Documentation
 
 | Document | Purpose |
 |---|---|
+| [TODO.md](TODO.md) | Roadmap checklist and improvement ideas |
 | [SPEC.md](SPEC.md) | Requirements, architecture, roadmap, decision log |
+| [spikes/ru-smoke/FINDINGS.md](spikes/ru-smoke/FINDINGS.md) | Russian offline smoke test: results and lessons |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 | [docs/adding-a-language.md](docs/adding-a-language.md) | How to add a language pack |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and conventions |
