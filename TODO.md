@@ -11,13 +11,17 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
 - [x] **Spike `ru-smoke`:** RUAccent + Silero v5.6 (female) + Piper + GigaAM, fully
   offline, GPU and 4-core CPU ([findings](spikes/ru-smoke/FINDINGS.md)); Russian
   weights pinned in `models.lock`; `install.sh`.
-- [ ] Spike follow-up: stress listening (Silero's own stress vs RUAccent marks),
-  polish stage (enhancement first; voice conversion once a reference clip is chosen).
+- [x] **Spike `ru-polish`:** two-stage speech and English words in Russian text
+  ([findings](spikes/ru-polish/FINDINGS.md)) → GPU hybrid Silero → Chatterbox VC,
+  Chatterbox Multilingual for sentences with English words; narrator `xenia`; FR-24.
+- [ ] Stress listening: Silero's own stress vs RUAccent marks (`spikes/ru-smoke/out/listen/`).
 - [ ] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB, TXT ("Глава 1"), PDF, MD →
   `<book>.md`; metadata; embedded cover extraction; `convert --reconvert`.
 - [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
-  dashes), backend benchmark, per-backend environments, MP3 + split plan, QA gate,
-  resume, covers (SD WebUI + typographic); extract the language-pack template.
+  dashes, English words — FR-24), Silero worker (CPU) and Chatterbox worker (VC + TTS,
+  GPU) with the hybrid route, benchmark against Qwen3-TTS / ESpeech / XTTS-v2,
+  per-backend environments, MP3 + split plan, QA gate, resume, covers (SD WebUI +
+  typographic); extract the language-pack template.
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
@@ -29,7 +33,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [ ] female narrator + contrasting dialogue voice; listening test; record in
     SPEC §13.1.
-- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs, v1.0.
+- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
 
 ## Housekeeping
 

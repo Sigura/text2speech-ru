@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.4-M0 |
+| Document version | 1.6-M0 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
@@ -25,8 +25,10 @@
 | 1.0-M0 | 2026-10-24 | Approved for M0. License default recorded as proposed (MIT core). Companion docs added: README, CLAUDE.md, CONTRIBUTING, CHANGELOG, ADRs 0001–0006, `docs/adding-a-language.md`. |
 | 1.1-M0 | 2026-10-24 | **Decision:** personal use only. Component priority is offline → quality → everything else; licenses are informational. Non-commercial models (IndexTTS-2, XTTS-v2, ESpeech, Silero v5, MMS) become full candidates; PDF reader chosen by M1 benchmark; licensing risk removed. |
 | 1.2-M0 | 2026-10-24 | **Decision:** Russian is the **first** language (M2), English second (M4) — ADR-0008. Russian benchmark protocol moves to M2; isolation proof (FR-07) moves to English. QA gate (§6.9) made per-language; pack paths aligned with §10. |
-| 1.4-M0 | 2026-10-24 | Russian smoke spike results: Silero v5.6 `xenia` (female) is the fast-tier candidate; normalization mandatory (Silero drops digits); QA uses GigaAM-v3 branch `rnnt` (spoken form); RUAccent must be wrapped to stay offline. `models.lock` gains `url` assets; `install.sh` pulls every pinned weight. |
 | 1.3-M0 | 2026-10-24 | Editable Markdown `<book>.md` moves next to the audio; the original input is always copied into `_work/` for re-conversion (`convert --reconvert`); `.md` accepted as input (§5.2, FR-01, FR-08). M0 implementation feedback: backend descriptor + `WorkerBackend` split (§6.6.2), protocol details (§6.6.3), resource planning (§9.1, `text2audio resources`, `[resources]` config). **Decision:** covers — extract, else generate with a local Stable Diffusion WebUI started on the first GPU with enough free VRAM, else typographic (§6.8.2, FR-23, ADR-0009); loopback-only local-service exception (§6.10). |
+| 1.4-M0 | 2026-10-24 | Russian smoke spike results: Silero v5.6 `xenia` (female) is the fast-tier candidate; normalization mandatory (Silero drops digits); QA uses GigaAM-v3 branch `rnnt` (spoken form); RUAccent must be wrapped to stay offline. `models.lock` gains `url` assets; `install.sh` pulls every pinned weight. |
+| 1.5-M0 | 2026-10-25 | Polish spike (`ru-polish`) + owner listening: **Decision:** Russian T1 is a hybrid — Silero → Chatterbox VC for Cyrillic-only segments (Chatterbox TTS quality at 1/6 of the time, no word errors), Chatterbox Multilingual TTS for segments with Latin-script words; enhancement on 48 kHz Silero dropped; VC is GPU-only; QA gate cannot see stress changes (§6.6.6). Russian text with English terms recorded as an open M2 question. |
+| 1.6-M0 | 2026-10-25 | **Foreign-script spans** inside a sentence (FR-24): the core tags them by Unicode script, the language pack resolves them; Russian rules for Latin-script words (§6.6.5). **Decision:** Russian narrator voice is Silero `xenia`; Chatterbox clones it from a pinned `xenia` reference clip. Russian backend tables (§6.6.1, §6.6.5, §8, §9, M2) aligned with the decisions; workflow: commits go straight to `main`. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -145,7 +147,7 @@ flowchart LR
 |---|---|---|
 | **Detect & Decode** | Detect format by content (magic bytes / XML root / zip contents), detect encoding, unpack archives safely. | — |
 | **Parse to Markdown** | Extract structure (chapters, headings, paragraphs, emphasis, quotes, poetry, footnotes) and metadata (title, author, language, cover). | `<book>.md` (the editable book text, "`book.md`" below) + `metadata.json` + `cover.jpg` |
-| **Normalize text** | Language-specific verbalization of numbers, dates, units, abbreviations; apply pronunciation lexicon. | (in-memory) |
+| **Normalize text** | Language-specific verbalization of numbers, dates, units, abbreviations; apply pronunciation lexicon; resolve foreign-script spans (FR-24). | (in-memory) |
 | **Segment & Annotate** | Split into synthesis units that fit the backend's input limit; attach voice, language, pause and expression attributes. | `segments.jsonl` |
 | **Expression pass** | Map structural / inferred / manual expression to the backend's control vocabulary. | updates `segments.jsonl` |
 | **TTS backend worker** | Synthesize each segment in an isolated process. | `audio/segments/*.wav` |
@@ -257,6 +259,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-21 | **One output folder per book**, named after the input file name, under a configurable output root; work files in `_work/`; batch input of several files or a directory (§5.2). | Must | `run a.fb2 b.epub` creates `output/a/` and `output/b/`; re-running `a.fb2` resumes in `output/a/`; a name clash produces `a (pdf)` or `a (2)` as specified. |
 | FR-22 | **Zero-config quality**: every setting has an automatic value derived from the language profile, content profile and hardware (§6.6.5); `text2audio config show <book>` prints the effective value and the source of each setting. | Must | With an empty `text2audio.toml`, fixtures in each supported language select the expected backend, voices, pauses, normalization and footnote policy; output passes the QA gate. |
 | FR-23 | **Cover for every book**: use the embedded cover (FB2, EPUB); otherwise generate one with a cover plugin (local Stable Diffusion WebUI); otherwise render a typographic cover (title + author). Embed it in every output file (§6.8.2). | Should | A TXT fixture gets a generated cover when the SD plugin is available and a typographic one when it is not; the source of the cover is recorded in `metadata.json`. |
+| FR-24 | **Foreign-script spans inside a sentence**: the core tags runs of words whose Unicode script differs from the book language's script (language-independent); the language pack resolves each span — pronunciation lexicon, acronym spelling, routing the segment to a backend that can read it, or transliteration — before synthesis, so no word is silently dropped. Every span and its resolution is listed in `report.json`. Longer spans (whole sentences or quotes) follow FR-18. | Must | The Russian code-switch fixture (English terms, brands, acronyms, an English quote) loses no word on T0 and T1: QA ASR, compared against the resolved text, scores WER 0; `report.json` lists every span. |
 
 ### 6.2 Non-Functional Requirements
 
@@ -341,6 +344,9 @@ so any change invalidates exactly the affected segments.
   (Apache-2.0, offline, accurate on short text) for FR-18; document-level language
   comes from metadata first.
 - **Lexicon** — TSV `word<TAB>replacement-or-phonemes`, applied after normalization.
+  Levels (FR-13, later wins): the language pack's built-in list → user-global
+  `~/.config/text2audio/lexicon/<lang>.tsv` → per-book `_work/lexicon.tsv`. Stress in
+  a replacement is written `+` before the vowel (`Docker<TAB>д+окер`) or with U+0301.
 
 ### 6.6 Multi-Language and Plugin Architecture
 
@@ -374,9 +380,9 @@ as one option a language may choose, not as the design centre.
 | Sentence segmentation | `text2audio.segmenters` | Abbreviation and punctuation conventions | pySBD `en` | pySBD `ru` + pack rules |
 | Text normalization | `text2audio.normalizers` | Number grammar, date/currency formats | NeMo TN or pack rules | rutextnorm (after audit) + pack rules |
 | Stress / G2P | `text2audio.g2p` | Unwritten stress, heteronyms, diacritics | misaki + espeak-ng | RUAccent (silero-stress fallback) |
-| TTS backend (per tier) | `text2audio.backends` | Model quality and voice availability per language | Kokoro / Chatterbox | Piper or Silero v5 / Chatterbox Multilingual or Qwen3-TTS (M2 benchmark) |
+| TTS backend (per tier) | `text2audio.backends` | Model quality and voice availability per language | Kokoro / Chatterbox | Silero v5.6 `xenia` / hybrid: Silero → Chatterbox VC, Chatterbox Multilingual for Latin-script segments (§6.6.6) |
 | QA ASR | `text2audio.asr` | ASR accuracy per language | faster-whisper | GigaAM-v3 |
-| Polish (VC / enhancement) | `text2audio.polishers` | Stress and timbre artefacts differ per language and backend | TBD (M4) | M2 spike: Silero → Chatterbox VC / Seed-VC / OpenVoice; resemble-enhance |
+| Polish (VC / enhancement) | `text2audio.polishers` | Stress and timbre artefacts differ per language and backend | TBD (M4) | Chatterbox VC on Silero (T1, `ru-polish`); Seed-VC / OpenVoice untested |
 | Emotion classifier (E2) | `text2audio.emotion` | Trained per language | TBD (M3) | TBD |
 | Content heuristics | part of the language pack | Chapter/dialogue/drama conventions | "Chapter", quotes | "Глава", dialogue dash |
 
@@ -592,6 +598,28 @@ Text rules:
   `«…»` and `„…“`.
 - Prosody: slightly longer default paragraph pause (800 ms); `—` inside a sentence gets
   a short pause; `…` a longer one.
+- **Latin-script words inside Russian text** (FR-24). Silero drops every Latin-script
+  word silently («Я установил Docker» → "я установил"); Chatterbox reads English terms
+  well but garbles acronyms (spike `ru-polish`). Resolved in this order, after
+  normalization (which already handled Roman numerals, units, URLs and e-mails):
+  1. **Homoglyphs**: a mostly-Cyrillic word with Latin look-alike letters
+     (`a c e o p x y` and capitals, common in OCR/PDF text: *сoбака* with a Latin `o`)
+     is rewritten in Cyrillic — it is a typo, not English.
+  2. **Lexicon**: brands and common terms with stress (*Docker* → «до́кер»,
+     *iPhone* → «айфо́н», *deadline* → «дедла́йн»); Russian endings and hyphenated
+     compounds attach to the result (*iPhone'а* → «айфо́на», *Docker-контейнер* →
+     «до́кер-контейнер»). Pack, user and per-book levels as in FR-13.
+  3. **Acronyms** (all capitals, ≤ 5 letters, not in the lexicon): spelled with English
+     letter names (*HTTP* → «эйч-ти-ти-пи́»); conventional readings go in the lexicon
+     (*SQL* → «эс-кью-э́ль»).
+  4. **Remaining Latin words**: on T1 the segment is routed to Chatterbox Multilingual
+     (same narrator reference, `language_id="ru"`), which reads English words in a
+     Russian accent; a whole English sentence or quote uses `language_id="en"` with the
+     same voice until the `en` pack exists (FR-18). On T0 (Silero only) the word is
+     transliterated from its English pronunciation (English G2P → Russian phonemes →
+     Cyrillic). Segments fully resolved by steps 1–3 stay on the Silero route.
+  5. Other scripts default to the generic fallback; any span the pack cannot resolve
+     is flagged in `report.json`.
 - QA bounds: higher WER threshold than English (rich morphology makes ASR endings
   noisier) — starting value 0.18, tuned in M2.
 
@@ -599,12 +627,12 @@ Text rules:
 
 | Tier | Candidates | Key caveats |
 |---|---|---|
-| fast (CPU) | [Piper](https://github.com/OHF-Voice/piper1-gpl) `ru_RU` voices; [Silero TTS v5](https://github.com/snakers4/silero-models) | Kokoro has **no official Russian**; community Kokoro-ru fine-tunes are experimental. Silero v5 is fast with many Russian voices; it loads through `torch.hub`, so its files must be pre-fetched (see below). |
-| expressive (GPU) | [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) (MIT, Russian officially supported); [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Russian listed) | Chatterbox Multilingual has no paralinguistic tags (`<laugh>` etc.), so E2 uses the `exaggeration` scalar only. |
-| expressive (GPU), additional | [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune trained on Russian); [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (Russian supported, voice cloning) | Russian-specific training may beat multilingual models on naturalness; XTTS-v2 is older but well proven for Russian. Both enter the M2 benchmark on equal terms. |
+| fast (CPU) — **default: Silero v5.6 `xenia`** | [Silero TTS v5](https://github.com/snakers4/silero-models); [Piper](https://github.com/OHF-Voice/piper1-gpl) `ru_RU-irina` as baseline | Kokoro has **no official Russian**; community Kokoro-ru fine-tunes are experimental. Silero is a `torch.package` file from `models.silero.ai` (a `url` asset in `models.lock`), loaded with `PackageImporter`, never `torch.hub`. It **drops digits and Latin-script words silently**, so normalization and FR-24 run first. |
+| expressive (GPU) — **default: hybrid** | Silero → [Chatterbox](https://github.com/resemble-ai/chatterbox) VC into the `xenia` reference; Chatterbox Multilingual TTS (same reference, RUAccent stress as U+0301) for segments with Latin-script words (§6.6.6, spike `ru-polish`) | Chatterbox Multilingual is slower than real time stock (RTF ≈ 1.3 on an RTX 4090) and reads Russian **unstressed** unless the pack supplies stress marks. Its tokenizer downloads a Chinese segmenter (`spacy_pkuseg`) on load, so the worker disables it. No paralinguistic tags (`<laugh>` etc.), so E2 uses the `exaggeration` scalar only. |
+| expressive (GPU), alternatives | [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Russian listed); [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune trained on Russian); [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (Russian supported, voice cloning) | Russian-specific training may beat multilingual models on naturalness; XTTS-v2 is older but well proven for Russian. They enter the M2 benchmark against the hybrid. |
 
 **Offline asset checklist (Russian).** Several Russian components download weights
-on first use (RUAccent from Hugging Face, Silero via `torch.hub`, GigaAM on first
+on first use (RUAccent from Hugging Face, Chatterbox's `spacy_pkuseg`, GigaAM on first
 load). The `ru` pack MUST list every one of them in `models.lock` and load them from
 the model store explicitly. The offline CI job (§12) runs the full Russian fixture set
 with networking disabled to prove nothing is fetched at runtime.
@@ -613,7 +641,9 @@ with networking disabled to prove nothing is fetched at runtime.
 
 1. Test set (public-domain Russian prose and poetry, e.g. Pushkin, Chekhov, Tolstoy):
    ≥ 200 sentences including ≥ 50 stress homographs, ≥ 50 ё-words, ≥ 50 numbers needing
-   case agreement, dialogue with author's remarks, and one poem.
+   case agreement, dialogue with author's remarks, ≥ 30 sentences with Latin-script
+   words (terms, brands, acronyms, inflected forms, an English quote; FR-24), and one
+   poem.
 2. Metrics per backend: QA-ASR WER (GigaAM), **stress accuracy** on the homograph
    subset (human-checked), normalization exact match, RTF on T0 and T1, VRAM.
 3. Blind listening test with native speakers (≥ 5 listeners, ≥ 30 clips). UTMOS-type
@@ -654,10 +684,24 @@ content:
 - **Enhancement / super-resolution**: removes artefacts and raises bandwidth
   (e.g. 24 → 48 kHz) without changing the voice. Candidates: resemble-enhance, AudioSR.
 
-The QA gate runs on the polished audio, so a polisher that blurs stress or drops words
-is caught and the segment falls back to the unpolished audio. A polisher becomes a
-language's default only if it wins that language's listening test without raising
-WER. Voice-conversion targets follow the voice-cloning consent policy (§6.12).
+The QA gate runs on the polished audio, so a polisher that drops or garbles words is
+caught and the segment falls back to the unpolished audio. WER cannot see stress, so a
+polisher that shifts stress is caught only by the language's listening test and its
+homograph subset (§6.6.5). A polisher becomes a language's default only if it wins that
+language's listening test without raising WER.
+
+Spike `ru-polish` results (details in `spikes/ru-polish/FINDINGS.md`):
+
+- Voice conversion re-synthesizes intonation from the target: **expressiveness follows
+  the target voice**, so the narrator reference clip is the main quality lever.
+- Voice conversion is a **GPU stage**: about 0.2 RTF on an RTX 4090, but 8–11× slower
+  than real time on 4 CPU cores. T0 runs the fast TTS without polish.
+- Enhancement is pointless on a clean 48 kHz fast TTS (Silero); it is a candidate only
+  after 24 kHz models.
+- Russian T1 uses a **hybrid** route per segment: Silero → Chatterbox VC for
+  Cyrillic-only text, Chatterbox Multilingual TTS (same reference voice) for segments
+  with Latin-script words, which Silero cannot read. Listening found no audible switch
+  between the two. Voice-conversion targets follow the voice-cloning consent policy (§6.12).
 
 ### 6.7 Expression Strategy
 
@@ -971,7 +1015,7 @@ and **expressive** (GPU recommended, emotion control).
 |---|---|---|---|---|---|---|
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | fast | en (US/GB) + ~7 others | none | No (preset voices) | Apache-2.0 | **Default fast — English (M4)** |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | fast | 30+ incl. ru (voice-dependent) | none | No | GPL-3.0 code (repo moved from MIT `rhasspy/piper`, archived Oct 2025); per-voice licenses | Fallback fast; low-end / ARM; **Russian fast-tier candidate** |
-| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Unclear (informational); loads via `torch.hub` | **Russian fast-tier candidate** (M2) |
+| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Unclear (informational); `torch.package` from `models.silero.ai` | **Russian fast tier and voice of the T1 hybrid** (`xenia`) |
 | [Chatterbox](https://github.com/resemble-ai/chatterbox) | expressive | en; Multilingual variant (23 languages incl. ru) | scalar (`exaggeration`) | Yes (≈5 s reference) | MIT | **Russian expressive candidate (M2); default expressive — English (M4)** |
 | [Orpheus TTS](https://github.com/canopyai/Orpheus-TTS) | expressive | en (+ multilingual research releases) | tags | Limited | Apache-2.0 code; weights derived from Llama 3.2 → Llama community license | Optional plugin |
 | [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | expressive | 10 languages incl. ru | prompt | Yes | Apache-2.0 (verify) | **Russian expressive candidate** (M2) |
@@ -995,8 +1039,8 @@ Targets are provisional and will be validated on reference machines in M2.
 
 | Tier | Reference hardware | Default backends | Target RTF | Disk (models) |
 |---|---|---|---|---|
-| **T0 — CPU** | 4-core x86_64/arm64, 8 GB RAM, no GPU | ru: Piper `ru` or Silero v5 + GigaAM-v3; en: Kokoro (or Piper) + faster-whisper `small` | ≤ 0.5 | ~2 GB |
-| **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | ru: M2 benchmark winner + GigaAM-v3; en: Chatterbox + faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
+| **T0 — CPU** | 4-core x86_64/arm64, 8 GB RAM, no GPU | ru: Silero v5.6 `xenia` + GigaAM-v3; en: Kokoro (or Piper) + faster-whisper `small` | ≤ 0.5 | ~2 GB |
+| **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | ru: hybrid Silero → Chatterbox VC / Chatterbox Multilingual (§6.6.6) + GigaAM-v3; en: Chatterbox + faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
 
 ---
 
@@ -1075,7 +1119,7 @@ The model store defaults to `~/.local/share/text2audio/models` (overridable with
 |---|---|---|
 | **M0 — Scaffold** | Repo, CI, CLI skeleton, plugin discovery, model store + `models.lock`, `doctor`, worker protocol stub. | `doctor` passes; offline CI job green; a dummy backend synthesizes a sine-wave "segment" through a worker. |
 | **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest; PDF reader benchmark (Docling / pymupdf4llm / Marker). Russian fixtures first (cp1251 FB2, `.fb2.zip`, "Глава" TXT headings). | Golden-file tests pass for all formats on the fixture corpus, including a Russian fixture per format. |
-| **M2 — Russian TTS** | Russian language pack `ru`: stress + ё (RUAccent), number agreement, dialogue dashes, GigaAM-v3 QA; backend chosen by the M2 benchmark (fast: Piper `ru`, Silero v5; expressive: Chatterbox Multilingual, Qwen3-TTS, ESpeech, XTTS-v2); audio assembly, MP3 output with split plan, optional M4B, QA gate, resume; language-pack template extracted from `ru`. | Full public-domain Russian novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged; benchmark winners recorded in §13.1. |
+| **M2 — Russian TTS** | Russian language pack `ru`: stress + ё (RUAccent), number agreement, dialogue dashes, Latin-script spans (FR-24), GigaAM-v3 QA; backends per tier as decided (T0 Silero `xenia`; T1 hybrid Silero → Chatterbox VC + Chatterbox Multilingual for Latin-script segments, §6.6.6), confirmed by the M2 benchmark against Qwen3-TTS, ESpeech and XTTS-v2; audio assembly, MP3 output with split plan, optional M4B, QA gate, resume; language-pack template extracted from `ru`. | Full public-domain Russian novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged; benchmark winners recorded in §13.1. |
 | **M3 — Expression** | E1 structural rules, multi-voice dialogue (Russian dialogue dashes and author's remarks), E3 directives, E2 classifier plugin. | A/B listening test meets the §6.7 threshold for E1; E2 result documented (ship or defer). |
 | **M4 — English** | English language pack `en` generated from the template: misaki/espeak-ng G2P, English normalization, faster-whisper QA; Kokoro + Chatterbox backends (IndexTTS-2 benchmarked as expressive alternative). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
 | **M5 — Hardening & v1.0** | Air-gapped bundle, security tests, docs, performance tuning. | Definition of Done (§14) complete; v1.0.0 tagged. |
@@ -1136,16 +1180,19 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Second language is **Russian** (`ru`), delivered in M4 ([ADR-0006](docs/adr/0006-russian-second-language.md)). | Superseded |
 | 2026-10-24 | **Russian is the first language** (M2), English second (M4); isolation proof (FR-07) moves to English ([ADR-0008](docs/adr/0008-russian-first-language.md)). | Decided |
 | 2026-10-24 | Russian text front end: RUAccent (stress + ё), rutextnorm (normalization, after audit), GigaAM-v3 (QA ASR) as defaults, subject to the M2 benchmark. | Proposed |
-| — | Russian backend per tier (fast: Piper / Silero v5; expressive: Chatterbox Multilingual / Qwen3-TTS / ESpeech / XTTS-v2). | Open — decided by M2 benchmark |
+| 2026-10-25 | Russian backend per tier: T0 Silero v5.6 `xenia`; T1 hybrid (Silero → Chatterbox VC; Chatterbox Multilingual for Latin-script segments). Qwen3-TTS / ESpeech / XTTS-v2 remain M2 benchmark challengers. | Decided — M2 benchmark may overturn |
 | 2026-10-24 | **Personal use only.** Licenses are informational, not a selection criterion. Component priority: offline (hard requirement) → quality → everything else ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)). | Decided |
 | 2026-10-24 | Reference hardware: development machine (RTX 4090 24 GB) for T1; CPU-only run of the same machine, limited to 4 cores / 8 GB, for T0. | Proposed |
 | 2026-10-24 | M0: backend entry points return a light descriptor; the core wraps it in `WorkerBackend`. Workers speak protocol 1 with the standard library only. Until per-backend environments are installed (M2), workers start with the core's interpreter. | Decided |
 | 2026-10-24 | Resource planning (§9.1): plan from free VRAM, cgroup/affinity limits and backend-declared needs; GPU workers pinned to their NUMA CPUs; `nvidia-smi` instead of torch in the core. | Decided |
 | 2026-10-24 | Covers: embedded → generated by a local SD WebUI that text2audio starts itself on the first GPU with enough free VRAM → typographic; loopback-only local-service exception to the offline contract ([ADR-0009](docs/adr/0009-covers-and-local-services.md)). | Decided |
-| 2026-10-24 | Optional two-stage synthesis: fast TTS, then a "polish" plugin (voice conversion or enhancement) before the QA gate (§6.6.6). Owner's idea. | Proposed — tried in the `ru-smoke` spike, decided in M2 |
+| 2026-10-24 | Optional two-stage synthesis: fast TTS, then a "polish" plugin (voice conversion or enhancement) before the QA gate (§6.6.6). Owner's idea. | Proposed — tried in the `ru-polish` spike (below), decided in M2 |
 | — | Prompt language for generated covers of Russian books: genre mapping only, or offline ru→en MT (e.g. Opus-MT) for titles/annotations. | Open — M2 |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
-| 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender); voice choice open — M2 |
+| 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
+| 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |
+| 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
+| 2026-10-25 | Russian narrator voice is **Silero `xenia`** (owner listening). Chatterbox VC/TTS clone it from a reference clip rendered once by Silero, pinned in `models.lock` like any asset. Dialogue voice still open. | Decided |
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |
 

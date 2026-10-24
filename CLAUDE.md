@@ -10,7 +10,7 @@ Guidance for Claude Code sessions working in this repository.
 - Every decision goes into the decision log (SPEC.md §13.1). Significant
   architecture decisions also get an ADR in [docs/adr/](docs/adr/).
 - If implementation shows the spec is wrong or incomplete, update SPEC.md in the
-  same branch (bump the version in its change log) — do not silently diverge.
+  same commit (bump the version in its change log) — do not silently diverge.
 
 ## Non-negotiable rules
 
@@ -33,7 +33,9 @@ Guidance for Claude Code sessions working in this repository.
 
 ## Workflow
 
-- One milestone (SPEC.md §11) per branch: `m0-scaffold`, `m1-conversion`, …
+- Personal project: work and commit directly on `main` — no feature branches, PRs
+  or releases (owner's decision). Commit each finished, checked step; reference the
+  milestone (SPEC.md §11) in the message.
   Exploratory/throwaway code goes in `spikes/` and is never imported by `src/`.
 - Start each milestone in plan mode; the plan must map every exit criterion of
   the milestone to a test.

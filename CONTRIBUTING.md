@@ -26,15 +26,16 @@ Read [SPEC.md](SPEC.md) first. In particular:
 
 ## Workflow
 
-- Branch per milestone or feature; small, reviewable PRs.
+- Work directly on `main` (personal project: no feature branches, PRs or releases);
+  small commits, each passing the checks below.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
   (`feat(readers): parse FB2 footnotes`).
-- Reference requirement IDs from SPEC.md in PR descriptions (`Implements FR-02`).
+- Reference requirement IDs from SPEC.md in commit messages (`Implements FR-02`).
 - Add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for user-visible
   changes.
 - Decisions that change the architecture need an ADR in [docs/adr/](docs/adr/) and a
   line in the SPEC.md decision log (§13.1).
-- If your change makes the spec inaccurate, update SPEC.md in the same PR.
+- If your change makes the spec inaccurate, update SPEC.md in the same commit.
 
 ## Checks
 
