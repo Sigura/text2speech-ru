@@ -1,0 +1,70 @@
+"""Public Python API; every CLI command has an equivalent here (FR-05)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from text2audio import __version__
+from text2audio.core import resources as res
+from text2audio.core.config import Config, load_config
+from text2audio.core.contracts import Capabilities, ModelAsset, Tier
+from text2audio.core.doctor import DoctorReport, run_doctor
+from text2audio.core.plugins import Discovery, discover
+from text2audio.models.lock import load_lock
+from text2audio.models.pull import pull
+from text2audio.models.store import AssetProblem, ModelStore
+
+
+def version() -> str:
+    return __version__
+
+
+def doctor(store: Path | None = None, lock: Path | None = None) -> DoctorReport:
+    return run_doctor(ModelStore(store), lock)
+
+
+def resources(
+    config: Config | None = None, caps: Capabilities | None = None
+) -> tuple[res.Resources, res.ResourcePlan]:
+    """Probe the hardware and plan workers, honouring `[resources]` and `[synthesis]`."""
+    config = config or load_config()
+    found = res.probe()
+    rc = config.resources
+    plan = res.plan(
+        found,
+        caps,
+        tier=config.synthesis.tier,
+        devices=rc.devices,
+        max_workers=rc.max_workers,
+        threads_per_worker=rc.threads_per_worker,
+    )
+    return found, plan
+
+
+def plugins() -> Discovery:
+    return discover()
+
+
+def models_list(
+    lang: str | None = None, tier: Tier | None = None, lock: Path | None = None
+) -> list[ModelAsset]:
+    return [a for a in load_lock(lock) if a.wanted(lang, tier)]
+
+
+def models_verify(
+    lang: str | None = None,
+    tier: Tier | None = None,
+    store: Path | None = None,
+    lock: Path | None = None,
+) -> list[AssetProblem]:
+    return ModelStore(store).verify(models_list(lang, tier, lock))
+
+
+def models_pull(
+    lang: str | None = None,
+    tier: Tier | None = None,
+    store: Path | None = None,
+    lock: Path | None = None,
+) -> list[Path]:
+    """Download pinned assets. Uses the network; never call this from runtime code."""
+    return pull(models_list(lang, tier, lock), ModelStore(store))

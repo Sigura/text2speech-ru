@@ -1,0 +1,15 @@
+# models.lock — every asset loaded at runtime, pinned (SPEC §6.10, NFR-04).
+# Downloaded only by `text2audio models pull`; verified by `text2audio doctor`.
+#
+# [[asset]]
+# repo     = "<hf org>/<repo>"
+# revision = "<40-char commit sha>"
+# files    = ["model.onnx"]
+# sha256   = { "model.onnx" = "<64 hex>" }
+# license  = "MIT"                       # informational only (ADR-0007)
+# backend  = "piper"                     # or component = "g2p:ruaccent"
+# langs    = ["ru"]                      # empty = every language
+# tiers    = ["fast"]                    # empty = every tier
+#
+# Real assets arrive with the Russian pack in M2.
+version = 1

@@ -1,0 +1,20 @@
+[project]
+name = "text2audio-backend-sine"
+version = "0.1.0"
+description = "Dummy text2audio backend that renders a sine tone per segment (M0 test fixture)"
+requires-python = ">=3.11"
+# The descriptor imports text2audio; the worker module uses the standard library only.
+dependencies = ["text2audio"]
+
+[project.entry-points."text2audio.backends"]
+sine = "text2audio_backend_sine.descriptor:SineBackend"
+
+[tool.uv.sources]
+text2audio = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/text2audio_backend_sine"]
