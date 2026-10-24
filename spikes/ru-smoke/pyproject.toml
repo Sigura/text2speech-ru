@@ -1,0 +1,23 @@
+[project]
+name = "ru-smoke"
+version = "0"
+description = "Throwaway spike: Russian stress + TTS + ASR fully offline (feeds the M2 plan)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "torch>=2.4",
+    "torchaudio>=2.4",
+    "transformers>=4.45,<5",
+    "huggingface-hub>=0.24",
+    "ruaccent>=1.5",
+    "piper-tts>=1.3",
+    "soundfile",
+    "jiwer",
+    "sentencepiece",
+    "hydra-core",
+    "omegaconf",
+    "numpy",
+    "pyannote-audio>=4.0.7",
+]
+
+[tool.uv]
+package = false

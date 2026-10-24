@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.3-M0 |
+| Document version | 1.4-M0 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
@@ -25,6 +25,7 @@
 | 1.0-M0 | 2026-10-24 | Approved for M0. License default recorded as proposed (MIT core). Companion docs added: README, CLAUDE.md, CONTRIBUTING, CHANGELOG, ADRs 0001–0006, `docs/adding-a-language.md`. |
 | 1.1-M0 | 2026-10-24 | **Decision:** personal use only. Component priority is offline → quality → everything else; licenses are informational. Non-commercial models (IndexTTS-2, XTTS-v2, ESpeech, Silero v5, MMS) become full candidates; PDF reader chosen by M1 benchmark; licensing risk removed. |
 | 1.2-M0 | 2026-10-24 | **Decision:** Russian is the **first** language (M2), English second (M4) — ADR-0008. Russian benchmark protocol moves to M2; isolation proof (FR-07) moves to English. QA gate (§6.9) made per-language; pack paths aligned with §10. |
+| 1.4-M0 | 2026-10-24 | Russian smoke spike results: Silero v5.6 `xenia` (female) is the fast-tier candidate; normalization mandatory (Silero drops digits); QA uses GigaAM-v3 branch `rnnt` (spoken form); RUAccent must be wrapped to stay offline. `models.lock` gains `url` assets; `install.sh` pulls every pinned weight. |
 | 1.3-M0 | 2026-10-24 | Editable Markdown `<book>.md` moves next to the audio; the original input is always copied into `_work/` for re-conversion (`convert --reconvert`); `.md` accepted as input (§5.2, FR-01, FR-08). M0 implementation feedback: backend descriptor + `WorkerBackend` split (§6.6.2), protocol details (§6.6.3), resource planning (§9.1, `text2audio resources`, `[resources]` config). **Decision:** covers — extract, else generate with a local Stable Diffusion WebUI started on the first GPU with enough free VRAM, else typographic (§6.8.2, FR-23, ADR-0009); loopback-only local-service exception (§6.10). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
@@ -575,7 +576,7 @@ install time.
 | **Stress + ё** | [RUAccent](https://github.com/Den4ikAI/ruaccent) (MIT) | [silero-stress](https://github.com/snakers4/silero-stress) (MIT) — smaller and faster | RUAccent resolves context-dependent homographs (*зáмок/замóк*) and ambiguous *все/всё* from context; its [COLING 2025 paper](https://aclanthology.org/2025.coling-main.444/) self-reports 0.96 accuracy on homographs and 0.97 on other words. silero-stress leaves ambiguous ё-homographs untouched. Stress marks already in the source (`´`, `+`) are always respected. |
 | **Normalization** | [rutextnorm](https://libraries.io/pypi/rutextnorm) (MIT, rule-based, no dependencies) — **after a code audit** | Rules in the pack + [num2words](https://github.com/savoirfairelinux/num2words) `ru` | Covers numbers, dates, currency, units, fractions **with case agreement** (*с 5 книгами* → "с пятью книгами", *с 2010 года* → "с две тысячи десятого года"). Its `flag_uncertain()` returns spans the rules cannot resolve; these are logged in `report.json` and can be fixed via the per-book lexicon. Its upstream ([shigabeev/russian_tts_normalization](https://github.com/shigabeev/russian_tts_normalization)) is a small project whose README says it was written with ChatGPT's help, so it is pinned, audited and covered by the pack's own normalization test set; if it fails the audit the pack owns its rules instead. |
 | **Stress-aware G2P** | Backend's own front end fed with stress-marked text | espeak-ng `ru` | Stress is passed in the format each backend understands (`+` before the vowel, or U+0301 combining acute); the backend adapter converts. |
-| **QA ASR** | [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT) | faster-whisper `large-v3-turbo` | Vendor and third-party reports favour GigaAM over Whisper on Russian; confirmed by measurement in M2. QA ASR is therefore **per language** (`qa.asr_model` in the profile). |
+| **QA ASR** | [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT), branch **`rnnt`** | faster-whisper `large-v3-turbo` | Vendor and third-party reports favour GigaAM over Whisper on Russian; confirmed by measurement in M2. The `rnnt`/`ctc` branches output spoken form; the default `e2e_*` branches write digits, `₽`, `%`, which makes correctly read numbers count as errors (spike `ru-smoke`). QA ASR is therefore **per language** (`qa.asr_model` in the profile). |
 
 Text rules:
 
@@ -808,7 +809,19 @@ revision = "<40-char commit sha>"
 files    = ["kokoro-v1_0.pth", "voices/af_heart.pt"]
 sha256   = { "kokoro-v1_0.pth" = "…", "voices/af_heart.pt" = "…" }
 license  = "Apache-2.0"
+
+[[asset]]                     # a file not on Hugging Face: url + SHA-256
+backend  = "silero"
+url      = "https://models.silero.ai/models/tts/ru/v5_6_ru.pt"
+files    = ["v5_6_ru.pt"]
+sha256   = { "v5_6_ru.pt" = "…" }
+langs    = ["ru"]
+tiers    = ["fast"]
 ```
+
+`langs` / `tiers` select what `models pull --lang ru --tier fast` downloads; an asset
+without them is needed by every language or tier. URL assets are stored by content
+hash, so a changed upstream file can never replace a pinned one.
 
 - Assets include **everything** loaded at runtime, not only TTS weights: tokenizers,
   G2P dictionaries, espeak-ng data, ASR model, emotion classifier, sentence-splitter
@@ -1131,6 +1144,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Covers: embedded → generated by a local SD WebUI that text2audio starts itself on the first GPU with enough free VRAM → typographic; loopback-only local-service exception to the offline contract ([ADR-0009](docs/adr/0009-covers-and-local-services.md)). | Decided |
 | 2026-10-24 | Optional two-stage synthesis: fast TTS, then a "polish" plugin (voice conversion or enhancement) before the QA gate (§6.6.6). Owner's idea. | Proposed — tried in the `ru-smoke` spike, decided in M2 |
 | — | Prompt language for generated covers of Russian books: genre mapping only, or offline ru→en MT (e.g. Opus-MT) for titles/annotations. | Open — M2 |
+| 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender); voice choice open — M2 |
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |

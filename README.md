@@ -46,14 +46,25 @@ used. Sber's open model GigaAM (speech recognition) is used for the quality chec
 
 ## Installation
 
-Pick one. All three use the same locked versions (`uv.lock`).
+One command installs everything, including the model weights (≈ 1.1 GB for Russian):
 
 ```bash
-# uv (recommended)
+./install.sh                              # uv env + Russian weights + doctor
+./install.sh --lang ru,en --tier fast     # other languages / one tier
+./install.sh --no-models                  # Python environment only
+```
+
+Every weight it downloads is pinned in `models.lock` (revision or URL + SHA-256); after
+that, nothing touches the network. Other ways to get the Python environment, all from
+the same `uv.lock`:
+
+```bash
+# uv
 uv sync                                   # creates .venv with Python 3.11 + dev tools
 
-# conda — Python, FFmpeg and espeak-ng from conda-forge, Python packages from the lock
+# conda — Python and FFmpeg from conda-forge, Python packages from the lock
 conda env create -f environment.yaml && conda activate text2audio
+text2audio models pull --lang ru          # the weights (what install.sh does)
 
 # plain pip, into an existing Python ≥ 3.11 environment
 pip install -r requirements.txt           # runtime only
@@ -128,7 +139,7 @@ output/Война и мир/
 
 | # | Question | Decided by |
 |---|---|---|
-| 1 | Russian fast-tier voice: Silero v5 `xenia` vs other female voices (`baya`, `kseniya`) vs Piper `irina`. | Spike `spikes/ru-smoke`, then the M2 benchmark |
+| 1 | Russian fast-tier voice: spike says **Silero v5.6 `xenia`** (WER 0.057, 12× real time on 4 cores; [findings](spikes/ru-smoke/FINDINGS.md)). Open: does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`. | Owner listening, then the M2 benchmark |
 | 2 | Russian expressive backend: ESpeech / F5-TTS Russian vs Chatterbox Multilingual vs Qwen3-TTS vs XTTS-v2. Voice-cloning models need a **female reference clip** whose use is allowed. | M2 benchmark + listening test |
 | 3 | Silero weights come from `models.silero.ai`, not Hugging Face: extend `models.lock` with URL + SHA-256 sources. | M2 |
 | 4 | Does rutextnorm pass the code audit, or does the pack own its number rules? | M2 |
@@ -136,13 +147,17 @@ output/Война и мир/
 | 6 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
 | 7 | Default PDF reader: Docling vs pymupdf4llm vs Marker. | M1 benchmark |
 | 8 | Two-stage "polish": does voice conversion (Chatterbox VC / Seed-VC / OpenVoice) on top of Silero sound better without breaking stress? Is enhancement (resemble-enhance) worth its time? | Spike, then M2 listening test |
+| 9 | Female **reference clip** for voice conversion / cloning (polish stage, expressive backends): whose voice, with permission? | Owner |
 
 ## TODO
 
 - [x] **M0 — Scaffold:** CLI, plugins, model store, offline contract, worker protocol,
   resource planning, CI.
-- [ ] **Spike `ru-smoke`:** RUAccent + Silero v5 (female) + Piper + GigaAM, fully
-  offline; findings feed M2.
+- [x] **Spike `ru-smoke`:** RUAccent + Silero v5.6 (female) + Piper + GigaAM, fully
+  offline, GPU and 4-core CPU ([findings](spikes/ru-smoke/FINDINGS.md)); Russian
+  weights pinned in `models.lock`; `install.sh`.
+- [ ] Spike follow-up: stress listening (Silero own vs RUAccent), polish stage
+  (enhancement first; voice conversion once a reference clip is chosen).
 - [ ] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB, TXT ("Глава 1"), PDF, MD →
   `<book>.md`; metadata; embedded cover extraction; `convert --reconvert`.
 - [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue

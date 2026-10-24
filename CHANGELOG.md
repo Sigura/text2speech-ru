@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows
   typographic) and the loopback-only local-service exception.
 - SPEC.md: the editable `<book>.md` lives next to the audio; the original input is
   copied into `_work/` for `convert --reconvert`; `.md` input accepted.
+- `install.sh`: uv environment, system tool check, every pinned weight for the chosen
+  languages/tiers, `doctor`.
+- `models.lock` supports `url` assets (content-addressed) and pins the Russian
+  assets found by the `ru-smoke` spike (Silero v5.6, Piper irina, RUAccent, GigaAM-v3).
+- `spikes/ru-smoke`: offline Russian smoke test and findings.
 - CI (lint, format, types, tests, strict offline job, requirements freshness) and
   pre-commit hooks.
 - `environment.yaml` (conda) and `requirements.txt` / `requirements-dev.txt` (pip),
