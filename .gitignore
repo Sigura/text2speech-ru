@@ -36,5 +36,8 @@ spikes/*/models/
 spikes/**/out/
 spikes/*/.venv/
 
-/inputs/**/
-/outputs/**/
+inputs
+outputs
+
+# Owner's own books (personal input, never committed)
+/inputs/
