@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.2-M0 |
+| Document version | 1.3-M0 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
@@ -25,6 +25,7 @@
 | 1.0-M0 | 2026-10-24 | Approved for M0. License default recorded as proposed (MIT core). Companion docs added: README, CLAUDE.md, CONTRIBUTING, CHANGELOG, ADRs 0001–0006, `docs/adding-a-language.md`. |
 | 1.1-M0 | 2026-10-24 | **Decision:** personal use only. Component priority is offline → quality → everything else; licenses are informational. Non-commercial models (IndexTTS-2, XTTS-v2, ESpeech, Silero v5, MMS) become full candidates; PDF reader chosen by M1 benchmark; licensing risk removed. |
 | 1.2-M0 | 2026-10-24 | **Decision:** Russian is the **first** language (M2), English second (M4) — ADR-0008. Russian benchmark protocol moves to M2; isolation proof (FR-07) moves to English. QA gate (§6.9) made per-language; pack paths aligned with §10. |
+| 1.3-M0 | 2026-10-24 | Editable Markdown `<book>.md` moves next to the audio; the original input is always copied into `_work/` for re-conversion (`convert --reconvert`); `.md` accepted as input (§5.2, FR-01, FR-08). M0 implementation feedback: backend descriptor + `WorkerBackend` split (§6.6.2), protocol details (§6.6.3), resource planning (§9.1, `text2audio resources`, `[resources]` config). **Decision:** covers — extract, else generate with a local Stable Diffusion WebUI started on the first GPU with enough free VRAM, else typographic (§6.8.2, FR-23, ADR-0009); loopback-only local-service exception (§6.10). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -142,7 +143,7 @@ flowchart LR
 | Stage | Responsibility | Artifact |
 |---|---|---|
 | **Detect & Decode** | Detect format by content (magic bytes / XML root / zip contents), detect encoding, unpack archives safely. | — |
-| **Parse to Markdown** | Extract structure (chapters, headings, paragraphs, emphasis, quotes, poetry, footnotes) and metadata (title, author, language, cover). | `book.md` + `metadata.json` + `cover.jpg` |
+| **Parse to Markdown** | Extract structure (chapters, headings, paragraphs, emphasis, quotes, poetry, footnotes) and metadata (title, author, language, cover). | `<book>.md` (the editable book text, "`book.md`" below) + `metadata.json` + `cover.jpg` |
 | **Normalize text** | Language-specific verbalization of numbers, dates, units, abbreviations; apply pronunciation lexicon. | (in-memory) |
 | **Segment & Annotate** | Split into synthesis units that fit the backend's input limit; attach voice, language, pause and expression attributes. | `segments.jsonl` |
 | **Expression pass** | Map structural / inferred / manual expression to the backend's control vocabulary. | updates `segments.jsonl` |
@@ -165,11 +166,12 @@ output/                                  # output root
 │   ├── …
 │   ├── War and Peace.m3u                # playlist in reading order
 │   ├── War and Peace.m4b                # optional, only if enabled
+│   ├── War and Peace.md                 # editable Markdown text — edit, then re-run
 │   ├── report.json                      # QA results, timings, split decision, warnings
 │   └── _work/                           # resumable workspace
 │       ├── text2audio.toml              # per-book settings (voices, expression, output)
-│       ├── source.fb2.zip               # copy of (or link to) the original input
-│       ├── book.md                      # editable Markdown (human-facing)
+│       ├── source.fb2.zip               # copy of the original input, for re-conversion
+│       ├── book.converted.md            # last converter output, to diff against edits
 │       ├── metadata.json                # title, author, language, cover, source hash
 │       ├── cover.jpg
 │       ├── lexicon.tsv                  # per-book pronunciation overrides
@@ -203,6 +205,22 @@ output/                                  # output root
    book folder per supported file; one failing book does not stop the others, and a
    summary lists each book's folder and status.
 
+**Editing and re-conversion**
+
+- The editable Markdown sits **next to the audio** as `<book folder name>.md`, so it is
+  easy to find, open and keep with the audiobook. Editing it and running
+  `synthesize` (or `run`) again re-renders only the changed segments (FR-08, FR-10).
+- The original input is always **copied** (not linked) to `_work/source.<ext>`, so the
+  book can be converted again after the original moves, or with a better reader
+  (e.g. a different PDF reader after the M1 benchmark): `text2audio convert
+  --reconvert <book folder> [--reader <name>]`.
+- `_work/book.converted.md` keeps the last converter output. On re-conversion, if
+  `<book>.md` differs from it (the user edited it), the new output goes to
+  `<book>.reconverted.md` and the user's file is left untouched; otherwise `<book>.md`
+  is replaced. The reader name and version are recorded in `metadata.json`.
+- A `.md` input (already in the §6.4.1 dialect, e.g. a file edited elsewhere) is
+  accepted as is.
+
 Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`,
 `<book folder name>.m3u`, `<book folder name>.m4b`).
 
@@ -214,14 +232,14 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 
 | ID | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
-| FR-01 | Accept `.txt`, `.fb2`, `.fb2.zip`, `.epub`, `.pdf` and detect the format by content, not only by extension. | Must | A renamed file (e.g. `.fb2` saved as `.txt`) is detected correctly in tests. |
+| FR-01 | Accept `.txt`, `.fb2`, `.fb2.zip`, `.epub`, `.pdf` and `.md` (§6.4.1 dialect) and detect the format by content, not only by extension. | Must | A renamed file (e.g. `.fb2` saved as `.txt`) is detected correctly in tests. |
 | FR-02 | Convert each format to normalized Markdown (§6.4.1), preserving chapters, headings, paragraphs, emphasis, block quotes, epigraphs, poetry and footnotes. | Must | Golden-file tests pass for every format; chapter count matches the source TOC. |
 | FR-03 | Extract metadata: title, author(s), language, series, cover image. | Must | Metadata from FB2 `<title-info>` and EPUB OPF appears in `metadata.json` and in output tags. |
 | FR-04 | Run **100% offline** after installation. | Must | Full test suite passes inside a network namespace with no interfaces (§12). |
 | FR-05 | Provide a CLI (§6.11) and an importable Python API with the same capabilities. | Must | Every CLI command has an equivalent public API function covered by tests. |
 | FR-06 | Support **Russian** (M2) and **English** (M4) end-to-end in v1, on both hardware tiers (§9). | Must | A Russian and an English audiobook are produced from each input format on T0 and T1 hardware. |
 | FR-07 | Discover languages, TTS backends and per-stage components (normalizer, G2P/stress, ASR, emotion) as **plugins via Python entry points** (§6.6.1); each language may use a different implementation for every stage; adding one requires no core change. | Must | English is added in M4 (after Russian) with zero diff under `src/text2audio/core/`. |
-| FR-08 | Persist `book.md` and `segments.jsonl` so users can inspect and edit before synthesis; re-running picks up edits. | Must | Editing one paragraph re-synthesizes only the affected segments. |
+| FR-08 | Persist the editable `<book>.md` next to the audio, `segments.jsonl` and a copy of the original input, so users can edit before or after synthesis and re-convert later (§5.2); re-running picks up edits. | Must | Editing one paragraph re-synthesizes only the affected segments; `convert --reconvert` never overwrites an edited `<book>.md`. |
 | FR-09 | Output **MP3** by default (ID3v2 tags, embedded cover). **M4B** (AAC, chapter markers, cover), **Opus** and **WAV** are optional and can be produced alongside MP3. | Must | Default run produces MP3 only; `--format m4b` adds an M4B whose chapter list `ffprobe` shows; output plays in at least two common players. |
 | FR-10 | **Resume / incremental rendering**: segments are cached by content hash; interrupted jobs continue where they stopped. | Must | Killing a job mid-chapter and restarting loses at most one segment of work. |
 | FR-11 | **Text normalization** per language (numbers, ordinals, dates, currency, units, common abbreviations, Roman numerals in headings). | Must | Language-pack normalization test set passes (≥ 95% exact match). |
@@ -236,6 +254,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-20 | **Automatic splitting** into one file per book section when the detected structure passes the sanity checks in §6.8.1; otherwise fall back to a **single file**. Mode is `auto` (default), `section` (force) or `none` (always one file). | Must | Fixture with clean chapters → one MP3 per chapter; fixture with 500 tiny sections or no headings → single MP3; the decision and reason are recorded in `report.json`. |
 | FR-21 | **One output folder per book**, named after the input file name, under a configurable output root; work files in `_work/`; batch input of several files or a directory (§5.2). | Must | `run a.fb2 b.epub` creates `output/a/` and `output/b/`; re-running `a.fb2` resumes in `output/a/`; a name clash produces `a (pdf)` or `a (2)` as specified. |
 | FR-22 | **Zero-config quality**: every setting has an automatic value derived from the language profile, content profile and hardware (§6.6.5); `text2audio config show <book>` prints the effective value and the source of each setting. | Must | With an empty `text2audio.toml`, fixtures in each supported language select the expected backend, voices, pauses, normalization and footnote policy; output passes the QA gate. |
+| FR-23 | **Cover for every book**: use the embedded cover (FB2, EPUB); otherwise generate one with a cover plugin (local Stable Diffusion WebUI); otherwise render a typographic cover (title + author). Embed it in every output file (§6.8.2). | Should | A TXT fixture gets a generated cover when the SD plugin is available and a typographic one when it is not; the source of the cover is recorded in `metadata.json`. |
 
 ### 6.2 Non-Functional Requirements
 
@@ -400,14 +419,25 @@ chatterbox = "text2audio_backend_chatterbox:Backend"
 
 #### 6.6.2 Backend contract
 
+A backend's entry point resolves to a light **descriptor** that lives in the core
+environment; the model itself runs in the backend's own environment (§6.6.3). The
+core wraps the descriptor in a `WorkerBackend`, which implements `Backend`.
+
 ```python
-class Backend(Protocol):
+class BackendDescriptor(Protocol):       # what the entry point returns
     name: str
-    capabilities: Capabilities   # languages, voices, emotion mode, cloning,
-                                 # max_chars, sample_rate, device support
-    def assets(self) -> list[ModelAsset]: ...      # everything to download (repo, revision, files, sha256)
-    def load(self, store: ModelStore, device: str) -> None: ...
+    capabilities: Capabilities           # languages, voices, emotion mode, cloning, max_chars,
+                                         # sample_rate, devices, vram_mb / ram_mb / threads (§9.1)
+    def assets(self) -> list[ModelAsset]: ...           # everything to download (repo, revision, files, sha256)
+    def worker_command(self, python: str) -> list[str]: ...
+
+class Backend(Protocol):                 # what the pipeline calls
+    name: str
+    capabilities: Capabilities
+    def assets(self) -> list[ModelAsset]: ...
+    def load(self, device: str) -> None: ...            # store path passed to the worker
     def synthesize(self, seg: Segment, out_path: Path) -> SynthesisResult: ...
+    def close(self) -> None: ...
 ```
 
 `Capabilities.emotion` is one of `none | scalar | tags | prompt | vector`, which tells
@@ -422,11 +452,21 @@ own [uv](https://docs.astral.sh/uv/)-managed virtual environment** as a long-liv
 stdin/stdout:
 
 ```text
-core → worker   {"op": "load", "device": "cuda:0"}
+worker → core   {"protocol": 1, "event": "ready", "backend": "sine"}
+core → worker   {"protocol": 1, "op": "load", "device": "cuda:0", "store": "/…/models"}
 worker → core   {"ok": true, "sample_rate": 24000}
-core → worker   {"op": "synthesize", "segment": {...}, "out": "audio/segments/9f2c.wav"}
+core → worker   {"protocol": 1, "op": "synthesize", "segment": {...}, "out": "audio/segments/9f2c.wav"}
 worker → core   {"ok": true, "duration_ms": 4120, "elapsed_ms": 1630}
+core → worker   {"protocol": 1, "op": "shutdown"}
 ```
+
+Failures are `{"ok": false, "error": "…"}`. Every request carries the protocol version;
+the worker announces its own in the `ready` message and the core refuses a mismatch.
+JSON is UTF-8 without `\u` escaping. Workers implement the protocol with the standard
+library only, so the core package is never installed into a backend's environment.
+The core starts each worker with the environment of its resource slot (§9.1): its GPU
+as `CUDA_VISIBLE_DEVICES`, thread limits and CPU affinity. A worker that crashes is
+restarted once per request; a missing environment is reported with the fix.
 
 Backends whose dependencies are compatible with the core MAY run in-process (e.g.
 ONNX-based Kokoro or Piper) for lower overhead. The protocol is versioned
@@ -684,6 +724,34 @@ frames for players that support them.
 | `target_part_minutes` | 45 | Preferred length when splitting a long section at paragraph boundaries. |
 | `max_merge_ratio` | 0.5 | Above this share of merged sections, the structure is considered unreliable. |
 
+#### 6.8.2 Covers
+
+Every book gets a cover (FR-23, ADR-0009), chosen in this order:
+
+1. **Embedded** — FB2 `<coverpage>` → `<binary>`; EPUB 3 manifest item with
+   `properties="cover-image"`, else EPUB 2 `<meta name="cover">`, else the `guide`
+   cover reference. Images are validated (Pillow, size limit) and saved as
+   `_work/cover.jpg` (long side ≤ 1400 px).
+2. **Generated** by a cover plugin (`text2audio.covers` entry points), when one is
+   installed and enabled. The first plugin, `sd-webui`, drives a local
+   [AUTOMATIC1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui):
+   - it starts **its own** WebUI process (never reuses someone else's) with
+     `--nowebui --api --port <free port> --skip-prepare-environment --skip-install
+     --skip-version-check`, bound to 127.0.0.1, with the HF offline flags and
+     `CUDA_DEVICE_ORDER=PCI_BUS_ID`;
+   - on the **first GPU in nvidia-smi order with enough free VRAM** for the checkpoint
+     family (SDXL ≈ 10 GB, SD 1.5 ≈ 5 GB; `first_gpu_with`, §9.1); no GPU → skip;
+   - prompt from metadata: FB2 `<genre>` codes / EPUB subjects mapped to English style
+     keywords, plus annotation and era; no text is rendered in the image;
+   - the process is stopped when the batch's covers are done;
+   - the checkpoint name and SHA-256, seed and prompt go into `metadata.json`.
+3. **Typographic** — title and author drawn with Pillow on a plain background with a
+   bundled Cyrillic-capable font. Always available, deterministic.
+
+Generated and typographic covers get title and author drawn on top. Settings:
+`[cover] mode = "auto" | "embedded-only" | "generate" | "typographic"`,
+`[cover.sd] dir`, `python`, `checkpoint`, `steps`, `size`.
+
 ### 6.9 Quality Assurance Gate
 
 Each synthesized segment goes through:
@@ -736,6 +804,9 @@ license  = "Apache-2.0"
   command that fixes it (`text2audio models pull --lang en`).
 - `text2audio doctor` verifies hashes, tools, device and tier, and confirms offline
   readiness.
+- **Local services** (ADR-0009): a plugin may talk HTTP to a process that text2audio
+  started itself on the loopback interface (e.g. the SD WebUI for covers, §6.8.2). Any
+  other host is an offline violation.
 
 **Air-gapped install (FR-16)**
 
@@ -749,7 +820,8 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 
 | Command | Purpose |
 |---|---|
-| `text2audio convert <input>… [-o <output root>]` | Input file(s) or directory → one book folder each with `_work/book.md` + metadata. |
+| `text2audio convert <input>… [-o <output root>]` | Input file(s) or directory → one book folder each with `<book>.md` + `_work/` (source copy, metadata). |
+| `text2audio convert --reconvert <book folder> [--reader <name>]` | Convert the stored source again (§5.2); an edited `<book>.md` is kept and the new text goes to `<book>.reconverted.md`. |
 | `text2audio synthesize <book folder>` | Book folder → audio (incremental). |
 | `text2audio run <input>… [-o <output root>] [--name <folder>] [--overwrite]` | Convert + synthesize in one step (batch-capable). |
 | `text2audio preview <book folder> --chapter 3 --seconds 30` | Quick sample to audition voices/expression. |
@@ -759,6 +831,7 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 | `text2audio doctor` | Environment and offline-readiness check. |
 | `text2audio config show <book folder>` | Effective configuration with the source of each value (default, profile, user, book, CLI). |
 | `text2audio plugins` | List discovered languages and backends with capabilities. |
+| `text2audio resources [--json]` | Usable CPUs, RAM and GPUs (within affinity, cgroup and `CUDA_VISIBLE_DEVICES` limits) and the planned worker slots (§9.1). |
 
 Configuration is resolved in this order (later wins): built-in defaults → user config
 (`~/.config/text2audio/config.toml`) → book `_work/text2audio.toml` → CLI flags,
@@ -790,6 +863,14 @@ max_parts        = 150
 [qa]
 mode          = "on"          # on | off | sample=10%
 wer_threshold = 0.15
+
+[resources]                   # all optional; automatic plan otherwise (§9.1)
+devices            = ["cuda:0", "cuda:3"]   # or ["cpu"]
+max_workers        = 2
+threads_per_worker = 4
+
+[cover]
+mode = "auto"                 # auto | embedded-only | generate | typographic
 ```
 
 Exit codes: `0` success, `1` usage error, `2` input error, `3` missing asset /
@@ -884,6 +965,36 @@ Targets are provisional and will be validated on reference machines in M2.
 | **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | ru: M2 benchmark winner + GigaAM-v3; en: Chatterbox + faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
 
 ---
+
+### 9.1 Resource Planning
+
+The core probes what **this process** may use, not what the machine has, and plans
+worker slots from it (`text2audio resources`, `doctor`):
+
+- **CPUs**: the process affinity (`taskset`) capped by the cgroup `cpu.max` quota.
+- **RAM**: `MemAvailable` capped by the cgroup `memory.max` minus current usage.
+- **GPUs**: `nvidia-smi` (no torch in the core), filtered by `CUDA_VISIBLE_DEVICES`
+  (indices or UUIDs). GPUs are often shared with other jobs, so planning uses **free**
+  VRAM; each GPU's NUMA CPU set comes from `nvidia-smi topo -m`.
+
+Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`,
+`threads`):
+
+1. A GPU is usable if its free VRAM minus 1 GiB headroom covers the backend's
+   `vram_mb` (8 GiB when undeclared, the T1 floor). Tier `expressive` if any is usable,
+   otherwise `fast`.
+2. GPU slots: as many workers per GPU as its free VRAM allows (one when undeclared),
+   each pinned to CPUs on that GPU's NUMA node and given that GPU alone as
+   `CUDA_VISIBLE_DEVICES` (the worker sees `cuda:0`).
+3. CPU slots: `min(usable CPUs ÷ threads, (available RAM − 2 GiB) ÷ ram_mb)` workers,
+   each with disjoint CPUs and `OMP/MKL/OPENBLAS/TORCH_NUM_THREADS` set.
+4. `[resources]` config (`devices`, `max_workers`, `threads_per_worker`) and
+   `[synthesis] tier` override the automatic choice. The reasons are reported.
+5. One-off GPU services (the cover generator) take the first GPU in nvidia-smi order
+   with enough free VRAM.
+
+Free VRAM changes while other jobs run, so the plan is computed right before workers
+start, not cached.
 
 ## 10. Repository Layout
 
@@ -994,6 +1105,11 @@ Commits](https://www.conventionalcommits.org/), and
 | — | Russian backend per tier (fast: Piper / Silero v5; expressive: Chatterbox Multilingual / Qwen3-TTS / ESpeech / XTTS-v2). | Open — decided by M2 benchmark |
 | 2026-10-24 | **Personal use only.** Licenses are informational, not a selection criterion. Component priority: offline (hard requirement) → quality → everything else ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)). | Decided |
 | 2026-10-24 | Reference hardware: development machine (RTX 4090 24 GB) for T1; CPU-only run of the same machine, limited to 4 cores / 8 GB, for T0. | Proposed |
+| 2026-10-24 | M0: backend entry points return a light descriptor; the core wraps it in `WorkerBackend`. Workers speak protocol 1 with the standard library only. Until per-backend environments are installed (M2), workers start with the core's interpreter. | Decided |
+| 2026-10-24 | Resource planning (§9.1): plan from free VRAM, cgroup/affinity limits and backend-declared needs; GPU workers pinned to their NUMA CPUs; `nvidia-smi` instead of torch in the core. | Decided |
+| 2026-10-24 | Covers: embedded → generated by a local SD WebUI that text2audio starts itself on the first GPU with enough free VRAM → typographic; loopback-only local-service exception to the offline contract ([ADR-0009](docs/adr/0009-covers-and-local-services.md)). | Decided |
+| — | Prompt language for generated covers of Russian books: genre mapping only, or offline ru→en MT (e.g. Opus-MT) for titles/annotations. | Open — M2 |
+| 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |
 
 ---
 

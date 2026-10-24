@@ -15,5 +15,6 @@ Every ADR also appears in the SPEC.md decision log (§13.1).
 | [0006](0006-russian-second-language.md) | Russian as the second language | Superseded in part by 0008 |
 | [0007](0007-personal-use-offline-quality-priority.md) | Personal use: offline first, quality second, license not a criterion | Accepted |
 | [0008](0008-russian-first-language.md) | Russian as the first language | Accepted |
+| [0009](0009-covers-and-local-services.md) | Book covers: extract first, generate with a local Stable Diffusion service | Accepted |
 
 New ADR: copy [template.md](template.md), take the next number, open a PR.
