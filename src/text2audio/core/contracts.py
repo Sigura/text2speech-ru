@@ -47,8 +47,11 @@ class ModelAsset(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    repo: str
-    revision: str
+    # Source: a Hugging Face repo pinned to a commit, or a plain URL for a single file
+    # (e.g. Silero weights). Either way the SHA-256 pins the content.
+    repo: str | None = None
+    revision: str | None = None
+    url: str | None = None
     files: tuple[str, ...]
     sha256: dict[str, str]
     license: str = "unknown"  # informational only (ADR-0007)
@@ -59,26 +62,34 @@ class ModelAsset(BaseModel):
 
     @field_validator("revision")
     @classmethod
-    def _pinned_revision(cls, v: str) -> str:
-        if not _REVISION.match(v):
+    def _pinned_revision(cls, v: str | None) -> str | None:
+        if v is not None and not _REVISION.match(v):
             raise ValueError("revision must be a 40-character commit sha")
         return v
 
     @model_validator(mode="after")
-    def _hash_per_file(self) -> ModelAsset:
+    def _source_and_hashes(self) -> ModelAsset:
+        if self.url is None and (self.repo is None or self.revision is None):
+            raise ValueError("asset needs repo + revision, or url")
+        if self.url is not None and (self.repo is not None or len(self.files) != 1):
+            raise ValueError(f"{self.url}: a url asset has no repo and exactly one file")
         if set(self.sha256) != set(self.files):
-            raise ValueError(f"{self.repo}: sha256 keys must match files exactly")
+            raise ValueError(f"{self.source}: sha256 keys must match files exactly")
         for name, digest in self.sha256.items():
             if not _SHA256.match(digest):
-                raise ValueError(f"{self.repo}: invalid sha256 for {name}")
+                raise ValueError(f"{self.source}: invalid sha256 for {name}")
         for name in self.files:
             if name.startswith("/") or ".." in Path(name).parts:
-                raise ValueError(f"{self.repo}: unsafe file path {name!r}")
+                raise ValueError(f"{self.source}: unsafe file path {name!r}")
         return self
 
     @property
+    def source(self) -> str:
+        return self.url or f"{self.repo}@{(self.revision or '')[:12]}"
+
+    @property
     def owner(self) -> str:
-        return self.backend or self.component or self.repo
+        return self.backend or self.component or self.source
 
     def wanted(self, lang: str | None, tier: Tier | None) -> bool:
         lang_ok = lang is None or not self.langs or lang in self.langs

@@ -27,7 +27,7 @@ app = typer.Typer(no_args_is_help=True, add_completion=False, help=__doc__)
 models_app = typer.Typer(no_args_is_help=True, help="Manage the local model store.")
 app.add_typer(models_app, name="models")
 
-LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code, e.g. ru.")]
+LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code(s), e.g. ru or ru,en.")]
 TierOpt = Annotated[str | None, typer.Option("--tier", help="fast | expressive")]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output.")]
 LockOpt = Annotated[Path | None, typer.Option("--lock", help="Path to models.lock.")]
@@ -139,7 +139,7 @@ def models_list(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None
     from text2audio import api
 
     for a in api.models_list(lang, _tier(tier), lock):
-        typer.echo(f"{a.owner}\t{a.repo}@{a.revision[:12]}\t{len(a.files)} file(s)\t{a.license}")
+        typer.echo(f"{a.owner}\t{a.source}\t{len(a.files)} file(s)\t{a.license}")
 
 
 @models_app.command("verify")

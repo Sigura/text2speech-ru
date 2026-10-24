@@ -44,8 +44,9 @@ def _tool(report: DoctorReport, name: str, path: str | None, required: bool) -> 
     if path is None:
         need = "required" if required else "needed by some backends"
         report.add(name, "fail" if required else "warn", f"not found on PATH ({need})")
-    elif "conda" in path:
-        report.add(name, "warn", f"{path} (inside a conda env; prefer a system install)")
+    elif "conda" in path and not path.startswith(sys.prefix):
+        # Borrowed from another conda env (it may vanish); our own env's copy is fine.
+        report.add(name, "warn", f"{path} (from another conda env; prefer a system install)")
     else:
         report.add(name, "ok", path)
 

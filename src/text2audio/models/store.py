@@ -43,7 +43,7 @@ class AssetProblem:
 
     def __str__(self) -> str:
         return (
-            f"{self.kind} asset {self.asset.repo}/{self.file} "
+            f"{self.kind} asset {self.file} from {self.asset.source} "
             f"(used by {self.asset.owner}); fix: {pull_command(self.asset)}"
         )
 
@@ -53,6 +53,10 @@ class ModelStore:
         self.root = root or default_store()
 
     def asset_dir(self, asset: ModelAsset) -> Path:
+        if asset.url is not None:
+            # Content-addressed: a changed upstream file never overwrites a pinned one.
+            return self.root / "assets" / "url" / asset.sha256[asset.files[0]][:16]
+        assert asset.repo is not None and asset.revision is not None
         return self.root / "assets" / asset.repo / asset.revision
 
     def path(self, asset: ModelAsset, file: str) -> Path:

@@ -65,8 +65,8 @@ def test_pull_downloads_and_verifies(
 ) -> None:
     asset = make_asset(content=b"weights", install=False)
 
-    def download(repo: str, file: str, revision: str, target: Path) -> Path:
-        assert (repo, revision) == ("org/model", REV)
+    def download(a: ModelAsset, file: str, target: Path) -> Path:
+        assert (a.repo, a.revision) == ("org/model", REV)
         target.mkdir(parents=True, exist_ok=True)
         (target / file).write_bytes(b"weights")
         return target / file
@@ -81,7 +81,7 @@ def test_pull_rejects_hash_mismatch(
 ) -> None:
     asset = make_asset(install=False)
 
-    def download(repo: str, file: str, revision: str, target: Path) -> Path:
+    def download(a: ModelAsset, file: str, target: Path) -> Path:
         target.mkdir(parents=True, exist_ok=True)
         (target / file).write_bytes(b"something else")
         return target / file
@@ -89,3 +89,51 @@ def test_pull_rejects_hash_mismatch(
     with pytest.raises(PullError, match="SHA-256 mismatch"):
         pull([asset], store, download)
     assert not store.path(asset, "model.onnx").exists()
+
+
+def test_url_asset_is_content_addressed_and_pulled(store: ModelStore) -> None:
+    import hashlib
+
+    data = b"silero package"
+    asset = ModelAsset(
+        url="https://models.example/tts/ru/v5_6_ru.pt",
+        files=("v5_6_ru.pt",),
+        sha256={"v5_6_ru.pt": hashlib.sha256(data).hexdigest()},
+        backend="silero",
+        langs=("ru",),
+    )
+    assert asset.source == "https://models.example/tts/ru/v5_6_ru.pt"
+    assert store.asset_dir(asset).parts[-2:] == ("url", asset.sha256["v5_6_ru.pt"][:16])
+
+    def download(a: ModelAsset, file: str, target: Path) -> Path:
+        assert a.url is not None and file == "v5_6_ru.pt"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / file).write_bytes(data)
+        return target / file
+
+    assert len(pull([asset], store, download)) == 1
+    assert store.verify([asset]) == []
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"files": ("a",)},  # no source at all
+        {"url": "https://x/a", "repo": "o/m", "files": ("a",)},  # both sources
+        {"url": "https://x/a", "files": ("a", "b")},  # url asset with two files
+    ],
+)
+def test_asset_source_rules(fields: dict[str, object]) -> None:
+    sha = {f: "0" * 64 for f in fields["files"]}  # type: ignore[union-attr]
+    with pytest.raises(ValueError):
+        ModelAsset(sha256=sha, **fields)  # type: ignore[arg-type]
+
+
+def test_download_failure_becomes_pull_error(
+    store: ModelStore, make_asset: Callable[..., ModelAsset]
+) -> None:
+    def download(a: ModelAsset, file: str, target: Path) -> Path:
+        raise OSError("404 Entry Not Found")
+
+    with pytest.raises(PullError, match=r"model\.onnx from org/model@a{12}: download failed"):
+        pull([make_asset(install=False)], store, download)

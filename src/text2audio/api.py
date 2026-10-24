@@ -48,7 +48,8 @@ def plugins() -> Discovery:
 def models_list(
     lang: str | None = None, tier: Tier | None = None, lock: Path | None = None
 ) -> list[ModelAsset]:
-    return [a for a in load_lock(lock) if a.wanted(lang, tier)]
+    langs = lang.split(",") if lang else [None]
+    return [a for a in load_lock(lock) if any(a.wanted(x, tier) for x in langs)]
 
 
 def models_verify(
