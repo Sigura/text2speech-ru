@@ -26,9 +26,8 @@ Guidance for Claude Code sessions working in this repository.
 3. **Isolated backends** (§6.6.3, ADR-0004). TTS backends run as worker processes
    in their own uv environments; do not add model-specific heavy deps (torch,
    transformers, …) to the core package.
-4. **License hygiene** (§13, risk 1). Core stays MIT-compatible. Copyleft (GPL,
-   AGPL) or non-commercial (CC-BY-NC, CPML) components only as optional plugins,
-   with their license recorded in `models.lock`.
+4. **Priorities** (ADR-0007, personal use only). Be free with licenses: offline work
+   first, quality second. Record licenses in `models.lock` for information only.
 5. **Safe input handling** (§6.12). `defusedxml` for XML, archive size/path
    limits, `safetensors` / `torch.load(weights_only=True)`.
 

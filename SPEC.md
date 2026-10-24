@@ -4,11 +4,11 @@
 
 | | |
 |---|---|
-| Document version | 1.0-M0 |
+| Document version | 1.1-M0 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
-| Project license | Proposed: MIT core — see §13.1 |
+| Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
 **Change log**
 
@@ -23,6 +23,7 @@
 | 0.7 | 2026-10-24 | Russian research: stress (RUAccent default), normalization (rutextnorm, to be audited), per-language QA ASR (GigaAM-v3 for Russian), Russian backend shortlist with license notes, offline asset checklist and M4 benchmark protocol (§6.6.5, §8). |
 | 0.8 | 2026-10-24 | **Principle: no universal model.** Every language-dependent pipeline stage is pluggable per language (§6.6.1); per-language component matrix; mixed-language routing across different backends; per-language overrides in config; install only the languages you need. |
 | 1.0-M0 | 2026-10-24 | Approved for M0. License default recorded as proposed (MIT core). Companion docs added: README, CLAUDE.md, CONTRIBUTING, CHANGELOG, ADRs 0001–0006, `docs/adding-a-language.md`. |
+| 1.1-M0 | 2026-10-24 | **Decision:** personal use only. Component priority is offline → quality → everything else; licenses are informational. Non-commercial models (IndexTTS-2, XTTS-v2, ESpeech, Silero v5, MMS) become full candidates; PDF reader chosen by M1 benchmark; licensing risk removed. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -101,6 +102,8 @@ Design pillars:
 - GUI (CLI + Python API only in v1).
 - Music, sound effects, or full audiobook mastering/mixing.
 - Training or fine-tuning TTS models (only inference on published weights).
+- Commercial use or redistribution of generated audio or bundled models (personal use
+  only — see ADR-0007).
 
 ---
 
@@ -255,8 +258,8 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 |---|---|---|
 | `.txt` | Encoding detection with [charset-normalizer](https://github.com/jawah/charset_normalizer); heuristic structure inference (chapter-heading regexes per language, blank-line paragraphs, `*` / `—` dialogue). | Heuristics live in the language pack (e.g. "Chapter 1", "Глава 1"). |
 | `.fb2` / `.fb2.zip` | XML parse with [defusedxml](https://github.com/tiran/defusedxml) + [lxml](https://lxml.de/) following the [FictionBook 2](https://en.wikipedia.org/wiki/FictionBook) schema. Honour the XML declaration's encoding (often `windows-1251`). | Map `<section>` → chapter hierarchy, `<title>` → heading, `<p>`, `<emphasis>`, `<strong>`, `<epigraph>`, `<cite>`, `<poem>/<stanza>/<v>`, `<subtitle>`, `<empty-line/>`. Footnotes live in `<body name="notes">` and are linked by `l:href`. Cover from `<coverpage>` + `<binary>`. Language from `<title-info><lang>`. |
-| `.epub` | Treat as ZIP + [EPUB 3](https://www.w3.org/TR/epub-33/) package: read OPF manifest/spine and nav/NCX TOC, convert XHTML to Markdown with a custom lxml walker (EPUB 2 also supported). | A custom reader is preferred over [EbookLib](https://github.com/aerkalov/ebooklib), which is AGPL-3.0. Language from `dc:language`. |
-| `.pdf` | Layout-aware extraction. Default: [Docling](https://github.com/docling-project/docling) (MIT). Optional plugin: [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) (AGPL-3.0, faster). | Drop running headers/footers and page numbers; re-join hyphenated line breaks; tables read as "row: cell, cell" or skipped (configurable). Text-layer PDFs only in v1. |
+| `.epub` | Treat as ZIP + [EPUB 3](https://www.w3.org/TR/epub-33/) package: read OPF manifest/spine and nav/NCX TOC, convert XHTML to Markdown with a custom lxml walker (EPUB 2 also supported). | A custom reader gives full control over structure mapping; [EbookLib](https://github.com/aerkalov/ebooklib) may be used for package parsing if it handles the fixture corpus better. Language from `dc:language`. |
+| `.pdf` | Layout-aware extraction. Candidates: [Docling](https://github.com/docling-project/docling), [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) (fast, CPU-only), [Marker](https://github.com/datalab-to/marker) (strong on complex layouts, GPU). **Default chosen by the M1 benchmark** on the PDF fixture set; the others stay available as reader plugins. | Drop running headers/footers and page numbers; re-join hyphenated line breaks; tables read as "row: cell, cell" or skipped (configurable). Text-layer PDFs only in v1. |
 
 Footnote policy (configurable): `inline` (read in place, in a different voice),
 `chapter-end` (default), or `skip`.
@@ -552,9 +555,9 @@ Text rules:
 
 | Tier | Candidates | Key caveats |
 |---|---|---|
-| fast (CPU) | [Piper](https://github.com/OHF-Voice/piper1-gpl) `ru_RU` voices; [Silero TTS v5](https://github.com/snakers4/silero-models) | Kokoro has **no official Russian**; community Kokoro-ru fine-tunes are experimental. Silero v5 is fast with many Russian voices, but its **weights license is unclear** and it loads through `torch.hub` (must be pre-fetched, see below). |
+| fast (CPU) | [Piper](https://github.com/OHF-Voice/piper1-gpl) `ru_RU` voices; [Silero TTS v5](https://github.com/snakers4/silero-models) | Kokoro has **no official Russian**; community Kokoro-ru fine-tunes are experimental. Silero v5 is fast with many Russian voices; it loads through `torch.hub`, so its files must be pre-fetched (see below). |
 | expressive (GPU) | [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) (MIT, Russian officially supported); [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Russian listed) | Chatterbox Multilingual has no paralinguistic tags (`<laugh>` etc.), so E2 uses the `exaggeration` scalar only. |
-| experimental | [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune on Russian) | Card says Apache-2.0, but the F5-TTS base weights are CC-BY-NC-4.0 — the lineage conflict must be resolved before shipping. |
+| expressive (GPU), additional | [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) (F5-TTS fine-tune trained on Russian); [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (Russian supported, voice cloning) | Russian-specific training may beat multilingual models on naturalness; XTTS-v2 is older but well proven for Russian. Both enter the M4 benchmark on equal terms. |
 
 **Offline asset checklist (Russian).** Several Russian components download weights
 on first use (RUAccent from Hugging Face, Silero via `torch.hub`, GigaAM on first
@@ -568,8 +571,7 @@ with networking disabled to prove nothing is fetched at runtime.
    ≥ 200 sentences including ≥ 50 stress homographs, ≥ 50 ё-words, ≥ 50 numbers needing
    case agreement, dialogue with author's remarks, and one poem.
 2. Metrics per backend: QA-ASR WER (GigaAM), **stress accuracy** on the homograph
-   subset (human-checked), normalization exact match, RTF on T0 and T1, VRAM, and
-   license status.
+   subset (human-checked), normalization exact match, RTF on T0 and T1, VRAM.
 3. Blind listening test with native speakers (≥ 5 listeners, ≥ 30 clips). UTMOS-type
    predictors are trained mostly on English and are reported for reference only.
 4. The winners per tier become the profile defaults and are recorded in the decision
@@ -813,8 +815,12 @@ offline violation, `4` completed with QA warnings, `5` internal error.
 
 ## 7. Technology Stack
 
-Licenses below were collected from public sources and **must be re-verified against
-each project's LICENSE / model card before release** (tracked in M5).
+**Selection priority (personal use only, ADR-0007).** Every component is chosen by:
+
+1. **Works fully offline** after install — a hard requirement, never traded away;
+2. **Quality** — measured on the relevant benchmark;
+3. everything else — speed, size, maintenance. **License is not a criterion**; the
+   license column is kept for information only.
 
 | Concern | Choice (default) | Alternatives | License notes |
 |---|---|---|---|
@@ -823,8 +829,8 @@ each project's LICENSE / model card before release** (tracked in M5).
 | Config | [pydantic](https://docs.pydantic.dev/) + TOML | — | MIT |
 | Encoding detection | [charset-normalizer](https://github.com/jawah/charset_normalizer) | — | MIT |
 | XML (FB2 / EPUB) | [lxml](https://lxml.de/) + [defusedxml](https://github.com/tiran/defusedxml) | stdlib `xml.etree` | BSD / PSF |
-| EPUB | Custom reader (zipfile + lxml) | [EbookLib](https://github.com/aerkalov/ebooklib) | EbookLib is **AGPL-3.0** |
-| PDF → Markdown | [Docling](https://github.com/docling-project/docling) | [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm), [Marker](https://github.com/datalab-to/marker) | Docling MIT; pymupdf4llm **AGPL-3.0**; Marker GPL-3.0 code + restricted weights |
+| EPUB | Custom reader (zipfile + lxml) | [EbookLib](https://github.com/aerkalov/ebooklib) | AGPL-3.0 (informational) |
+| PDF → Markdown | Chosen by M1 benchmark: [Docling](https://github.com/docling-project/docling), [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm), [Marker](https://github.com/datalab-to/marker) | The other two, as plugins | Docling MIT; pymupdf4llm **AGPL-3.0**; Marker GPL-3.0 code + restricted weights |
 | Markdown | [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | mistune | MIT |
 | Sentence splitting | [pySBD](https://github.com/nipunsadvilkar/pySBD) | spaCy, Stanza | MIT |
 | Normalization | [NeMo text-processing](https://github.com/NVIDIA/NeMo-text-processing) | [num2words](https://github.com/savoirfairelinux/num2words) + rules | Apache-2.0 / LGPL |
@@ -848,22 +854,21 @@ and **expressive** (GPU recommended, emotion control).
 |---|---|---|---|---|---|---|
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | fast | en (US/GB) + ~7 others | none | No (preset voices) | Apache-2.0 | **Default fast — English v1** |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | fast | 30+ incl. ru (voice-dependent) | none | No | GPL-3.0 code (repo moved from MIT `rhasspy/piper`, archived Oct 2025); per-voice licenses | Fallback fast; low-end / ARM; **Russian fast-tier candidate** |
-| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Weights license unclear — verify before use; loads via `torch.hub` | **Russian fast-tier candidate** (M4) |
+| [Silero TTS v5](https://github.com/snakers4/silero-models) | fast | ru + CIS languages | none | No | Unclear (informational); loads via `torch.hub` | **Russian fast-tier candidate** (M4) |
 | [Chatterbox](https://github.com/resemble-ai/chatterbox) | expressive | en; Multilingual variant (23 languages incl. ru) | scalar (`exaggeration`) | Yes (≈5 s reference) | MIT | **Default expressive — English v1; Russian expressive candidate** |
 | [Orpheus TTS](https://github.com/canopyai/Orpheus-TTS) | expressive | en (+ multilingual research releases) | tags | Limited | Apache-2.0 code; weights derived from Llama 3.2 → Llama community license | Optional plugin |
 | [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) | expressive | 10 languages incl. ru | prompt | Yes | Apache-2.0 (verify) | **Russian expressive candidate** (M4) |
-| [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) | expressive | ru | none | Yes (F5-style reference) | Card: Apache-2.0; base F5-TTS weights CC-BY-NC-4.0 — conflict | Experimental (M4) |
-| [IndexTTS-2](https://github.com/index-tts/index-tts) | expressive | zh, en | vector (8 emotions) | Yes | Custom license; commercial use restricted | Optional, non-commercial |
+| [ESpeech-TTS](https://huggingface.co/ESpeech/ESpeech-TTS-1_SFT-256K) | expressive | ru | none | Yes (F5-style reference) | Card: Apache-2.0; base F5-TTS weights CC-BY-NC-4.0 | **Russian expressive candidate** (M4) |
+| [IndexTTS-2](https://github.com/index-tts/index-tts) | expressive | zh, en | vector (8 emotions) | Yes | Custom, non-commercial | **English expressive candidate** — strongest emotion control; benchmarked against Chatterbox in M2/M3 |
 | [Parler-TTS](https://github.com/huggingface/parler-tts) | expressive | en (+ multilingual variant) | prompt | No | Apache-2.0 | Optional |
 | [MeloTTS](https://github.com/myshell-ai/MeloTTS) | fast | en, es, fr, zh, ja, ko | none | No | MIT | Optional |
-| [MMS-TTS](https://huggingface.co/facebook/mms-tts) | fast | 1,100+ | none | No | CC-BY-NC-4.0 | Long-tail languages, non-commercial only |
-| [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (community fork) | expressive | 17 | reference-audio style | Yes | CPML (non-commercial); Coqui company closed, no commercial license available | Legacy optional plugin only |
-| [ChatTTS](https://github.com/2noise/ChatTTS) | expressive | zh, en | tags | No | Weights CC-BY-NC-4.0 | Not planned |
+| [MMS-TTS](https://huggingface.co/facebook/mms-tts) | fast | 1,100+ | none | No | CC-BY-NC-4.0 | Long-tail languages without a better option |
+| [XTTS-v2](https://github.com/idiap/coqui-ai-TTS) (community fork) | expressive | 17 | reference-audio style | Yes | CPML (non-commercial); Coqui closed, community fork maintained | Optional; **Russian expressive candidate** (M4) |
+| [ChatTTS](https://github.com/2noise/ChatTTS) | expressive | zh, en | tags | No | Weights CC-BY-NC-4.0 | Optional (mainly Chinese) |
 | Bark | — | — | — | — | — | **Removed** (unmaintained) |
 
 Selection criteria for any new backend: offline-capable, pinned weights on Hugging
-Face, license compatible with the project license, actively maintained (release in the
-last 12 months), passes the QA gate at ≤ 5% flagged segments on the reference corpus.
+Face, passes the QA gate at ≤ 5% flagged segments on the reference corpus.
 
 ---
 
@@ -922,11 +927,11 @@ The model store defaults to `~/.local/share/text2audio/models` (overridable with
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | **M0 — Scaffold** | Repo, CI, CLI skeleton, plugin discovery, model store + `models.lock`, `doctor`, worker protocol stub. | `doctor` passes; offline CI job green; a dummy backend synthesizes a sine-wave "segment" through a worker. |
-| **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest. | Golden-file tests pass for all formats on the fixture corpus. |
-| **M2 — English TTS** | Kokoro + Chatterbox backends, English normalization, audio assembly, MP3 output with split plan, optional M4B, QA gate, resume. | Full public-domain novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged. |
+| **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest; PDF reader benchmark (Docling / pymupdf4llm / Marker). | Golden-file tests pass for all formats on the fixture corpus. |
+| **M2 — English TTS** | Kokoro + Chatterbox backends (IndexTTS-2 benchmarked as expressive alternative), English normalization, audio assembly, MP3 output with split plan, optional M4B, QA gate, resume. | Full public-domain novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged. |
 | **M3 — Expression** | E1 structural rules, multi-voice dialogue, E3 directives, E2 classifier plugin. | A/B listening test meets the §6.7 threshold for E1; E2 result documented (ship or defer). |
-| **M4 — Russian** | Russian language pack `ru` generated from the template: stress, ё-restoration, number agreement, dialogue dashes; backend chosen by benchmark (Chatterbox Multilingual, Qwen3-TTS, Piper `ru`). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
-| **M5 — Hardening & v1.0** | Air-gapped bundle, security tests, license audit, docs, performance tuning. | Definition of Done (§14) complete; v1.0.0 tagged. |
+| **M4 — Russian** | Russian language pack `ru` generated from the template: stress, ё-restoration, number agreement, dialogue dashes; backend chosen by benchmark (fast: Piper `ru`, Silero v5; expressive: Chatterbox Multilingual, Qwen3-TTS, ESpeech, XTTS-v2). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
+| **M5 — Hardening & v1.0** | Air-gapped bundle, security tests, docs, performance tuning. | Definition of Done (§14) complete; v1.0.0 tagged. |
 | **v2 (later)** | OCR for scanned PDFs ([OCRmyPDF](https://github.com/ocrmypdf/OCRmyPDF) / Docling OCR), DOCX/HTML input, character-voice assignment by speaker attribution, local web UI. | — |
 
 ---
@@ -965,16 +970,15 @@ Commits](https://www.conventionalcommits.org/), and
 
 | # | Risk / question | Impact | Mitigation / decision needed |
 |---|---|---|---|
-| 1 | **Licensing.** Several attractive components are copyleft or non-commercial (pymupdf4llm AGPL, EbookLib AGPL, Piper GPL-3.0, XTTS CPML, MMS / ChatTTS CC-BY-NC, IndexTTS custom, Orpheus via Llama license). | High | **Decide the project license and intended use (personal vs. commercial) before M1.** Keep the core permissive (MIT / Apache-2.0); isolate copyleft/NC components in optional plugins; record each asset's license in `models.lock` and show it in `doctor` / output metadata. |
-| 2 | **Dependency conflicts** between backends. | High | Per-backend venvs + worker protocol (§6.6.3). |
-| 3 | **Hallucination** in autoregressive TTS at book length. | High | ASR quality gate (§6.9). |
-| 4 | **Model churn** — the open TTS landscape changes every few months. | Medium | Backend plugin contract keeps switching cheap; review the catalog (§8) each release. |
-| 5 | **Voice consistency** across a long book (timbre drift between segments). | Medium | Fixed reference clip / speaker embedding per voice, fixed seed, per-chapter loudness normalization; drift measured with speaker-similarity score in M2. |
-| 6 | **PDF quality** varies widely (multi-column, footnotes, tables). | Medium | Docling default + configurable post-rules; users can edit `book.md` before synthesis. |
-| 7 | **Expression benefit** unproven. | Medium | E1 default; E2 ships only if the M3 test passes. |
-| 8 | **Hardware floor** — expressive tier unusable on CPU-only machines. | Medium | Two tiers (§9); `doctor` recommends a tier. |
-| 9 | **Normalization quality** for languages beyond English. | Medium | Normalization is the language pack's responsibility with its own test set (FR-11). |
-| 10 | No single model is best for all languages. | Low (by design) | **Decided:** best-of-breed per language; multilingual models are one option per language (§6.6.1, decision log). |
+| 1 | **Dependency conflicts** between backends. | High | Per-backend venvs + worker protocol (§6.6.3). |
+| 2 | **Hallucination** in autoregressive TTS at book length. | High | ASR quality gate (§6.9). |
+| 3 | **Model churn** — the open TTS landscape changes every few months. | Medium | Backend plugin contract keeps switching cheap; review the catalog (§8) each release. |
+| 4 | **Voice consistency** across a long book (timbre drift between segments). | Medium | Fixed reference clip / speaker embedding per voice, fixed seed, per-chapter loudness normalization; drift measured with speaker-similarity score in M2. |
+| 5 | **PDF quality** varies widely (multi-column, footnotes, tables). | Medium | Docling default + configurable post-rules; users can edit `book.md` before synthesis. |
+| 6 | **Expression benefit** unproven. | Medium | E1 default; E2 ships only if the M3 test passes. |
+| 7 | **Hardware floor** — expressive tier unusable on CPU-only machines. | Medium | Two tiers (§9); `doctor` recommends a tier. |
+| 8 | **Normalization quality** for languages beyond English. | Medium | Normalization is the language pack's responsibility with its own test set (FR-11). |
+| 9 | No single model is best for all languages. | Low (by design) | **Decided:** best-of-breed per language; multilingual models are one option per language (§6.6.1, decision log). |
 
 ### 13.1 Decision Log
 
@@ -984,8 +988,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Offline runtime contract ([ADR-0002](docs/adr/0002-offline-runtime-contract.md)), isolated backend workers ([ADR-0004](docs/adr/0004-isolated-backend-workers.md)), MP3 default with per-section split ([ADR-0005](docs/adr/0005-mp3-default-section-split.md)). | Decided |
 | 2026-10-24 | Second language is **Russian** (`ru`), delivered in M4 ([ADR-0006](docs/adr/0006-russian-second-language.md)). | Decided |
 | 2026-10-24 | Russian text front end: RUAccent (stress + ё), rutextnorm (normalization, after audit), GigaAM-v3 (QA ASR) as defaults, subject to the M4 benchmark. | Proposed |
-| — | Russian backend per tier (Piper / Silero v5 for fast; Chatterbox Multilingual / Qwen3-TTS for expressive). | Open — decided by M4 benchmark |
-| 2026-10-24 | Project license: **MIT core**; copyleft / non-commercial components only as optional plugins. Final confirmation of intended use (personal vs. commercial) still pending. | Proposed — confirm before M1 |
+| — | Russian backend per tier (fast: Piper / Silero v5; expressive: Chatterbox Multilingual / Qwen3-TTS / ESpeech / XTTS-v2). | Open — decided by M4 benchmark |
+| 2026-10-24 | **Personal use only.** Licenses are informational, not a selection criterion. Component priority: offline (hard requirement) → quality → everything else ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)). | Decided |
 | 2026-10-24 | Reference hardware: development machine (RTX 4090 24 GB) for T1; CPU-only run of the same machine, limited to 4 cores / 8 GB, for T0. | Proposed |
 
 ---
@@ -1002,7 +1006,6 @@ Commits](https://www.conventionalcommits.org/), and
 - [ ] Interrupted jobs resume without re-synthesizing completed segments.
 - [ ] Each input book gets its own folder under the output root, named after the input file; batch runs and name clashes behave as in §5.2.
 - [ ] The Russian language pack exists, was generated from the template, and required no change to `core/`; it uses **different components from English in at least the normalization, stress/G2P and QA-ASR stages**; Russian FB2 fixtures pass the QA gate.
-- [ ] License audit complete; every bundled component's license is recorded and compatible with the project license.
 - [ ] README covers install (online and air-gapped), CLI usage, configuration, voices, expression levels; `docs/adding-a-language.md` covers the extension recipe.
 
 ---

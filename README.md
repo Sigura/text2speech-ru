@@ -46,5 +46,4 @@ text2audio doctor                           # offline readiness check
 
 ## License
 
-Proposed: MIT for the core (see SPEC.md §13.1). Optional plugins may carry their own
-licenses, including non-commercial ones; `text2audio doctor` will list them.
+Be free, offline work first, quality second

@@ -22,8 +22,7 @@ Read [SPEC.md](SPEC.md) first. In particular:
   network. The offline CI job enforces this.
 - **No universal model** — language-specific logic and models belong in plugins,
   never in `src/text2audio/core/`.
-- **Licenses** — new dependencies and model assets must have their license recorded;
-  copyleft or non-commercial components are only accepted as optional plugins.
+- **Licenses** — Be free, offline work first, quality second.
 
 ## Workflow
 
