@@ -2,9 +2,13 @@
 # Development (tests, lint, sine backend): pip install -r requirements-dev.txt
 -e .
     # via
+    #   text2audio-backend-silero
     #   text2audio-backend-sine
+    #   text2audio-g2p-ruaccent
     #   text2audio-lang-ru
+-e ./plugins/backend-silero
 -e ./plugins/backend-sine
+-e ./plugins/g2p-ruaccent
 -e ./plugins/lang-ru
 annotated-doc==0.0.5
     # via typer
@@ -14,6 +18,8 @@ anyio==4.15.1 ; sys_platform != 'emscripten'
     # via httpx2
 ast-serialize==0.13.1
     # via mypy
+cffi==2.1.1
+    # via soundfile
 cfgv==3.5.0
     # via pre-commit
 charset-normalizer==3.5.2
@@ -27,10 +33,14 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   typer
 coverage==7.17.0
     # via pytest-cov
+dawg2-python==0.9.0
+    # via pymorphy3
 defusedxml==0.7.1
     # via text2audio
 distlib==0.4.4
     # via virtualenv
+docopt==0.6.2
+    # via num2words
 filelock==4.2.4
     # via
     #   huggingface-hub
@@ -80,14 +90,22 @@ networkx==3.7 ; python_full_version >= '3.12'
     # via pymupdf-layout
 nodeenv==1.11.0
     # via pre-commit
+num2words==0.5.14
+    # via text2audio-lang-ru
 numpy==2.4.6 ; python_full_version < '3.12'
     # via
     #   onnxruntime
     #   pymupdf-layout
+    #   soundfile
+    #   soxr
+    #   text2audio
 numpy==2.5.4 ; python_full_version >= '3.12'
     # via
     #   onnxruntime
     #   pymupdf-layout
+    #   soundfile
+    #   soxr
+    #   text2audio
 onnxruntime==1.31.0
     # via pymupdf-layout
 packaging==26.3
@@ -111,6 +129,8 @@ protobuf==7.36.2
     # via onnxruntime
 psutil==7.2.2
     # via pymupdf4llm
+pycparser==3.12 ; implementation_name != 'PyPy'
+    # via cffi
 pydantic==2.14.1
     # via text2audio
 pydantic-core==2.50.1
@@ -119,6 +139,12 @@ pygments==2.21.0
     # via
     #   pytest
     #   rich
+pymorphy3==2.0.6
+    # via text2audio-lang-ru
+pymorphy3-dicts-ru==2.4.417150.4580142
+    # via
+    #   pymorphy3
+    #   text2audio-lang-ru
 pymupdf==1.28.2
     # via
     #   pymupdf-layout
@@ -141,10 +167,18 @@ pyyaml==6.0.3
     #   pre-commit
     #   pymupdf-layout
 rich==15.0.0
-    # via typer
+    # via
+    #   text2audio
+    #   typer
 ruff==0.17.2
+setuptools==84.2.1 ; python_full_version >= '3.12'
+    # via pymorphy3
 shellingham==1.5.4
     # via typer
+soundfile==0.14.0
+    # via text2audio
+soxr==1.1.0
+    # via text2audio
 tabulate==0.10.0
     # via pymupdf4llm
 tqdm==4.70.1
@@ -164,6 +198,7 @@ typing-extensions==4.16.0
     #   mypy
     #   pydantic
     #   pydantic-core
+    #   soundfile
     #   typing-inspection
 typing-inspection==0.4.4
     # via pydantic

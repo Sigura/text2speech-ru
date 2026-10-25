@@ -36,3 +36,9 @@ def load_lock(path: Path | None = None) -> list[ModelAsset]:
         return _LockFile.model_validate(data).asset
     except (tomllib.TOMLDecodeError, ValidationError) as exc:
         raise LockError(f"{path}: {exc}") from exc
+
+
+def assets_for(owner: str, assets: list[ModelAsset] | None = None) -> list[ModelAsset]:
+    """Lock entries a plugin loads: by backend name or component id ("g2p:ruaccent")."""
+    found = load_lock() if assets is None else assets
+    return [a for a in found if owner in (a.backend, a.component)]

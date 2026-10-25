@@ -1,0 +1,20 @@
+[project]
+name = "text2audio-g2p-ruaccent"
+version = "0.1.0"
+description = "RUAccent stress + ё component for text2audio (runs in its own uv environment)"
+requires-python = ">=3.11"
+# The descriptor imports text2audio; the worker runs in env/ and uses no core code.
+dependencies = ["text2audio"]
+
+[project.entry-points."text2audio.g2p"]
+ruaccent = "text2audio_g2p_ruaccent.descriptor:RuAccent"
+
+[tool.uv.sources]
+text2audio = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/text2audio_g2p_ruaccent"]

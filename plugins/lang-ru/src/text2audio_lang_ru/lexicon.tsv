@@ -1,0 +1,11 @@
+# Russian pack lexicon (FR-13): word<TAB>reading. Applied before normalization; user and
+# per-book lexicons override it. Stress: "+" before the vowel.
+США	сэшэ+а
+ЕС	евросо+юз
+ООН	о+он
+НАТО	н+ато
+ЮНЕСКО	юн+еско
+ВУЗ	в+уз
+вуз	в+уз
+ГУЛАГ	гул+аг
+МИД	м+ид

@@ -116,17 +116,49 @@ class Segment(BaseModel):
     status: str = "pending"
     wer: float | None = None
     attempts: int = 0
+    heading_level: int | None = None  # 1–6 for title/heading segments (split plan, §6.8.1)
+    # Normalized text with stress marks as "+" before the vowel; backends convert (§6.6.5).
+    text_stress: str | None = None
+    route: str | None = None  # synthesis route chosen by the tier plan, e.g. "silero"
+    duration_ms: int | None = None
+    flags: list[str] = []
 
     @property
     def speech_text(self) -> str:
         return self.text_norm if self.text_norm is not None else self.text
 
+    @property
+    def tts_text(self) -> str:
+        """What the backend reads: stressed if the language marks stress."""
+        return self.text_stress if self.text_stress is not None else self.speech_text
+
+
+class QaProfile(BaseModel):
+    """QA gate bounds of a language (§6.9)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    asr: str | None = None  # entry point in `text2audio.asr`
+    wer_threshold: float = 0.15
+    chars_per_sec: tuple[float, float] = (8.0, 25.0)
+    # Letters folded before comparing texts (ASR writes "е" for "ё").
+    fold: dict[str, str] = {}
+
+
+class TierRoute(BaseModel):
+    """How a language synthesizes on one tier: backend, optional polish, foreign text."""
+
+    model_config = ConfigDict(frozen=True)
+
+    backend: str
+    polish: str | None = None  # entry point in `text2audio.polishers`
+    foreign: str | None = None  # backend for segments with unresolved foreign script
+
 
 class LanguageProfile(BaseModel):
     """What a language pack tells the core about its language (§6.6.5).
 
-    Only text structure for now (M1); stress, normalization, voices and QA bounds are
-    added with the first pack that needs them (M2).
+    Components are named by entry point, so the core never imports a model (§6.6.1).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -141,6 +173,40 @@ class LanguageProfile(BaseModel):
     # Abbreviations that end with a full stop but not a sentence ("т. е.", "г."),
     # lowercase; initials (one capital letter and a stop) are handled by the core.
     abbreviations: tuple[str, ...] = ()
+    normalizer: str | None = None  # entry point in `text2audio.normalizers`
+    g2p: str | None = None  # entry point in `text2audio.g2p` (stress / phonemes)
+    tiers: dict[Tier, TierRoute] = {}
+    # Voice role → backend → backend voice id, e.g. {"narrator": {"silero": "xenia"}}.
+    voices: dict[str, dict[str, str]] = {}
+    pauses_ms: dict[str, int] = {}  # overrides of the core's structural pauses
+    qa: QaProfile = QaProfile()
+    lexicon: str | None = None  # path of the pack's lexicon TSV (FR-13)
+    # Title of a long section split at paragraph boundaries (§6.8.1).
+    part_title: str = "{title} (part {n} of {total})"
+
+
+class NormResult(BaseModel):
+    text: str
+    # Spans the rules could not verbalize with confidence; listed in report.json.
+    uncertain: list[str] = []
+
+
+@runtime_checkable
+class Normalizer(Protocol):
+    """Text normalization stage of one language (§6.5, FR-11)."""
+
+    def normalize(self, text: str, role: str = "narration") -> NormResult: ...
+
+
+@runtime_checkable
+class ComponentDescriptor(Protocol):
+    """A per-language component (stress/G2P, ASR) that runs in a worker (§6.6.1)."""
+
+    name: str
+    env: str | None  # its uv environment (§6.6.3); None = the core's interpreter
+
+    def assets(self) -> list[ModelAsset]: ...
+    def worker_command(self, python: str) -> list[str]: ...
 
 
 class SynthesisResult(BaseModel):

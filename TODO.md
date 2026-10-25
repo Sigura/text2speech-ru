@@ -28,6 +28,13 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   GPU) with the hybrid route, benchmark against Qwen3-TTS / ESpeech / XTTS-v2,
   per-backend environments, MP3 + split plan, QA gate, resume, covers (SD WebUI +
   typographic); extract the language-pack template.
+  - [x] step 1 — first audiobook on CPU: normalization, RUAccent, Silero worker, plugin
+    environments, assembly + split plan + MP3 tags, `run` / `synthesize`, incremental
+    re-render and resume;
+  - [ ] step 2 — QA gate (GigaAM `rnnt`, WER, retries, `report.json`), full-novel T0 run;
+  - [ ] step 3 — GPU hybrid (Silero → Chatterbox VC, Chatterbox TTS for Latin words),
+    FR-24 Latin-span stage, T1 run;
+  - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template.
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
@@ -61,6 +68,6 @@ Suggestions, not commitments. Each names the milestone where it would fit.
 | 5 | **Inbox folder mode.** `text2audio watch ~/Books/inbox` converts every book dropped there, one at a time, into the output root. | Fits a personal library: copy a book in, find the audiobook later. | M5 |
 | 6 | **Completion hook.** Optional `on_complete` command in the config (e.g. a script that messages your Telegram bot). The core runs a local command and never talks to the network itself. | Long books finish hours later; a notification is handy, and the offline contract stays intact. | M2 |
 | 7 | **Russian regression corpus in CI.** Keep the spike's sentences (plus the M2 benchmark set) as a nightly GPU job with WER and stress thresholds. | Catches regressions when a model, RUAccent or a normalization rule changes. | M2 |
-| 8 | **Speaking rate and voice per book.** Expose Silero's SSML `prosody rate` and voice choice in `config show`, with a 30-second `preview` per voice. | Narration speed is personal; trying `xenia`, `baya` and `kseniya` on the actual book is quicker than editing config blind. | M2–M3 |
-| 9 | **Batched synthesis requests.** Send several segments per worker request (Silero and GigaAM both batch). | With RTF 0.008, process and protocol overhead per segment dominate; batching keeps the GPU busy. | M2 |
-| 10 | **Shared-GPU etiquette.** Re-probe free VRAM before each chapter and back off (fewer workers, or CPU) when another job such as the video server grows. | The GPUs are shared; the plan is a snapshot and VRAM use changes while a book renders. | M2 |
+| 8 | **Speaking rate and voice per book.** Expose Silero's SSML `prosody rate` and voice choice in `config show`, with a 30-second `preview` per voice. | Narration speed is personal; trying `xenia`, `baya` and `kseniya` on the actual book is quicker than editing config blind. | M3 |
+| 9 | **Batched synthesis requests.** Send several segments per worker request (Silero and GigaAM both batch). | With RTF 0.008, process and protocol overhead per segment dominate; batching keeps the GPU busy. | M3 |
+| 10 | **Shared-GPU etiquette.** Re-probe free VRAM before each chapter and back off (fewer workers, or CPU) when another job such as the video server grows. | The GPUs are shared; the plan is a snapshot and VRAM use changes while a book renders. | M3 |

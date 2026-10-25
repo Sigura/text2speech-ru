@@ -51,10 +51,42 @@ Russian pack itself is the only one written by hand.
 
 Any stage you leave out falls back to the generic implementation.
 
+**As built in M2 (the Russian pack is the reference):** the profile is a
+`LanguageProfile` object exported by the pack's `text2audio.languages` entry point
+(`plugins/lang-ru/src/text2audio_lang_ru/__init__.py`). Besides the text rules it names
+its components by entry point and carries the data the core reads:
+
+| Field | Russian value | Meaning |
+|---|---|---|
+| `normalizer` | `"ru"` | `text2audio.normalizers` entry point: `normalize(text, role) → NormResult` |
+| `g2p` | `"ruaccent"` | `text2audio.g2p` component that adds `+` stress marks (a worker) |
+| `tiers` | `{"fast": TierRoute(backend="silero")}` | backend (+ polish, foreign-text backend) per tier |
+| `voices` | `{"narrator": {"silero": "xenia"}}` | role → backend → voice id |
+| `pauses_ms` | `{"paragraph": 800}` | overrides of the core's structural pauses |
+| `qa` | `QaProfile(asr="gigaam", wer_threshold=0.18, fold={"ё": "е"})` | QA gate bounds |
+| `lexicon` | path to `lexicon.tsv` | base pronunciation list (FR-13) |
+| `part_title` | `"{title} (часть {n} из {total})"` | title of a long section split in parts |
+
+The normalizer runs in the core environment, so it must stay light (pure Python, data
+inside wheels). Keep a test set like `plugins/lang-ru/tests/normalization.tsv`
+(`input<TAB>expected[<TAB>role]`, ≥ 95 % exact match, FR-11).
+
+Anything heavy — stress/G2P models, ASR, TTS — is a separate plugin that runs as a
+worker in its own uv environment (ADR-0010): a descriptor with `name`, `env`,
+`env_project` and `worker_command()`, a `worker.py` that imports `t2a_worker` first,
+and `env/pyproject.toml` + `env/uv.lock`. Copy `plugins/g2p-ruaccent` (component) or
+`plugins/backend-silero` (backend) as a starting point; `text2audio envs sync` builds the
+environment.
+
 ## 4. Declare assets
 
 Every model file and data file the pack's components load goes into its
 `models.lock` entries: repository, commit revision, files, SHA-256, license.
+Entries are matched to plugins by `backend = "<name>"` or `component = "<kind>:<name>"`
+(`"g2p:ruaccent"`, `"asr:gigaam"`); the core passes their store directories to the worker
+in its `load` request. Workers run with `T2A_NO_NETWORK=1`: a library that tries to
+download on first use fails instead — wrap it so it loads only pinned files (see the
+RUAccent worker).
 
 ## 5. Build the benchmark set
 

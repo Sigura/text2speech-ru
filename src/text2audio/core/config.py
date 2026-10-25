@@ -35,7 +35,14 @@ class OutputConfig(_Section):
     split: Literal["auto", "section", "none"] = "auto"
     min_part_minutes: float = 3
     max_part_minutes: float = 90
+    target_part_minutes: float = 45
+    min_parts: int = 2
     max_parts: int = 150
+    max_merge_ratio: float = 0.5
+
+
+class ToolsConfig(_Section):
+    ffmpeg: str | None = None  # None = from PATH
 
 
 class QaConfig(_Section):
@@ -56,6 +63,7 @@ class Config(_Section):
     output: OutputConfig = OutputConfig()
     qa: QaConfig = QaConfig()
     resources: ResourcesConfig = ResourcesConfig()
+    tools: ToolsConfig = ToolsConfig()
     # Per-language overrides, e.g. [lang.ru] g2p = "silero-stress" (§6.6.1).
     lang: dict[str, dict[str, Any]] = {}
 

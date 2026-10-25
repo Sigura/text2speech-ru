@@ -84,7 +84,10 @@ def test_cli_plugins_and_models(
     tmp_path: Path, make_asset: Callable[..., ModelAsset], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("T2A_MODEL_HOME", str(tmp_path / "store"))
-    assert "backends: sine" in runner.invoke(app, ["plugins"]).output
+    backends = next(
+        x for x in runner.invoke(app, ["plugins"]).output.splitlines() if x.startswith("backends:")
+    )
+    assert {"sine", "silero"} <= set(backends.removeprefix("backends: ").split(", "))
     lock = str(write_lock(tmp_path / "models.lock", [make_asset(install=False)]))
     listed = runner.invoke(app, ["models", "list", "--lang", "ru", "--lock", lock])
     assert "org/model@aaaaaaaaaaaa" in listed.output
@@ -102,6 +105,12 @@ def test_cli_resources_json() -> None:
 
 
 def test_planned_commands_explain_their_milestone() -> None:
-    result = runner.invoke(app, ["synthesize", "output/Война и мир"])
+    result = runner.invoke(app, ["preview", "output/Война и мир"])
     assert result.exit_code == ExitCode.USAGE
     assert "M2" in result.output
+
+
+def test_synthesize_rejects_a_folder_that_is_not_a_book(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["synthesize", str(tmp_path)])
+    assert result.exit_code == ExitCode.INPUT
+    assert "not a book folder" in result.output

@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 1.7-M1 |
+| Document version | 1.9-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
-| Last updated | 2026-10-24 |
+| Last updated | 2026-10-25 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
@@ -30,6 +30,8 @@
 | 1.5-M0 | 2026-10-25 | Polish spike (`ru-polish`) + owner listening: **Decision:** Russian T1 is a hybrid — Silero → Chatterbox VC for Cyrillic-only segments (Chatterbox TTS quality at 1/6 of the time, no word errors), Chatterbox Multilingual TTS for segments with Latin-script words; enhancement on 48 kHz Silero dropped; VC is GPU-only; QA gate cannot see stress changes (§6.6.6). Russian text with English terms recorded as an open M2 question. |
 | 1.6-M0 | 2026-10-25 | **Foreign-script spans** inside a sentence (FR-24): the core tags them by Unicode script, the language pack resolves them; Russian rules for Latin-script words (§6.6.5). **Decision:** Russian narrator voice is Silero `xenia`; Chatterbox clones it from a pinned `xenia` reference clip. Russian backend tables (§6.6.1, §6.6.5, §8, §9, M2) aligned with the decisions; workflow: commits go straight to `main`. |
 | 1.7-M1 | 2026-10-25 | M1 implementation feedback: readers as built (§6.3: TOC-driven EPUB chapters, FB2 banners/dinkus/wrapper rules, TXT layouts and confidence, PDF clean-up); XML through defusedxml with an HTML-entity pass, no lxml (§6.12, §7); **PDF default pymupdf4llm 1.28.2 with its bundled layout model** (benchmark `spikes/pdf-readers`); rule-based sentence splitting with pack abbreviations instead of pySBD (§6.5); the `ru` pack exists from M1 with text-structure data. |
+| 1.8-M2 | 2026-10-25 | M2 step 1 (first audiobook on CPU): **rutextnorm rejected** after the audit — the `ru` pack owns its normalization (rules + num2words + pymorphy3, §6.6.5); lexicon applied **before** normalization (§6.5); plugin worker environments outside the repo, Python 3.12, stdlib worker runtime with a network guard (§6.6.3, ADR-0010); manifest fields `heading_level`, `text_stress`, `route`, `duration_ms` and the resumable journals `render.jsonl` / `stress.jsonl` (§5.2, §6.4.2); long sections split at lower headings are **grouped** into files near the target length (§6.8.1); Silero runs on CPU slots, at most 8 workers by default (§9.1). |
+| 1.9-M2 | 2026-10-25 | Progress display for `run` / `synthesize` (FR-17, §6.11): `rich` stage lines + live bar on stderr, results on stdout; `Progress` callables may add `detail(stage, **fields)`; Ctrl-C exits 130. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -181,6 +183,9 @@ output/                                  # output root
 │       ├── cover.jpg
 │       ├── lexicon.tsv                  # per-book pronunciation overrides
 │       ├── segments.jsonl               # segment manifest (§6.4.2)
+│       ├── render.jsonl                 # journal of rendered segments (resume, FR-10)
+│       ├── stress.jsonl                 # cache of stress-marked text
+│       ├── parts.json                   # fingerprints of the output files (re-encode only changes)
 │       └── audio/
 │           ├── segments/                # one file per segment, named by content hash
 │           └── chapters/                # assembled per-section WAV (intermediate)
@@ -328,7 +333,12 @@ caching. It is regenerated from `book.md`; manual edits belong in `book.md`.
 ```
 
 `hash` covers normalized text + voice + expression + backend + model revision + seed,
-so any change invalidates exactly the affected segments.
+so any change invalidates exactly the affected segments. M2 adds `heading_level` (for
+the split plan), `text_stress` (normalized text with `+` stress marks, what the backend
+reads), `route` and `duration_ms`. Rendered segments are recorded in the append-only,
+fsynced journal `_work/render.jsonl`, keyed by hash; a rerun skips every segment found
+there, so an interrupted job loses only the segments in flight (FR-10). Audio is
+`_work/audio/segments/<hash>.wav`; segments with identical text and settings share it.
 
 ### 6.5 Text Processing
 
@@ -349,7 +359,8 @@ so any change invalidates exactly the affected segments.
 - **Language detection** — [lingua-py](https://github.com/pemistahl/lingua-py)
   (Apache-2.0, offline, accurate on short text) for FR-18; document-level language
   comes from metadata first.
-- **Lexicon** — TSV `word<TAB>replacement-or-phonemes`, applied after normalization.
+- **Lexicon** — TSV `word<TAB>replacement-or-phonemes`, applied **before** normalization,
+  so entries name source spellings (*США*, *Docker*) and their stress marks survive.
   Levels (FR-13, later wins): the language pack's built-in list → user-global
   `~/.config/text2audio/lexicon/<lang>.tsv` → per-book `_work/lexicon.tsv`. Stress in
   a replacement is written `+` before the vowel (`Docker<TAB>д+окер`) or with U+0301.
@@ -483,6 +494,14 @@ The core starts each worker with the environment of its resource slot (§9.1): i
 as `CUDA_VISIBLE_DEVICES`, thread limits and CPU affinity. A worker that crashes is
 restarted once per request; a missing environment is reported with the fix.
 
+Environments (ADR-0010): a plugin ships its uv project next to its descriptor
+(`env/pyproject.toml` + `uv.lock`); `text2audio envs sync` creates it under
+`<data dir>/text2audio/envs/<name>` (Python 3.12) at install time. Components that need
+heavy libraries — stress/G2P (RUAccent), QA ASR (GigaAM), polishers — run as workers
+the same way, with additive operations (`process`, `transcribe`, `polish`). Workers
+import a standard-library runtime (`t2a_worker`) that blocks non-loopback sockets
+(`T2A_NO_NETWORK=1`) before any ML library loads, and cap their thread pools to the slot.
+
 Backends whose dependencies are compatible with the core MAY run in-process (e.g.
 ONNX-based Kokoro or Piper) for lower overhead. The protocol is versioned
 (`"protocol": 1`).
@@ -586,7 +605,7 @@ install time.
 | Area | Default | Alternative / fallback | Notes |
 |---|---|---|---|
 | **Stress + ё** | [RUAccent](https://github.com/Den4ikAI/ruaccent) (MIT) | [silero-stress](https://github.com/snakers4/silero-stress) (MIT) — smaller and faster | RUAccent resolves context-dependent homographs (*зáмок/замóк*) and ambiguous *все/всё* from context; its [COLING 2025 paper](https://aclanthology.org/2025.coling-main.444/) self-reports 0.96 accuracy on homographs and 0.97 on other words. silero-stress leaves ambiguous ё-homographs untouched. Stress marks already in the source (`´`, `+`) are always respected. |
-| **Normalization** | [rutextnorm](https://libraries.io/pypi/rutextnorm) (MIT, rule-based, no dependencies) — **after a code audit** | Rules in the pack + [num2words](https://github.com/savoirfairelinux/num2words) `ru` | Covers numbers, dates, currency, units, fractions **with case agreement** (*с 5 книгами* → "с пятью книгами", *с 2010 года* → "с две тысячи десятого года"). Its `flag_uncertain()` returns spans the rules cannot resolve; these are logged in `report.json` and can be fixed via the per-book lexicon. Its upstream ([shigabeev/russian_tts_normalization](https://github.com/shigabeev/russian_tts_normalization)) is a small project whose README says it was written with ChatGPT's help, so it is pinned, audited and covered by the pack's own normalization test set; if it fails the audit the pack owns its rules instead. |
+| **Normalization** | **Pack rules** + [num2words](https://github.com/savoirfairelinux/num2words) `ru` (case/gender) + [pymorphy3](https://github.com/no-plagiarism/pymorphy3) (case and gender of the governing preposition and noun; dictionary inside its wheel) — rutextnorm **rejected by the M2 audit** | [rutextnorm](https://libraries.io/pypi/rutextnorm) | Covers numbers, dates, currency, units, fractions **with case agreement** (*с 5 книгами* → "с пятью книгами", *с 2010 года* → "с две тысячи десятого года"). Its `flag_uncertain()` returns spans the rules cannot resolve; these are logged in `report.json` and can be fixed via the per-book lexicon. Its upstream ([shigabeev/russian_tts_normalization](https://github.com/shigabeev/russian_tts_normalization)) is a small project whose README says it was written with ChatGPT's help, so it was audited against the pack's normalization test set: it got gender agreement wrong (*2 книги* → «два книги», *1 книга* → «один книга»), read *Пётр I* as «Пётр и» and *Глава IV* as «четвёртый», and dropped ranges — **the pack owns its rules** (test set `plugins/lang-ru/tests/normalization.tsv`, > 300 cases, 100 % at M2 step 1). |
 | **Stress-aware G2P** | Backend's own front end fed with stress-marked text | espeak-ng `ru` | Stress is passed in the format each backend understands (`+` before the vowel, or U+0301 combining acute); the backend adapter converts. |
 | **QA ASR** | [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (MIT), branch **`rnnt`** | faster-whisper `large-v3-turbo` | Vendor and third-party reports favour GigaAM over Whisper on Russian; confirmed by measurement in M2. The `rnnt`/`ctc` branches output spoken form; the default `e2e_*` branches write digits, `₽`, `%`, which makes correctly read numbers count as errors (spike `ru-smoke`). QA ASR is therefore **per language** (`qa.asr_model` in the profile). |
 
@@ -767,8 +786,11 @@ durations and recorded in `report.json`.
    section (the last one merges into the previous). The merged file takes the title of
    the first section that has real content.
 3. **Split long sections.** Any section longer than `max_part_minutes` is split at the
-   next lower heading level if one exists, otherwise at the paragraph boundary
-   closest to `target_part_minutes`; parts are titled `Chapter 5 (part 2 of 3)`.
+   next lower heading level if one exists — consecutive subsections are **grouped** into
+   files of about `target_part_minutes` (a 5-hour book part with 80 short chapters
+   becomes ~7 files titled `Глава 1 — Глава 11`, not 80) — otherwise at the paragraph
+   boundary closest to `target_part_minutes`; such parts are titled with the language
+   profile's `part_title` (`Глава 5 (часть 2 из 3)`).
 4. **Sanity checks.** The plan is rejected, and the book is written as **one file**,
    if any of these hold:
    - no usable headings were found, or fewer than `min_parts` parts remain after
@@ -795,6 +817,11 @@ frames for players that support them.
 | `max_part_minutes` | 90 | Longer sections are split. |
 | `target_part_minutes` | 45 | Preferred length when splitting a long section at paragraph boundaries. |
 | `max_merge_ratio` | 0.5 | Above this share of merged sections, the structure is considered unreliable. |
+
+A merged file takes the title of its first section that is long enough to stand alone
+(else of its longest one). Every file starts with 300 ms of silence (players clip the
+first syllable otherwise); output files whose segments, tags and cover are unchanged are
+not re-encoded (`_work/parts.json`).
 
 #### 6.8.2 Covers
 
@@ -958,7 +985,16 @@ mode = "auto"                 # auto | embedded-only | generate | typographic
 ```
 
 Exit codes: `0` success, `1` usage error, `2` input error, `3` missing asset /
-offline violation, `4` completed with QA warnings, `5` internal error.
+offline violation, `4` completed with QA warnings, `5` internal error. `130` interrupted
+(Ctrl-C); finished segments are kept and the same command resumes (FR-10).
+
+Progress (FR-17): `run` and `synthesize` write to stderr one line per book (with the
+route: language, tier, backend, voice) and one ✓ line per finished stage — convert,
+normalize, stress, synthesize, encode — with counts, cached items and time. On a
+terminal the running stage also has a live bar with rate, ETA, audio rendered and
+× realtime; without one only the stage lines are written. Result lines go to stdout.
+The core reports through the `Progress` callable `(stage, done, total)`; it may also
+have `detail(stage, **fields)` for the facts above.
 
 ### 6.12 Security and Responsible Use
 
@@ -1079,6 +1115,10 @@ Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`
    `[synthesis] tier` override the automatic choice. The reasons are reported.
 5. One-off GPU services (the cover generator) take the first GPU in nvidia-smi order
    with enough free VRAM.
+6. A backend declares the devices it may use: Silero is CPU-only (≈ 12× real time on 4
+   cores), so the GPUs stay free for heavier models and other jobs. Without
+   `[resources] max_workers`, at most **8** workers run per stage, and never more than one
+   per 25 pending segments — the machine is shared.
 
 Free VRAM changes while other jobs run, so the plan is computed right before workers
 start, not cached.
@@ -1206,8 +1246,13 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-25 | Sentence splitting is rule-based in the core with abbreviations from the language profile; pySBD dropped (split Russian dialogue and abbreviations wrongly). | Decided |
 | 2026-10-25 | The `ru` language pack exists from M1 with text-structure data (heading patterns, front matter, abbreviations); language packs install with the core through the `langs` dependency group. | Decided |
 | 2026-10-25 | Russian narrator voice is **Silero `xenia`** (owner listening). Chatterbox VC/TTS clone it from a reference clip rendered once by Silero, pinned in `models.lock` like any asset. Dialogue voice still open. | Decided |
+| 2026-10-25 | **Russian normalization is owned by the `ru` pack** (rules + num2words + pymorphy3); rutextnorm failed the audit (gender agreement, Roman numerals, ranges). Lexicon entries apply before normalization. | Decided |
+| 2026-10-25 | Plugin worker environments live under `<data dir>/text2audio/envs/` (Python 3.12), created by `envs sync`; workers share a stdlib runtime with a network guard; components (RUAccent, GigaAM) run as workers like backends ([ADR-0010](docs/adr/0010-plugin-worker-environments.md)). | Decided |
+| 2026-10-25 | RUAccent stress is fed to Silero as `+` marks (`put_accent` fills only unmarked words; Silero's own homograph stress off); `[lang.ru] g2p = "backend"` switches to Silero's own stress if the listening test prefers it. | Decided — listening pending |
+| 2026-10-25 | Split plan: long sections split at lower headings are grouped into files near `target_part_minutes` instead of one file per subsection. | Decided |
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |
+| 2026-10-25 | CLI progress uses **rich** (already pulled in by typer) instead of tqdm: several stages, live notes and log-friendly output without a terminal from one library (FR-17). | Decided |
 
 ---
 

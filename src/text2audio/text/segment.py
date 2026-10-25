@@ -47,7 +47,7 @@ class _Builder:
         self.chapter = 0
         self.counter = 0
 
-    def add(self, text: str, role: str, pause: str) -> None:
+    def add(self, text: str, role: str, pause: str, level: int | None = None) -> None:
         text = " ".join(text.split()) if role != "poem" else text.strip()
         if not text:
             return
@@ -61,6 +61,7 @@ class _Builder:
                 role=role,
                 pause_after_ms=PAUSE_MS[pause],
                 seed=self.seed,
+                heading_level=level,
             )
         )
 
@@ -76,7 +77,8 @@ class _Builder:
 
     def block(self, block: Block, role: str = "narration") -> None:
         if isinstance(block, Heading):
-            self.add(plain(block.inlines), "title" if block.level == 1 else "heading", "heading")
+            role = "title" if block.level == 1 else "heading"
+            self.add(plain(block.inlines), role, "heading", block.level)
         elif isinstance(block, Paragraph):
             self.prose(plain(block.inlines), role)
         elif isinstance(block, Quote):

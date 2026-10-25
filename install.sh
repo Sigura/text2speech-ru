@@ -5,8 +5,9 @@
 #   ./install.sh --lang ru,en --tier fast
 #   ./install.sh --no-models           # Python environment only
 #
-# Steps: uv → Python packages from uv.lock → system tools check → every model file
-# pinned in models.lock for the chosen languages/tiers (revision + SHA-256) → doctor.
+# Steps: uv → Python packages from uv.lock → plugin worker environments (one uv env per
+# backend/component, ADR-0004) → system tools check → every model file pinned in
+# models.lock for the chosen languages/tiers (revision + SHA-256) → doctor.
 # This script and `text2audio models pull` are the only parts that use the network.
 # The Stable Diffusion WebUI for covers is an external tool and is not installed here
 # (ADR-0009); `doctor` reports whether it is available.
@@ -41,6 +42,9 @@ fi
 say "Python packages (uv.lock)"
 "$UV" sync --frozen
 
+say "Plugin worker environments"
+"$UV" run text2audio envs sync
+
 say "System tools"
 missing=()
 for tool in ffmpeg espeak-ng; do
@@ -56,6 +60,8 @@ if [ "$MODELS" = 1 ]; then
     "$UV" run text2audio models pull --lang "$LANGS" ${TIER:+--tier "$TIER"}
     "$UV" run text2audio models verify --lang "$LANGS" ${TIER:+--tier "$TIER"}
 fi
+
+pip install -r ./requirements.txt
 
 say "doctor"
 "$UV" run text2audio doctor

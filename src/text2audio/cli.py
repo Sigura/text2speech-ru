@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict
 from enum import IntEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from rich.markup import escape
 
+from text2audio.console import StageProgress, duration
 from text2audio.core.offline import enforce_offline
 from text2audio.models.store import default_store
 
@@ -26,6 +29,8 @@ class ExitCode(IntEnum):
 app = typer.Typer(no_args_is_help=True, add_completion=False, help=__doc__)
 models_app = typer.Typer(no_args_is_help=True, help="Manage the local model store.")
 app.add_typer(models_app, name="models")
+envs_app = typer.Typer(no_args_is_help=True, help="Manage plugin worker environments.")
+app.add_typer(envs_app, name="envs")
 
 LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code(s), e.g. ru or ru,en.")]
 TierOpt = Annotated[str | None, typer.Option("--tier", help="fast | expressive")]
@@ -219,9 +224,159 @@ def convert(
         raise typer.Exit(ExitCode.INPUT)
 
 
+@envs_app.command("list")
+def envs_list() -> None:
+    """List plugin environments and whether they are installed."""
+    from text2audio import api
+
+    for env in api.plugin_envs():
+        state = "installed" if env.installed else f"missing (fix: {env.fix})"
+        typer.echo(f"{env.name}\t{state}\t{env.path}")
+
+
+@envs_app.command("sync")
+def envs_sync(
+    names: Annotated[list[str] | None, typer.Argument(help="Environments (default: all).")] = None,
+) -> None:
+    """Create or update plugin environments from their lock files (uses the network)."""
+    import subprocess
+
+    from text2audio import api
+    from text2audio.core.envs import EnvMissing
+
+    try:
+        for env in api.envs_sync(names):
+            typer.echo(f"{env.name}: {env.path}")
+    except (EnvMissing, subprocess.CalledProcessError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+
+
+INTERRUPTED = 130  # 128 + SIGINT, as shells report it
+
+
+def _synthesize_one(
+    folder: Path,
+    tier: str | None,
+    workers: int | None,
+    lang: str | None,
+    ui: StageProgress,
+) -> int:
+    """Synthesize one book folder; returns its exit code."""
+    from text2audio import api
+    from text2audio.audio.encode import FfmpegError
+    from text2audio.core.config import load_config, user_config_path
+    from text2audio.core.envs import EnvMissing
+    from text2audio.core.synthesize import SynthesisError
+
+    overrides = {"synthesis": {"language": lang}} if lang else {}
+    config = load_config([user_config_path(), folder / "_work" / "text2audio.toml"], overrides)
+    try:
+        result = api.synthesize(
+            folder, config=config, tier=_tier(tier), max_workers=workers, progress=ui
+        )
+    except KeyboardInterrupt:
+        ui.bars.stop()
+        ui.print(
+            "\n[yellow]Interrupted.[/] Finished segments are saved; "
+            "run the same command again to resume."
+        )
+        raise typer.Exit(INTERRUPTED) from None
+    except (SynthesisError, EnvMissing, FfmpegError) as exc:
+        ui.print(f"  [red]✗ failed:[/] {escape(str(exc))}")
+        return (
+            ExitCode.MISSING_ASSET if isinstance(exc, EnvMissing | FfmpegError) else ExitCode.INPUT
+        )
+    r = result.report
+    seg = r["segments"]
+    rtf = r["synthesis"]["rtf"]
+    ui.result(
+        f"{result.folder}: {len(result.files)} file(s), "
+        f"{duration(r['duration_ms'] / 1000)} of audio, {seg['total']} segments "
+        f"({seg['rendered_now']} rendered now), "
+        + (f"RTF {rtf}, " if rtf is not None else "")
+        + f"took {duration(r['wall_s'])}; split: {r['split']['reason']}"
+    )
+    if result.flagged:
+        ui.warn(f"{result.flagged} segment(s) flagged — see {result.folder / 'report.json'}")
+        return ExitCode.QA_WARNINGS
+    return ExitCode.OK
+
+
+TierFlag = Annotated[str | None, typer.Option("--tier", help="fast | expressive (default: auto).")]
+WorkersFlag = Annotated[int | None, typer.Option("--workers", help="Max parallel TTS workers.")]
+
+
+@app.command()
+def synthesize(
+    folders: Annotated[list[Path], typer.Argument(help="Book folders made by `convert`.")],
+    tier: TierFlag = None,
+    workers: WorkersFlag = None,
+    lang: Annotated[str | None, typer.Option("--lang", help="Book language override.")] = None,
+) -> None:
+    """Render book folders to audio; only changed segments are synthesized again."""
+    codes: list[int] = []
+    with StageProgress() as ui:
+        for n, folder in enumerate(folders, 1):
+            ui.book(folder.name, folder, n, len(folders))
+            codes.append(_synthesize_one(folder, tier, workers, lang, ui))
+    raise typer.Exit(max(codes, default=ExitCode.OK))
+
+
+@app.command()
+def run(
+    inputs: Annotated[list[Path], typer.Argument(help="Book files or folders of books.")],
+    output: Annotated[
+        Path | None, typer.Option("-o", "--output", help="Output root (default ./output).")
+    ] = None,
+    name: Annotated[str | None, typer.Option("--name", help="Book folder name.")] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Reuse a clashing folder name.")
+    ] = False,
+    lang: Annotated[str | None, typer.Option("--lang", help="Language of TXT/MD input.")] = None,
+    tier: TierFlag = None,
+    workers: WorkersFlag = None,
+) -> None:
+    """Convert and synthesize in one step, one folder per book."""
+    from text2audio import api
+
+    codes: list[int] = []
+    with StageProgress() as ui:
+        started = time.monotonic()
+        try:
+            with ui.console.status(f"Converting {len(inputs)} input(s)…"):
+                results = api.convert(inputs, output, name=name, overwrite=overwrite, lang=lang)
+        except ValueError as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.USAGE) from exc
+        # convert works on the whole batch, so a time per book is known only for one book
+        took = time.monotonic() - started if len(results) == 1 else None
+        for n, r in enumerate(results, 1):
+            ui.book(r.input.stem if r.folder is None else r.folder.name, r.input, n, len(results))
+            if r.status == "failed" or r.folder is None:
+                ui.print(f"  [red]✗ failed:[/] {escape(str(r.error))}")
+                codes.append(ExitCode.INTERNAL if r.internal else ExitCode.INPUT)
+                continue
+            ui.stage(
+                "convert",
+                f"{r.format} · {r.chapters} chapter(s) · {r.segments} segments"
+                + {
+                    "converted": "",
+                    "unchanged": " · unchanged",
+                    "kept-edits": " · your edits kept, new text in the .reconverted.md",
+                }.get(r.status, ""),
+                took,
+            )
+            for w in r.warnings:
+                ui.warn(w)
+            codes.append(_synthesize_one(r.folder, tier, workers, lang, ui))
+    if len(results) > 1:
+        ok = sum(c in (ExitCode.OK, ExitCode.QA_WARNINGS) for c in codes)
+        typer.echo(f"{ok} of {len(results)} book(s) done")
+    raise typer.Exit(max(codes, default=ExitCode.INPUT))
+
+
 _PLANNED = {
-    "synthesize": "M2",
-    "run": "M2",
     "preview": "M2",
     "voices": "M2",
     "bundle": "M5",

@@ -1,12 +1,16 @@
 [project]
 name = "text2audio-lang-ru"
-version = "0.1.0"
-description = "Russian language pack for text2audio (M1: text structure; M2: stress, normalization, voices)"
+version = "0.2.0"
+description = "Russian language pack for text2audio: text structure, normalization, stress, voices"
 requires-python = ">=3.11"
-dependencies = ["text2audio"]
+# Pure-Python text rules; the dictionaries ship inside the wheels (nothing downloaded).
+dependencies = ["text2audio", "num2words>=0.5.14", "pymorphy3>=2.0", "pymorphy3-dicts-ru>=2.4"]
 
 [project.entry-points."text2audio.languages"]
 ru = "text2audio_lang_ru:PROFILE"
+
+[project.entry-points."text2audio.normalizers"]
+ru = "text2audio_lang_ru.normalize:RussianNormalizer"
 
 [tool.uv.sources]
 text2audio = { workspace = true }

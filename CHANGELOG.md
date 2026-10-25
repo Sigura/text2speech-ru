@@ -69,6 +69,28 @@ All notable changes to this project are documented here. The format follows
   pre-commit hooks.
 - `environment.yaml` (conda) and `requirements.txt` / `requirements-dev.txt` (pip),
   exported from `uv.lock` by `scripts/export-requirements.sh`.
+- M2 step 1 — first audiobook on CPU: `text2audio run` / `synthesize` turn a Russian
+  book into MP3s (`report.json`, playlist); `envs sync` / `envs list`.
+- `ru` normalization: numbers with case and gender agreement, years, centuries, Roman
+  numerals after names and chapter words, dates, times, percentages, currency, units,
+  ranges, abbreviations, initials, acronyms (test set of > 300 cases, FR-11); pack
+  lexicon (FR-13 levels: pack → user → book).
+- Plugins `g2p-ruaccent` (stress + ё, kept offline) and `backend-silero` (`xenia`,
+  48 kHz, CPU), each in its own uv environment; stdlib worker runtime with a network
+  guard; `Worker` client for components; ADR-0010.
+- Audio assembly: edge trimming, generated pauses, split plan (§6.8.1), two-pass
+  loudness (−19 LUFS, −3 dBTP), MP3 64 kbps with ID3v2.3 tags, cover and chapters.
+- Incremental re-render by segment hash and resume from the render journal (FR-08,
+  FR-10); unchanged output files are not re-encoded.
+- `doctor` reports plugin environments; `install.sh` creates them.
+- Terminal progress for `run` / `synthesize` (FR-17): a plan header, one line per finished
+  stage, a live bar with rate and ETA on a terminal (`rich`, stderr only).
+- `run` / `synthesize` progress (FR-17): book header and route, one ✓ line per
+  finished stage (convert, normalize, stress, synthesize, encode) with counts, cached
+  items and time; a live bar for the running stage with rate, ETA, audio rendered
+  and × realtime, and a "loading voices" note while workers start. Plain stage lines
+  without a terminal; segment failures shown as they happen; Ctrl-C exits 130 with a
+  resume hint.
 
 ### Changed
 
@@ -77,3 +99,7 @@ All notable changes to this project are documented here. The format follows
 - README keeps the solution description, installation, usage and open questions; the
   roadmap checklist and improvement ideas moved to `TODO.md`.
 - QA gate ASR model and WER threshold come from the language profile (SPEC.md §6.9).
+- SPEC.md 1.8-M2: rutextnorm rejected, lexicon before normalization, plugin worker
+  environments, manifest fields and journals, grouping in the split plan, CPU-only
+  Silero and a default cap of 8 workers.
+- `segments.jsonl` records each heading's level (golden manifests regenerated).

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "typer>=0.12",
+    "rich>=13.7",  # progress display (FR-17); typer pulls it in too
     "pydantic>=2.7",
     "platformdirs>=4.2",
     # Imported lazily, only by `text2audio models pull` (the sole network path, §6.10).
@@ -15,6 +16,10 @@ dependencies = [
     "mdit-py-plugins>=0.4",
     "charset-normalizer>=3.3",
     "pymupdf4llm==1.28.2",
+    # Audio assembly (§6.8); model-free, so they belong in the core (ADR-0004).
+    "numpy>=2.0",
+    "soundfile>=0.12",
+    "soxr>=0.5",
 ]
 
 [project.scripts]
@@ -22,7 +27,7 @@ text2audio = "text2audio.cli:main"
 
 [dependency-groups]
 # Language packs run in the core environment (text rules, no heavy deps); one per language.
-langs = ["text2audio-lang-ru"]
+langs = ["text2audio-lang-ru", "text2audio-g2p-ruaccent", "text2audio-backend-silero"]
 dev = [
     "text2audio-backend-sine",
     "pytest>=8",
@@ -39,11 +44,13 @@ default-groups = ["dev", "langs"]
 
 [tool.uv.workspace]
 members = ["plugins/*"]
-exclude = ["spikes/*"]
+exclude = ["spikes/*", "plugins/*/src/*/env"]
 
 [tool.uv.sources]
 text2audio-backend-sine = { workspace = true }
 text2audio-lang-ru = { workspace = true }
+text2audio-g2p-ruaccent = { workspace = true }
+text2audio-backend-silero = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -53,9 +60,14 @@ build-backend = "hatchling.build"
 packages = ["src/text2audio"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "plugins"]
 # Every test run is socket-free (FR-04, §12); worker pipes are not sockets.
-addopts = "--disable-socket --allow-unix-socket"
+addopts = "--disable-socket --allow-unix-socket -m 'not slow'"
+markers = [
+    "models: needs pinned model assets and plugin environments (skipped when missing)",
+    "gpu: needs a GPU with enough free VRAM (skipped otherwise)",
+    "slow: full-book renders; run with `pytest -m slow`",
+]
 
 [tool.ruff]
 line-length = 100
@@ -73,7 +85,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*"]
+module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "soundfile", "soxr"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

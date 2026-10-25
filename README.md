@@ -57,13 +57,20 @@ used. Sber's open model GigaAM (speech recognition) is used for the quality chec
 One command installs everything, including the model weights (≈ 1.1 GB for Russian):
 
 ```bash
-./install.sh                              # uv env + Russian weights + doctor
+./install.sh                              # uv env + worker envs + Russian weights + doctor
 ./install.sh --lang ru,en --tier fast     # other languages / one tier
 ./install.sh --no-models                  # Python environment only
 ```
 
 Every weight it downloads is pinned in `models.lock` (revision or URL + SHA-256); after
-that, nothing touches the network. Other ways to get the Python environment, all from
+that, nothing touches the network. Each model runs in its own worker environment
+(Silero ≈ 0.8 GB, RUAccent ≈ 0.2 GB, GigaAM ≈ 5.4 GB with CUDA), kept outside the
+repository in `~/.local/share/text2audio/envs/`:
+
+```bash
+text2audio envs sync                      # create/update every plugin environment
+text2audio envs list                      # which are installed
+``` Other ways to get the Python environment, all from
 the same `uv.lock`:
 
 ```bash
@@ -84,9 +91,13 @@ CI fails when they are stale.
 
 ### Usage examples
 
-Available now (M0–M1):
+Available now (M0, M1, M2 step 1):
 
 ```bash
+CUDA_VISIBLE_DEVICES="2,3" text2audio run "./inputs/Бэнкс. Выбор Оружия.fb2" --workers 4 -o ./outputs/        # convert + synthesize → MP3s, playlist, report.json
+CUDA_VISIBLE_DEVICES="" text2audio run book.fb2    # CPU only (Silero is CPU-only anyway)
+text2audio synthesize "output/Станции Ангелов"     # after editing the .md: only changed sentences
+text2audio run book.fb2 --workers 4                # at most 4 TTS workers (default: up to 8)
 text2audio convert "inputs/Станции Ангелов.fb2"    # → output/Станции Ангелов/Станции Ангелов.md
 text2audio convert inputs/ -o ~/Audiobooks         # every book in a folder, one sub-folder each
 text2audio convert book.txt --lang ru              # language of untagged text (default: guessed)
@@ -126,12 +137,24 @@ Re-running `convert` on the same file resumes in the same folder. If you edited 
 `.md`, a re-conversion never overwrites it: the new text goes to
 `<book>.reconverted.md` next to it.
 
-The commands below are **planned** (M2+); they follow the CLI in SPEC §6.11.
+`synthesize` (and `run`) normalize the text (numbers, dates, Roman numerals,
+abbreviations), mark stress and ё with RUAccent, read it with Silero `xenia`, and
+assemble MP3s: one per chapter when the structure allows it, otherwise one file with
+chapter marks (−19 LUFS, ID3 tags, cover, `.m3u`). Every sentence's audio is cached by a
+hash of its text and settings, so an interrupted run resumes and an edit re-renders
+only what changed:
 
-**One book, start to finish:**
+```text
+output/Бэнкс. Выбор Оружия: 18 file(s), 8.97 h, 4014 of 4088 segments rendered, RTF 0.1422; split: 18 files at heading level 2
+```
+
+The commands below are **planned** (rest of M2 and later); they follow the CLI in
+SPEC §6.11. `preview`, the QA gate (`--qa`), the GPU hybrid, generated covers,
+`config show` and `bundle` are not there yet.
+
+**Many books at once:**
 
 ```bash
-text2audio run "Война и мир.fb2.zip"        # → output/Война и мир/01 - Том первый….mp3
 text2audio run books/ -o ~/Audiobooks       # every book in a folder, one sub-folder each
 ```
 
@@ -227,7 +250,7 @@ output/Война и мир/
 |---|---|---|
 | 1 | Does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`; WER cannot tell. | Owner listening, then the M2 benchmark |
 | 2 | Does a Russian-trained model (ESpeech / F5-TTS, XTTS-v2) or Qwen3-TTS beat the GPU hybrid? | M2 benchmark + listening |
-| 3 | Does rutextnorm pass the code audit, or does the pack own its number rules? | M2 |
+| 3 | ~~Does rutextnorm pass the code audit?~~ **Decided:** no (gender agreement, Roman numerals, ranges); the `ru` pack owns its rules (SPEC §13.1). | M2 step 1 |
 | 4 | Cover prompts for Russian books: FB2 genre mapping only, or offline ru→en translation (e.g. Opus-MT) of title and annotation? | M2 |
 | 5 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
 | 6 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M2 |
@@ -242,7 +265,7 @@ output/Война и мир/
 | [spikes/ru-smoke/FINDINGS.md](spikes/ru-smoke/FINDINGS.md) | Russian offline smoke test: results and lessons |
 | [spikes/ru-polish/FINDINGS.md](spikes/ru-polish/FINDINGS.md) | Two-stage speech, Chatterbox, English words in Russian text |
 | [spikes/pdf-readers/FINDINGS.md](spikes/pdf-readers/FINDINGS.md) | PDF reader benchmark: pymupdf4llm vs Docling vs Marker |
-| [docs/adr/](docs/adr/) | Architecture decision records |
+| [docs/adr/](docs/adr/) | Architecture decision records (0010: plugin worker environments) |
 | [docs/adding-a-language.md](docs/adding-a-language.md) | How to add a language pack |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and conventions |
 | [CHANGELOG.md](CHANGELOG.md) | Change history |

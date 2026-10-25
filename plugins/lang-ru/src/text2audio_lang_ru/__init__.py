@@ -1,12 +1,15 @@
 """Russian language pack (SPEC §6.6.5, ADR-0008).
 
-M1 provides text structure only: heading patterns for TXT and PDF input. Stress (RUAccent),
-normalization, FB2-specific typography, voices and QA bounds arrive in M2.
+Text structure for TXT/PDF headings (M1); normalization (`normalize.py`), the stress
+component (RUAccent), voices, tier routes and QA bounds (M2). Components are named by
+entry point; the pack itself stays free of heavy dependencies.
 """
 
 from __future__ import annotations
 
-from text2audio.core.contracts import LanguageProfile
+from pathlib import Path
+
+from text2audio.core.contracts import LanguageProfile, QaProfile, TierRoute
 
 _ORDINAL = (
     r"(?:(?:двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s+)?"
@@ -27,6 +30,14 @@ PROFILE = LanguageProfile(
         rf"(?:пролог|эпилог|предисловие|послесловие|вступление|введение|заключение)\.?{_TITLE_TAIL}",
     ),
     front_matter=(r"(?:содержание|оглавление)\.?",),
+    normalizer="ru",
+    g2p="ruaccent",
+    tiers={"fast": TierRoute(backend="silero")},
+    voices={"narrator": {"silero": "xenia"}, "dialogue": {"silero": "xenia"}},
+    pauses_ms={"paragraph": 800},
+    qa=QaProfile(asr="gigaam", wer_threshold=0.18, chars_per_sec=(6.0, 25.0), fold={"ё": "е"}),
+    lexicon=str(Path(__file__).parent / "lexicon.tsv"),
+    part_title="{title} (часть {n} из {total})",
     abbreviations=(
         "т. е.",
         "т. к.",

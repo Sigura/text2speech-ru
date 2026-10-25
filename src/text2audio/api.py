@@ -11,7 +11,11 @@ from text2audio.core.contracts import Capabilities, ModelAsset, Tier
 from text2audio.core.convert import ConvertResult
 from text2audio.core.convert import convert as _convert
 from text2audio.core.doctor import DoctorReport, run_doctor
+from text2audio.core.envs import PluginEnv, plugin_env
+from text2audio.core.envs import sync as _sync_env
 from text2audio.core.plugins import Discovery, discover
+from text2audio.core.synthesize import Progress, SynthesisReport
+from text2audio.core.synthesize import synthesize as _synthesize
 from text2audio.models.lock import load_lock
 from text2audio.models.pull import pull
 from text2audio.models.store import AssetProblem, ModelStore
@@ -92,3 +96,50 @@ def models_pull(
 ) -> list[Path]:
     """Download pinned assets. Uses the network; never call this from runtime code."""
     return pull(models_list(lang, tier, lock), ModelStore(store))
+
+
+def synthesize(
+    folder: Path,
+    *,
+    config: Config | None = None,
+    tier: Tier | None = None,
+    max_workers: int | None = None,
+    store: Path | None = None,
+    progress: Progress | None = None,
+) -> SynthesisReport:
+    """Book folder → audio; only segments whose text or settings changed are rendered."""
+    config = config or load_config(_book_config_files(folder))
+    return _synthesize(
+        folder,
+        config,
+        store=ModelStore(store),
+        tier=tier,
+        max_workers=max_workers,
+        progress=progress,
+    )
+
+
+def _book_config_files(folder: Path) -> list[Path]:
+    from text2audio.core.config import user_config_path
+
+    return [user_config_path(), folder / "_work" / "text2audio.toml"]
+
+
+def plugin_envs(names: list[str] | None = None) -> list[PluginEnv]:
+    """Environments declared by installed plugins (backends and components)."""
+    found = discover(("backends", "g2p", "asr", "polishers"))
+    envs: dict[str, PluginEnv] = {}
+    for items in found.plugins.values():
+        for plugin in items.values():
+            env = plugin_env(plugin)
+            if env is not None and (not names or env.name in names):
+                envs[env.name] = env
+    return [envs[k] for k in sorted(envs)]
+
+
+def envs_sync(names: list[str] | None = None) -> list[PluginEnv]:
+    """Create or update plugin environments from their lock files (uses the network)."""
+    envs = plugin_envs(names)
+    for env in envs:
+        _sync_env(env)
+    return envs

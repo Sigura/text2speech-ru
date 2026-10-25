@@ -1,0 +1,169 @@
+"""`synthesize` end to end on the sine backend: MP3s, report, incremental re-render,
+resume (FR-08, FR-09, FR-10, FR-17, FR-20). Real Russian models: test_ru_models.py."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from text2audio import api
+from text2audio.core.config import load_config
+from text2audio.core.journal import Journal
+from text2audio.core.synthesize import SynthesisError
+
+FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+
+
+def config(**output: Any) -> Any:
+    return load_config(
+        [],
+        {
+            "lang": {"ru": {"backend": {"fast": "sine"}, "g2p": "backend"}},
+            "synthesis": {"tier": "fast"},
+            "output": output,
+        },
+    )
+
+
+@pytest.fixture
+def book(tmp_path: Path) -> Path:
+    [result] = api.convert([FIXTURE], tmp_path / "out")
+    assert result.folder is not None
+    return result.folder
+
+
+def run(book: Path, store: Path, **output: Any) -> api.SynthesisReport:
+    return api.synthesize(book, config=config(**output), store=store)
+
+
+def probe(path: Path) -> dict[str, Any]:
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_format",
+            "-show_streams",
+            "-show_chapters",
+            "-of",
+            "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    data: dict[str, Any] = json.loads(out)
+    return data
+
+
+def test_single_file_with_tags_cover_and_chapters(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path / "store", split="none")
+    [mp3] = result.files
+    assert mp3 == book / f"{book.name}.mp3"
+    info = probe(mp3)
+    audio = next(s for s in info["streams"] if s["codec_type"] == "audio")
+    assert (audio["codec_name"], audio["sample_rate"], audio["channels"]) == ("mp3", "44100", 1)
+    cover = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert cover["disposition"]["attached_pic"] == 1
+    tags = info["format"]["tags"]
+    assert tags["album"] == "Капитанская дочка"
+    assert tags["artist"] == "Александр Сергеевич Пушкин"
+    assert tags["track"] == "1/1"
+    assert [c["tags"]["title"] for c in info["chapters"]][1:] == [
+        "Глава I. Сержант гвардии",
+        "Глава II. Вожатый",
+    ]
+
+
+def test_one_file_per_chapter_with_playlist(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path / "store", min_part_minutes=0.2)
+    names = [f.name for f in result.files]
+    assert names == ["01 - Глава I. Сержант гвардии.mp3", "02 - Глава II. Вожатый.mp3"]
+    playlist = (book / f"{book.name}.m3u").read_text("utf-8").splitlines()
+    assert playlist[0] == "#EXTM3U" and playlist[2] == names[0]
+    assert probe(result.files[1])["format"]["tags"]["track"] == "2/2"
+
+
+def test_report(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path / "store")
+    report = json.loads((book / "report.json").read_text("utf-8"))
+    assert report == result.report
+    assert report["language"] == "ru" and report["tier"] == "fast"
+    assert report["segments"]["total"] == report["segments"]["rendered_now"] > 0
+    assert report["synthesis"]["rtf"] is not None
+    assert report["split"]["mode"] == "single"  # chapters shorter than 3 minutes
+    assert [c["title"] for c in report["chapters"]][1:] == [
+        "Глава I. Сержант гвардии",
+        "Глава II. Вожатый",
+    ]
+    assert sum(c["duration_ms"] for c in report["chapters"]) == report["duration_ms"]
+
+
+def test_normalized_text_in_manifest(book: Path, tmp_path: Path) -> None:
+    run(book, tmp_path / "store")
+    lines = (book / "_work" / "segments.jsonl").read_text("utf-8").splitlines()
+    heading = json.loads(lines[1])
+    assert heading["text"] == "Глава I. Сержант гвардии"
+    assert heading["text_norm"] == "Глава первая. Сержант гвардии"
+    assert heading["status"] == "done" and heading["hash"] and heading["duration_ms"] > 0
+
+
+def test_rerun_renders_nothing_and_keeps_files(book: Path, tmp_path: Path) -> None:
+    first = run(book, tmp_path / "store")
+    mtime = first.files[0].stat().st_mtime_ns
+    second = run(book, tmp_path / "store")
+    assert second.report["segments"]["rendered_now"] == 0
+    assert second.files[0].stat().st_mtime_ns == mtime  # not re-encoded
+
+
+def test_edit_one_paragraph_rerenders_only_it(book: Path, tmp_path: Path) -> None:
+    # FR-08: editing one paragraph re-synthesizes only the affected segments.
+    run(book, tmp_path / "store")
+    md = book / f"{book.name}.md"
+    text = md.read_text("utf-8")
+    assert "Савельич" in text
+    md.write_text(text.replace("Отец мой", "Батюшка мой", 1), "utf-8")
+    result = run(book, tmp_path / "store")
+    assert result.report["segments"]["rendered_now"] == 1
+
+
+def test_book_lexicon_changes_reading(book: Path, tmp_path: Path) -> None:
+    (book / "_work" / "lexicon.tsv").write_text("Савельич\tСав+ельич\n", "utf-8")
+    run(book, tmp_path / "store")
+    segs = [json.loads(x) for x in (book / "_work/segments.jsonl").read_text("utf-8").splitlines()]
+    assert any("Сав+ельич" in (s["text_stress"] or "") for s in segs)
+
+
+def test_resume_after_interruption(book: Path, tmp_path: Path) -> None:
+    # FR-10: an interrupted job continues where it stopped.
+    def stop_after_three(stage: str, done: int, total: int) -> None:
+        if stage == "synthesize" and done == 3:
+            raise KeyboardInterrupt
+
+    with pytest.raises(SynthesisError):
+        api.synthesize(book, config=config(), store=tmp_path / "store", progress=stop_after_three)
+    journal = Journal(book / "_work" / "render.jsonl")
+    assert len(journal.entries) == 3
+    result = run(book, tmp_path / "store")
+    total = result.report["segments"]["total"]
+    assert result.report["segments"]["rendered_now"] == total - 3
+
+
+def test_journal_ignores_torn_last_line(tmp_path: Path) -> None:
+    path = tmp_path / "render.jsonl"
+    path.write_text('{"hash": "a", "duration_ms": 1}\n{"hash": "b", "dur', "utf-8")
+    journal = Journal(path)
+    assert "a" in journal and "b" not in journal
+
+
+def test_missing_language_pack(book: Path, tmp_path: Path) -> None:
+    cfg = load_config([], {"synthesis": {"language": "xx"}})
+    with pytest.raises(SynthesisError, match="no language pack"):
+        api.synthesize(book, config=cfg, store=tmp_path / "store")

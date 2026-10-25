@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from text2audio.core import resources as res
+from text2audio.core.envs import plugin_env
 from text2audio.core.offline import is_offline
 from text2audio.core.plugins import Discovery, discover
 from text2audio.models.lock import LockError, load_lock
@@ -131,4 +132,15 @@ def run_doctor(
             "ok",
             f"languages {','.join(caps.languages)}; licenses: {', '.join(licenses)}",
         )
+    for group in ("backends", "g2p", "asr", "polishers"):
+        for name, plugin in sorted(plugins.plugins.get(group, {}).items()):
+            penv = plugin_env(plugin)
+            if penv is None:
+                continue
+            if penv.installed:
+                report.add(f"env {penv.name}", "ok", str(penv.path))
+            else:
+                report.add(
+                    f"env {penv.name}", "warn", f"not installed (for {name}); fix: {penv.fix}"
+                )
     return report

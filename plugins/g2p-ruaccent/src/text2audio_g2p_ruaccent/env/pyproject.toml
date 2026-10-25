@@ -1,0 +1,15 @@
+[project]
+name = "t2a-env-g2p-ruaccent"
+version = "0"
+description = "Worker environment of the RUAccent component (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "ruaccent==1.5.8.3",
+    "onnxruntime==1.31.0",
+    "transformers==4.57.6",
+    "sentencepiece==0.2.2",
+    "numpy==2.5.4",
+]
+
+[tool.uv]
+package = false

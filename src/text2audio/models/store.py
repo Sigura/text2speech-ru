@@ -70,6 +70,10 @@ class ModelStore:
             return AssetProblem(asset, file, "corrupt")
         return None
 
+    def payload(self, assets: list[ModelAsset]) -> list[dict[str, object]]:
+        """Where a worker finds its pinned files: `[{"dir": …, "files": […]}]`."""
+        return [{"dir": str(self.asset_dir(a)), "files": list(a.files)} for a in assets]
+
     def verify(self, assets: list[ModelAsset]) -> list[AssetProblem]:
         return [
             problem
