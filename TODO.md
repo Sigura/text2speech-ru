@@ -15,8 +15,14 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   ([findings](spikes/ru-polish/FINDINGS.md)) → GPU hybrid Silero → Chatterbox VC,
   Chatterbox Multilingual for sentences with English words; narrator `xenia`; FR-24.
 - [ ] Stress listening: Silero's own stress vs RUAccent marks (`spikes/ru-smoke/out/listen/`).
-- [ ] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB, TXT ("Глава 1"), PDF, MD →
-  `<book>.md`; metadata; embedded cover extraction; `convert --reconvert`.
+- [x] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB 2/3, TXT ("Глава 1"), PDF
+  (pymupdf4llm + layout, [benchmark](spikes/pdf-readers/FINDINGS.md)), MD → `<book>.md`;
+  metadata; embedded cover; segment manifest; `convert --reconvert`; golden tests with a
+  Russian fixture per format. Follow-ups:
+  - [ ] `--reader` and a reader plugin group once a second PDF reader exists (Docling);
+  - [ ] PDF per-file time limit (§6.12); OCR for scanned PDFs (v2);
+  - [ ] restore compound hyphens lost at PDF line ends (`где-нибудь`) — `ru` normalization, M2;
+  - [ ] English TXT headings ("Chapter 1") — with the `en` pack, M4.
 - [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
   dashes, English words — FR-24), Silero worker (CPU) and Chatterbox worker (VC + TTS,
   GPU) with the hybrid route, benchmark against Qwen3-TTS / ESpeech / XTTS-v2,

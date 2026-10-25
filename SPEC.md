@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.6-M0 |
+| Document version | 1.7-M1 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-24 |
 | Primary language | Python 3.11+ |
@@ -29,6 +29,7 @@
 | 1.4-M0 | 2026-10-24 | Russian smoke spike results: Silero v5.6 `xenia` (female) is the fast-tier candidate; normalization mandatory (Silero drops digits); QA uses GigaAM-v3 branch `rnnt` (spoken form); RUAccent must be wrapped to stay offline. `models.lock` gains `url` assets; `install.sh` pulls every pinned weight. |
 | 1.5-M0 | 2026-10-25 | Polish spike (`ru-polish`) + owner listening: **Decision:** Russian T1 is a hybrid — Silero → Chatterbox VC for Cyrillic-only segments (Chatterbox TTS quality at 1/6 of the time, no word errors), Chatterbox Multilingual TTS for segments with Latin-script words; enhancement on 48 kHz Silero dropped; VC is GPU-only; QA gate cannot see stress changes (§6.6.6). Russian text with English terms recorded as an open M2 question. |
 | 1.6-M0 | 2026-10-25 | **Foreign-script spans** inside a sentence (FR-24): the core tags them by Unicode script, the language pack resolves them; Russian rules for Latin-script words (§6.6.5). **Decision:** Russian narrator voice is Silero `xenia`; Chatterbox clones it from a pinned `xenia` reference clip. Russian backend tables (§6.6.1, §6.6.5, §8, §9, M2) aligned with the decisions; workflow: commits go straight to `main`. |
+| 1.7-M1 | 2026-10-25 | M1 implementation feedback: readers as built (§6.3: TOC-driven EPUB chapters, FB2 banners/dinkus/wrapper rules, TXT layouts and confidence, PDF clean-up); XML through defusedxml with an HTML-entity pass, no lxml (§6.12, §7); **PDF default pymupdf4llm 1.28.2 with its bundled layout model** (benchmark `spikes/pdf-readers`); rule-based sentence splitting with pack abbreviations instead of pySBD (§6.5); the `ru` pack exists from M1 with text-structure data. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -281,10 +282,10 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 
 | Format | Parser approach | Notes |
 |---|---|---|
-| `.txt` | Encoding detection with [charset-normalizer](https://github.com/jawah/charset_normalizer); heuristic structure inference (chapter-heading regexes per language, blank-line paragraphs, `*` / `—` dialogue). | Heuristics live in the language pack (e.g. "Chapter 1", "Глава 1"). |
-| `.fb2` / `.fb2.zip` | XML parse with [defusedxml](https://github.com/tiran/defusedxml) + [lxml](https://lxml.de/) following the [FictionBook 2](https://en.wikipedia.org/wiki/FictionBook) schema. Honour the XML declaration's encoding (often `windows-1251`). | Map `<section>` → chapter hierarchy, `<title>` → heading, `<p>`, `<emphasis>`, `<strong>`, `<epigraph>`, `<cite>`, `<poem>/<stanza>/<v>`, `<subtitle>`, `<empty-line/>`. Footnotes live in `<body name="notes">` and are linked by `l:href`. Cover from `<coverpage>` + `<binary>`. Language from `<title-info><lang>`. |
-| `.epub` | Treat as ZIP + [EPUB 3](https://www.w3.org/TR/epub-33/) package: read OPF manifest/spine and nav/NCX TOC, convert XHTML to Markdown with a custom lxml walker (EPUB 2 also supported). | A custom reader gives full control over structure mapping; [EbookLib](https://github.com/aerkalov/ebooklib) may be used for package parsing if it handles the fixture corpus better. Language from `dc:language`. |
-| `.pdf` | Layout-aware extraction. Candidates: [Docling](https://github.com/docling-project/docling), [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) (fast, CPU-only), [Marker](https://github.com/datalab-to/marker) (strong on complex layouts, GPU). **Default chosen by the M1 benchmark** on the PDF fixture set; the others stay available as reader plugins. | Drop running headers/footers and page numbers; re-join hyphenated line breaks; tables read as "row: cell, cell" or skipped (configurable). Text-layer PDFs only in v1. |
+| `.txt` | Encoding detection (UTF-8/16 BOM, then [charset-normalizer](https://github.com/jawah/charset_normalizer); cp1251 and KOI8-R in tests). Paragraph layout detected per file: blank lines between paragraphs, an indented first line (lib.ru, hard-wrapped or not), or one paragraph per line; a word hyphenated at a line end is re-joined. Headings: the language pack's part/chapter patterns plus language-free ones (a Roman or Arabic numeral alone on a line); "Глава 1" followed directly by a short line takes it as its title; a block of short lines containing a heading is split into lines. A contents list after a front-matter heading ("Содержание") is skipped until the book starts (its first entry repeats). Up to three short lines before the first heading form the `#` title. The reader reports a heading confidence (0.9 pack patterns, 0.6 numerals only, 0 none) for the split plan (§6.8.1). | Heuristics live in the language pack (e.g. "Глава 1"); without a pack only numeral headings are found. The language comes from `--lang`, else from the script of the text matched to an installed pack. |
+| `.fb2` / `.fb2.zip` | XML parse with [defusedxml](https://github.com/tiran/defusedxml) (stdlib parser) following the [FictionBook 2](https://en.wikipedia.org/wiki/FictionBook) schema. Honour the XML declaration's encoding (often `windows-1251`). | Map `<section>` → chapter hierarchy, `<title>` → heading, `<p>`, `<emphasis>`, `<strong>`, `<epigraph>`, `<cite>`, `<poem>/<stanza>/<v>`, `<subtitle>`, `<empty-line/>`. Footnotes live in `<body name="notes">` and are linked by `l:href`. Cover from `<coverpage>` + `<binary>`. Language from `<title-info><lang>`. A `<subtitle>` is a heading one level below its section; a `<p>` or `<subtitle>` holding only `* * *`-like marks is a scene break; elements outside the schema (library banners such as `<myheader>` / `<myfooter>`) are dropped and reported; a lone top-level section that only wraps the book's sections (its title repeating author and title) is unwrapped. The annotation goes to metadata, not into the narrated text. |
+| `.epub` | Treat as ZIP + [EPUB 3](https://www.w3.org/TR/epub-33/) package: read OPF manifest/spine and nav/NCX TOC, convert XHTML with a custom walker (EPUB 2 also supported). | **Chapters come from the table of contents**: an entry starts a heading whose level follows its depth (top level = `##`); an in-text `<h1>`–`<h6>` with the same title is not repeated; without a TOC the largest XHTML heading becomes `##`. Footnotes from `epub:type` noteref/footnote and from the EPUB 2 pattern of a short numbered link to an element elsewhere (back-links ignored); note bodies are never read in place. Poems and epigraphs by common class names. Metadata: `dc:*`, series via `belongs-to-collection` or calibre, ISBN, translators (`trl`); cover via `cover-image` or `<meta name="cover">`. Language from `dc:language`. |
+| `.pdf` | Layout-aware extraction with **[pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) 1.28.2 and its layout model** (chosen by the M1 benchmark, `spikes/pdf-readers`: no header or page-number leaks, 0.4 s/page on CPU; the ONNX models ship inside the `pymupdf_layout` wheel, nothing is downloaded). Pinned: PyMuPDF 2.0 absorbed pymupdf4llm. Docling (leaked page numbers, downloads a 164 MB model) may become a reader plugin; Marker 2.x (vLLM Docker server) is excluded. | The output Markdown is parsed and cleaned without language rules: a paragraph starting with a lowercase letter continues the previous one (page-break splits; a trailing hyphen is dropped), page numbers and short lines repeated on ≥ 3 pages are removed, headings are plain text with chapters at `##`. Text-layer PDFs only in v1: encrypted, text-less (scanned) and > 5000-page PDFs are refused. Real compounds hyphenated at a line end lose their hyphen ("по-настоящему"); restoring them is a language-pack normalization rule (M2). |
 
 Footnote policy (configurable): `inline` (read in place, in a different voice),
 `chapter-end` (default), or `skip`.
@@ -335,8 +336,13 @@ so any change invalidates exactly the affected segments.
   [NeMo text-processing](https://github.com/NVIDIA/NeMo-text-processing) (Apache-2.0,
   grammar-based, many languages; heavy `pynini` dependency) or lighter
   [num2words](https://github.com/savoirfairelinux/num2words) (LGPL) + rules.
-- **Sentence segmentation** — [pySBD](https://github.com/nipunsadvilkar/pySBD) (rule
-  based, many languages, no model download) by default.
+- **Sentence segmentation** — rule-based in the core: a sentence ends at `. ! ? …`
+  (and closing quotes) followed by a capital or digit, optionally after an opening
+  quote or dash; never after initials or an abbreviation from the language profile
+  (`abbreviations`, e.g. «т. е.», «г.»). Dialogue keeps its author's remark
+  («— Эх! — отвечал он»). pySBD was tried in M1 and dropped: it split Russian
+  dialogue and abbreviations wrongly and was slow. Splitting too little is safe
+  (sentences are only packed into chunks); splitting a sentence is not.
 - **Chunking** — segments are packed up to the backend's declared `max_chars`
   (typically ~200–400 characters, roughly 15–25 s of speech); never split mid-sentence
   unless a sentence exceeds the limit, in which case split at clause punctuation.
@@ -377,7 +383,7 @@ as one option a language may choose, not as the design centre.
 
 | Stage | Entry-point group | Why it differs by language | English (M4) | Russian (M2, first) |
 |---|---|---|---|---|
-| Sentence segmentation | `text2audio.segmenters` | Abbreviation and punctuation conventions | pySBD `en` | pySBD `ru` + pack rules |
+| Sentence segmentation | `text2audio.segmenters` | Abbreviation and punctuation conventions | core rules + `en` abbreviations (M4) | core rules + `ru` abbreviations |
 | Text normalization | `text2audio.normalizers` | Number grammar, date/currency formats | NeMo TN or pack rules | rutextnorm (after audit) + pack rules |
 | Stress / G2P | `text2audio.g2p` | Unwritten stress, heteronyms, diacritics | misaki + espeak-ng | RUAccent (silero-stress fallback) |
 | TTS backend (per tier) | `text2audio.backends` | Model quality and voice availability per language | Kokoro / Chatterbox | Silero v5.6 `xenia` / hybrid: Silero → Chatterbox VC, Chatterbox Multilingual for Latin-script segments (§6.6.6) |
@@ -653,7 +659,7 @@ with networking disabled to prove nothing is fetched at runtime.
 
 **Generic fallback (any other language)**
 - Used when the language is detected but no pack is installed and a multilingual
-  backend supports it: sentence splitting with pySBD, numbers via num2words when it
+  backend supports it: the core's sentence splitting (no abbreviations), numbers via num2words when it
   supports the language, no lexicon or stress handling.
 - The CLI and `report.json` warn that quality is reduced and name the pack to
   install, if one exists.
@@ -956,9 +962,12 @@ offline violation, `4` completed with QA warnings, `5` internal error.
 
 ### 6.12 Security and Responsible Use
 
-- **Untrusted input**: XML is parsed with `defusedxml` (no external entities, no DTD
-  fetching); archives are size- and ratio-limited (zip-bomb protection) and paths are
-  sanitized (no `../` extraction); PDF parsing runs with page and time limits.
+- **Untrusted input**: XML is parsed with `defusedxml` (entity declarations and
+  external references refused; XHTML named entities such as `&nbsp;` are rewritten to
+  numeric references first, so no DTD is ever needed); archives are read in memory,
+  never extracted, with limits on member count, unpacked size and compression ratio,
+  and member names may not escape the archive; PDFs are refused when encrypted or over
+  5000 pages (a per-file time limit is still to do).
 - **Model loading**: prefer [safetensors](https://github.com/huggingface/safetensors)
   or ONNX; when a backend needs PyTorch checkpoints, load with
   `torch.load(weights_only=True)`; `trust_remote_code` is disabled unless pinned to a
@@ -989,11 +998,11 @@ offline violation, `4` completed with QA warnings, `5` internal error.
 | CLI | [Typer](https://typer.tiangolo.com/) | Click | MIT |
 | Config | [pydantic](https://docs.pydantic.dev/) + TOML | — | MIT |
 | Encoding detection | [charset-normalizer](https://github.com/jawah/charset_normalizer) | — | MIT |
-| XML (FB2 / EPUB) | [lxml](https://lxml.de/) + [defusedxml](https://github.com/tiran/defusedxml) | stdlib `xml.etree` | BSD / PSF |
-| EPUB | Custom reader (zipfile + lxml) | [EbookLib](https://github.com/aerkalov/ebooklib) | AGPL-3.0 (informational) |
-| PDF → Markdown | Chosen by M1 benchmark: [Docling](https://github.com/docling-project/docling), [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm), [Marker](https://github.com/datalab-to/marker) | The other two, as plugins | Docling MIT; pymupdf4llm **AGPL-3.0**; Marker GPL-3.0 code + restricted weights |
+| XML (FB2 / EPUB) | [defusedxml](https://github.com/tiran/defusedxml) over stdlib `xml.etree` | lxml | PSF |
+| EPUB | Custom reader (zipfile + defusedxml) | [EbookLib](https://github.com/aerkalov/ebooklib) | — |
+| PDF → Markdown | [pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) 1.28.2 + layout model (M1 benchmark) | [Docling](https://github.com/docling-project/docling) as a plugin | AGPL-3.0 (informational, ADR-0007) |
 | Markdown | [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | mistune | MIT |
-| Sentence splitting | [pySBD](https://github.com/nipunsadvilkar/pySBD) | spaCy, Stanza | MIT |
+| Sentence splitting | Core rules + pack abbreviations | pySBD (tried, dropped), spaCy, Stanza | — |
 | Normalization | [NeMo text-processing](https://github.com/NVIDIA/NeMo-text-processing) | [num2words](https://github.com/savoirfairelinux/num2words) + rules | Apache-2.0 / LGPL |
 | Language ID | [lingua-py](https://github.com/pemistahl/lingua-py) | fastText LID | Apache-2.0 |
 | ASR (QA gate) | Per language: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (en), [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) (ru) | whisper.cpp | MIT (code and weights) |
@@ -1192,6 +1201,10 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
+| 2026-10-25 | **PDF default reader: pymupdf4llm 1.28.2 with its layout model** (benchmark `spikes/pdf-readers`: no header/page-number leaks, 0.4 s/page CPU, models inside the wheel). Pinned below PyMuPDF 2.0, which absorbed it. Docling: possible plugin; Marker 2.x excluded (vLLM Docker server). The layout model's `onnxruntime` runs in the core process: a reader, CPU-only, no downloads. | Decided |
+| 2026-10-25 | Readers parse XML with defusedxml over the stdlib parser and an HTML-entity pass for XHTML; lxml is not used. EPUB chapters come from the table of contents. FB2 elements outside the schema are dropped and reported. | Decided |
+| 2026-10-25 | Sentence splitting is rule-based in the core with abbreviations from the language profile; pySBD dropped (split Russian dialogue and abbreviations wrongly). | Decided |
+| 2026-10-25 | The `ru` language pack exists from M1 with text-structure data (heading patterns, front matter, abbreviations); language packs install with the core through the `langs` dependency group. | Decided |
 | 2026-10-25 | Russian narrator voice is **Silero `xenia`** (owner listening). Chatterbox VC/TTS clone it from a reference clip rendered once by Silero, pinned in `models.lock` like any asset. Dialogue voice still open. | Decided |
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |

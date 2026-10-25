@@ -58,6 +58,9 @@ All notable changes to this project are documented here. The format follows
   of their chapter, default pauses. Rule-based sentence splitter (dialogue remarks,
   initials and the language pack's abbreviations stay inside a sentence) instead of
   pySBD, which split Russian dialogue wrongly.
+- SPEC.md 1.7-M1: readers as built (§6.3), defusedxml without lxml (§6.12), PDF
+  default reader, rule-based sentence splitting (§6.5), `ru` pack from M1; README
+  usage for `convert`; `spikes/pdf-readers` benchmark.
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`

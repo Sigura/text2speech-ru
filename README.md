@@ -7,12 +7,12 @@ editable Markdown text and then into an audiobook: MP3 files, one per book secti
 with tags and a cover. It uses local neural text-to-speech (TTS) and needs no network
 after installation. It is for personal use only (ADR-0007).
 
-> **Status:** M0 (scaffold) is done: CLI, plugin discovery, model store, offline
-> contract, worker protocol, resource planning, `install.sh` with pinned Russian
-> weights. Two Russian spikes chose the voices and models
-> ([ru-smoke](spikes/ru-smoke/FINDINGS.md), [ru-polish](spikes/ru-polish/FINDINGS.md)).
-> Next: conversion (M1), then Russian speech (M2). Plans and ideas: [TODO.md](TODO.md);
-> full specification: [SPEC.md](SPEC.md).
+> **Status:** M0 (scaffold) and **M1 (conversion) are done**: `text2audio convert`
+> turns FB2, EPUB, TXT, PDF and Markdown into an editable `<book>.md`, metadata, cover
+> and the segment list for synthesis. Spikes chose the Russian voices and models
+> ([ru-smoke](spikes/ru-smoke/FINDINGS.md), [ru-polish](spikes/ru-polish/FINDINGS.md))
+> and the PDF reader ([pdf-readers](spikes/pdf-readers/FINDINGS.md)). Next: Russian
+> speech (M2). Plans and ideas: [TODO.md](TODO.md); full specification: [SPEC.md](SPEC.md).
 
 ## Solution overview
 
@@ -84,9 +84,13 @@ CI fails when they are stale.
 
 ### Usage examples
 
-Available now (M0):
+Available now (M0–M1):
 
 ```bash
+text2audio convert "inputs/Станции Ангелов.fb2"    # → output/Станции Ангелов/Станции Ангелов.md
+text2audio convert inputs/ -o ~/Audiobooks         # every book in a folder, one sub-folder each
+text2audio convert book.txt --lang ru              # language of untagged text (default: guessed)
+text2audio convert --reconvert "output/Станции Ангелов"   # read the stored source again
 text2audio doctor                 # tools, GPUs, model hashes, plugins → "offline-ready", exit 0
 text2audio resources              # usable CPUs/RAM/GPUs and planned TTS workers
 text2audio resources --json
@@ -108,7 +112,21 @@ Tier: expressive
   - GPU2 skipped: 5677 MiB free < 8192 needed
 ```
 
-The commands below are **planned** (M1–M2); they follow the CLI in SPEC §6.11.
+`convert` writes one folder per book. The editable text sits next to where the audio
+will go; `_work/` keeps a copy of the source, metadata, the cover and the segment list.
+Library banners, page numbers, running headers and tables of contents are dropped;
+the warnings say what was skipped:
+
+```text
+output/Станции Ангелов/Станции Ангелов.md — fb2, 22 chapter(s), 4712 segments
+  warning: dropped elements outside the FB2 schema: <myfooter>×1, <myheader>×1
+```
+
+Re-running `convert` on the same file resumes in the same folder. If you edited the
+`.md`, a re-conversion never overwrites it: the new text goes to
+`<book>.reconverted.md` next to it.
+
+The commands below are **planned** (M2+); they follow the CLI in SPEC §6.11.
 
 **One book, start to finish:**
 
@@ -120,7 +138,7 @@ text2audio run books/ -o ~/Audiobooks       # every book in a folder, one sub-fo
 **Check the text first, then synthesize:**
 
 ```bash
-text2audio convert "Мастер и Маргарита.epub"                  # only the editable Markdown
+text2audio convert "Мастер и Маргарита.epub"                  # the editable Markdown (now)
 $EDITOR "output/Мастер и Маргарита/Мастер и Маргарита.md"      # fix typos, drop front matter
 text2audio preview "output/Мастер и Маргарита" --chapter 3 --seconds 30   # hear a sample
 text2audio synthesize "output/Мастер и Маргарита"               # re-renders only what changed
@@ -152,11 +170,12 @@ text2audio run book.fb2 --qa off                  # skip the ASR check (faster, 
 text2audio run book.fb2 --qa sample=10%           # check a sample of segments
 ```
 
-**Older or poor PDFs:** convert again later with a better reader; your edits to
-`<book>.md` are kept and the new text goes next to it:
+**PDFs:** text-layer PDFs only (no OCR yet); scanned and password-protected files are
+refused with a message. If a better PDF reader is added later, convert the stored
+copy again — your edits to `<book>.md` are kept:
 
 ```bash
-text2audio convert --reconvert "output/report" --reader docling
+text2audio convert --reconvert "output/report"
 ```
 
 **Air-gapped machine:** export the installed models once, import them there:
@@ -211,9 +230,8 @@ output/Война и мир/
 | 3 | Does rutextnorm pass the code audit, or does the pack own its number rules? | M2 |
 | 4 | Cover prompts for Russian books: FB2 genre mapping only, or offline ru→en translation (e.g. Opus-MT) of title and annotation? | M2 |
 | 5 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
-| 6 | Default PDF reader: Docling vs pymupdf4llm vs Marker. | M1 benchmark |
-| 7 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M2 |
-| 8 | Can Chatterbox be made faster than real time (fp16, `torch.compile`)? Only matters for sentences with English words. | M2 |
+| 6 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M2 |
+| 7 | Can Chatterbox be made faster than real time (fp16, `torch.compile`)? Only matters for sentences with English words. | M2 |
 
 ## Documentation
 
@@ -223,6 +241,7 @@ output/Война и мир/
 | [SPEC.md](SPEC.md) | Requirements, architecture, roadmap, decision log |
 | [spikes/ru-smoke/FINDINGS.md](spikes/ru-smoke/FINDINGS.md) | Russian offline smoke test: results and lessons |
 | [spikes/ru-polish/FINDINGS.md](spikes/ru-polish/FINDINGS.md) | Two-stage speech, Chatterbox, English words in Russian text |
+| [spikes/pdf-readers/FINDINGS.md](spikes/pdf-readers/FINDINGS.md) | PDF reader benchmark: pymupdf4llm vs Docling vs Marker |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 | [docs/adding-a-language.md](docs/adding-a-language.md) | How to add a language pack |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and conventions |
