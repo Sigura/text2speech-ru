@@ -36,6 +36,8 @@ filelock==4.2.4
     #   huggingface-hub
     #   python-discovery
     #   virtualenv
+flatbuffers==25.12.19
+    # via onnxruntime
 fsspec==2026.9.0
     # via huggingface-hub
 h11==0.16.0 ; sys_platform != 'emscripten'
@@ -72,11 +74,26 @@ mdurl==0.1.2
 mypy==2.4.0
 mypy-extensions==1.1.0
     # via mypy
+networkx==3.6.1 ; python_full_version < '3.12'
+    # via pymupdf-layout
+networkx==3.7 ; python_full_version >= '3.12'
+    # via pymupdf-layout
 nodeenv==1.11.0
     # via pre-commit
+numpy==2.4.6 ; python_full_version < '3.12'
+    # via
+    #   onnxruntime
+    #   pymupdf-layout
+numpy==2.5.4 ; python_full_version >= '3.12'
+    # via
+    #   onnxruntime
+    #   pymupdf-layout
+onnxruntime==1.31.0
+    # via pymupdf-layout
 packaging==26.3
     # via
     #   huggingface-hub
+    #   onnxruntime
     #   pytest
     #   virtualenv
 pathspec==1.1.1
@@ -90,6 +107,10 @@ pluggy==1.7.0
     #   pytest
     #   pytest-cov
 pre-commit==4.7.0
+protobuf==7.36.2
+    # via onnxruntime
+psutil==7.2.2
+    # via pymupdf4llm
 pydantic==2.14.1
     # via text2audio
 pydantic-core==2.50.1
@@ -98,6 +119,14 @@ pygments==2.21.0
     # via
     #   pytest
     #   rich
+pymupdf==1.28.2
+    # via
+    #   pymupdf-layout
+    #   pymupdf4llm
+pymupdf-layout==1.28.2
+    # via pymupdf4llm
+pymupdf4llm==1.28.2
+    # via text2audio
 pysbd==0.3.4
     # via text2audio
 pytest==9.1.1
@@ -112,11 +141,14 @@ pyyaml==6.0.3
     # via
     #   huggingface-hub
     #   pre-commit
+    #   pymupdf-layout
 rich==15.0.0
     # via typer
 ruff==0.17.2
 shellingham==1.5.4
     # via typer
+tabulate==0.10.0
+    # via pymupdf4llm
 tqdm==4.70.1
     # via huggingface-hub
 truststore==0.10.5 ; sys_platform != 'emscripten'

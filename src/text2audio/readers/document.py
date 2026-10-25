@@ -7,8 +7,12 @@ reader having to know Markdown escaping rules.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal
+
+# A scene-break line: "* * *", "***", "———", "•", "⁂" … (no letters or digits).
+DINKUS = re.compile(r"[*\u2022\u00b7\u25ca\u2042~#=_\-\u2013\u2014\s]{1,20}")
 
 InlineKind = Literal["text", "emph", "strong", "note"]
 

@@ -9,6 +9,7 @@ from text2audio.readers.document import Document
 from text2audio.readers.epub import read_epub
 from text2audio.readers.fb2 import read_fb2, read_fb2_zip
 from text2audio.readers.markdown import read_md
+from text2audio.readers.pdf import read_pdf
 from text2audio.readers.safety import InputError
 from text2audio.readers.txt import read_txt
 
@@ -22,6 +23,7 @@ READERS: dict[str, tuple[str, ReadFn]] = {
     "epub": ("epub", lambda data, lang: read_epub(data)),
     "txt": ("txt", read_txt),
     "md": ("md", read_md),
+    "pdf": ("pymupdf4llm", read_pdf),
 }
 
 # File name suffixes picked up when a directory is given as input (FR-21 batch).

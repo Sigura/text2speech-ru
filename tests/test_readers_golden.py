@@ -22,6 +22,8 @@ CASES = [
     "ru/kapitanskaya-dochka.epub",
     "ru/kapitanskaya-dochka-epub2.epub",
     "en/alice.epub",
+    "ru/kapitanskaya-dochka.pdf",
+    "en/alice.pdf",
 ]
 
 

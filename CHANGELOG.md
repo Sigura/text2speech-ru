@@ -47,6 +47,11 @@ All notable changes to this project are documented here. The format follows
   and EPUB 2 numbered links (back-links ignored, notes never read in place);
   epigraphs, poems, OPF metadata (series via `belongs-to-collection` or calibre,
   ISBN, translators) and cover; empty headings dropped.
+- PDF input (M1): pymupdf4llm 1.28.2 with its bundled layout model (chosen by the
+  `spikes/pdf-readers` benchmark), then clean-up: paragraphs and words split by page
+  breaks re-joined, page numbers and repeated running headers dropped, plain headings
+  with chapters at `##`; scanned and password-protected PDFs refused. A Markdown →
+  Document parser (markdown-it-py) feeds the PDF output through the same writer.
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`

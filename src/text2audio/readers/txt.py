@@ -19,6 +19,7 @@ from charset_normalizer import from_bytes
 from text2audio.core.contracts import LanguageProfile
 from text2audio.core.languages import guess_language, profile
 from text2audio.readers.document import (
+    DINKUS,
     Block,
     Document,
     Heading,
@@ -30,7 +31,6 @@ from text2audio.readers.document import (
 MAX_HEADING_CHARS = 80
 MAX_SUBTITLE_CHARS = 60
 _GENERIC_CHAPTER = (r"[IVXLCDM]{1,7}\.?", r"\d{1,3}\.?")
-_DINKUS = re.compile(r"[*•·◊⁂~#=_\-–—\s]{1,20}")
 _HYPHEN_BREAK = re.compile(r"(\w)-$")
 
 
@@ -117,7 +117,7 @@ class _Builder:
         line = para.text.strip()
         if para.lines > 1 or len(line) > MAX_HEADING_CHARS:
             return "text"
-        if _DINKUS.fullmatch(line):
+        if DINKUS.fullmatch(line):
             return "break"
         if _matches(self.front, line):
             return "front"

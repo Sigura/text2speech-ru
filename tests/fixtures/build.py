@@ -424,6 +424,144 @@ def epub_english() -> bytes:
     return zip_bytes(members, stored=("mimetype",))
 
 
+# -- PDF -----------------------------------------------------------------------------
+# Typeset like a printed book: A5, justified, hyphenated at line ends (soft hyphens),
+# running header and page numbers. Needs PyMuPDF and the DejaVu fonts at build time only.
+
+DEJAVU = Path("/usr/share/fonts/truetype/dejavu")
+PDF_CSS = """
+@font-face { font-family: serif; src: url(DejaVuSerif.ttf); }
+@font-face { font-family: serif; src: url(DejaVuSerif-Italic.ttf); font-style: italic; }
+@font-face { font-family: serif; src: url(DejaVuSerif-Bold.ttf); font-weight: bold; }
+body { font-family: serif; font-size: 10pt; line-height: 1.3; }
+p { text-align: justify; text-indent: 1.2em; margin: 0; }
+h1 { font-size: 16pt; text-align: center; margin: 2em 0 1em 0; }
+h2 { font-size: 13pt; text-align: center; margin: 1.5em 0 0.8em 0; }
+blockquote { margin: 0.5em 0 0.8em 4em; font-size: 9pt; }
+blockquote p { text-indent: 0; text-align: left; }
+p.r { text-align: right; font-style: italic; }
+"""
+
+
+def _soft_hyphens(text: str) -> str:
+    import re
+
+    def split(m: re.Match[str]) -> str:
+        w = m.group(0)
+        if len(w) < 9:
+            return w
+        parts = [w[i : i + 4] for i in range(0, len(w), 4)]
+        if len(parts[-1]) < 3:
+            parts[-2:] = [parts[-2] + parts[-1]]
+        return "­".join(parts)
+
+    return re.sub(r"\w+", split, text)
+
+
+def pdf_html_ru() -> str:
+    def para(text: str) -> str:
+        import re
+
+        text = _soft_hyphens(escape(_strip_note_refs(text)))
+        return re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
+
+    first, _, last = AUTHOR
+    out = [f"<h1>{first} {last}. {TITLE}</h1>"]
+    for ch in CHAPTERS:
+        lines = "<br/>".join(escape(v) for v in ch["epigraph"])
+        author = escape(_strip_note_refs(ch["epigraph_author"]))
+        out.append(f"<h2>{escape('. '.join(ch['title']))}</h2>")
+        out.append(f'<blockquote><p>{lines}</p><p class="r">{author}</p></blockquote>')
+        out += [f"<p>{para(p)}</p>" for p in ch["paragraphs"]]
+    return "<html><body>" + "".join(out) + "</body></html>"
+
+
+def pdf_html_en() -> str:
+    paras = "".join(f"<p>{_soft_hyphens(escape(p))}</p>" for p in ALICE)
+    return (
+        "<html><body><h1>Alice’s Adventures in Wonderland</h1>"
+        f"<h2>Chapter I. Down the Rabbit-Hole</h2>{paras}"
+        f"<h2>Chapter II. The Pool of Tears</h2>{paras}</body></html>"
+    )
+
+
+def _strip_note_refs(text: str) -> str:
+    import re
+
+    return re.sub(r"\[\^\w+\]", "", text)
+
+
+def typeset_pdf(html: str, header: str, title: str, author: str) -> bytes:
+    import pymupdf
+
+    story = pymupdf.Story(html=html, user_css=PDF_CSS, archive=pymupdf.Archive(str(DEJAVU)))
+    import io
+
+    buf = io.BytesIO()
+    writer = pymupdf.DocumentWriter(buf)
+    page_rect = pymupdf.paper_rect("a5")
+    more = True
+    while more:
+        device = writer.begin_page(page_rect)
+        margins = pymupdf.Rect(48, 56, page_rect.width - 48, page_rect.height - 52)
+        more, _ = story.place(margins)
+        story.draw(device)
+        writer.end_page()
+    writer.close()
+    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+    font = str(DEJAVU / "DejaVuSerif.ttf")
+    for n, page in enumerate(doc, 1):
+        w = page.rect.width
+        page.insert_text(
+            (w / 2 - len(header) * 2.2, 34), header, fontsize=8, fontname="dv", fontfile=font
+        )
+        page.insert_text(
+            (w / 2 - 4, page.rect.height - 28), str(n), fontsize=8, fontname="dv", fontfile=font
+        )
+    doc.subset_fonts()  # embed only the glyphs used: kilobytes instead of megabytes
+    stamp = "D:20200101000000Z"
+    doc.set_metadata(
+        {
+            "title": title,
+            "author": author,
+            "creationDate": stamp,
+            "modDate": stamp,
+            "producer": "",
+            "creator": "",
+        }
+    )
+    data: bytes = doc.tobytes(garbage=3, deflate=True, no_new_id=True)
+    return data
+
+
+def scanned_pdf() -> bytes:
+    """A page that is only an image: no text layer, as in a scan."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=595)
+    page.insert_image(page.rect, stream=tiny_png())
+    stamp = "D:20200101000000Z"
+    doc.set_metadata({"creationDate": stamp, "modDate": stamp, "producer": "", "creator": ""})
+    data: bytes = doc.tobytes(no_new_id=True)
+    return data
+
+
+def encrypted_pdf(plain_pdf: bytes) -> bytes:
+    import pymupdf
+
+    doc = pymupdf.open(stream=plain_pdf, filetype="pdf")
+    data: bytes = doc.tobytes(
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        user_pw="secret",
+        owner_pw="secret",
+        garbage=3,
+        deflate=True,
+        no_new_id=True,
+    )
+    return data
+
+
 # -- TXT and MD ---------------------------------------------------------------------
 
 
@@ -517,6 +655,12 @@ def main() -> None:
     write(HERE / "ru/kapitanskaya-dochka.epub", epub3_book())
     write(HERE / "ru/kapitanskaya-dochka-epub2.epub", epub2_book())
     write(HERE / "en/alice.epub", epub_english())
+    first, _, last = AUTHOR
+    ru_pdf = typeset_pdf(pdf_html_ru(), TITLE, TITLE, f"{first} {last}")
+    write(HERE / "ru/kapitanskaya-dochka.pdf", ru_pdf)
+    write(HERE / "en/alice.pdf", typeset_pdf(pdf_html_en(), "Alice", "", "Lewis Carroll"))
+    write(HERE / "evil/scanned.pdf", scanned_pdf())
+    write(HERE / "evil/encrypted.pdf", encrypted_pdf(ru_pdf))
     write(HERE / "evil/xxe.fb2", XXE_FB2)
     write(HERE / "evil/billion-laughs.fb2", LAUGHS_FB2)
     write(HERE / "evil/traversal.fb2.zip", zip_bytes([("../../evil.fb2", fb2)]))

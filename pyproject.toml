@@ -15,6 +15,7 @@ dependencies = [
     "mdit-py-plugins>=0.4",
     "charset-normalizer>=3.3",
     "pysbd>=0.3.4",
+    "pymupdf4llm==1.28.2",
 ]
 
 [project.scripts]
@@ -71,3 +72,12 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["pymupdf", "pymupdf.*", "pymupdf4llm", "pymupdf4llm.*", "pysbd", "pysbd.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# PyMuPDF is only partly typed; its calls are confined to this module.
+module = ["text2audio.readers.pdf"]
+disallow_untyped_calls = false

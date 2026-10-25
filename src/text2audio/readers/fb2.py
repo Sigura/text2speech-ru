@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import base64
 import binascii
-import re
 from collections import Counter
 from xml.etree.ElementTree import Element
 
 from text2audio.readers.document import (
+    DINKUS,
     Block,
     Cover,
     Document,
@@ -33,7 +33,6 @@ from text2audio.readers.document import (
 from text2audio.readers.safety import InputError, local_name, open_zip, parse_xml
 
 MAX_COVER_BYTES = 20 * 2**20
-_DINKUS = re.compile(r"[*•·◊⁂~#=_\-–—\s]{1,20}")  # a scene-break line, never empty here
 _ENDS_TITLE_LINE = (".", "!", "?", "…", ":", ";", ",", "—", "–", "-")
 _INLINE_KINDS: dict[str, InlineKind] = {"emphasis": "emph", "strong": "strong"}
 _TRANSPARENT_INLINE = {"style", "strikethrough", "sub", "sup", "code", "a"}
@@ -141,7 +140,7 @@ class _Reader:
             if name in ("p", "subtitle"):
                 inl = self.inlines(el)
                 text = plain(inl).strip()
-                if _DINKUS.fullmatch(text):  # "* * *" and friends, as <p> or <subtitle>
+                if DINKUS.fullmatch(text):  # "* * *" and friends, as <p> or <subtitle>
                     out.append(SceneBreak())
                 elif name == "subtitle":  # `level` is already one below the section's heading
                     out.append(Heading(min(level, 6), inl))

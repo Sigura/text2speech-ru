@@ -21,6 +21,8 @@ defusedxml==0.7.1
     # via text2audio
 filelock==4.2.4
     # via huggingface-hub
+flatbuffers==25.12.19
+    # via onnxruntime
 fsspec==2026.9.0
     # via huggingface-hub
 h11==0.16.0 ; sys_platform != 'emscripten'
@@ -48,24 +50,56 @@ mdit-py-plugins==0.6.1
     # via text2audio
 mdurl==0.1.2
     # via markdown-it-py
+networkx==3.6.1 ; python_full_version < '3.12'
+    # via pymupdf-layout
+networkx==3.7 ; python_full_version >= '3.12'
+    # via pymupdf-layout
+numpy==2.4.6 ; python_full_version < '3.12'
+    # via
+    #   onnxruntime
+    #   pymupdf-layout
+numpy==2.5.4 ; python_full_version >= '3.12'
+    # via
+    #   onnxruntime
+    #   pymupdf-layout
+onnxruntime==1.31.0
+    # via pymupdf-layout
 packaging==26.3
-    # via huggingface-hub
+    # via
+    #   huggingface-hub
+    #   onnxruntime
 platformdirs==4.13.5
     # via text2audio
+protobuf==7.36.2
+    # via onnxruntime
+psutil==7.2.2
+    # via pymupdf4llm
 pydantic==2.14.1
     # via text2audio
 pydantic-core==2.50.1
     # via pydantic
 pygments==2.21.0
     # via rich
+pymupdf==1.28.2
+    # via
+    #   pymupdf-layout
+    #   pymupdf4llm
+pymupdf-layout==1.28.2
+    # via pymupdf4llm
+pymupdf4llm==1.28.2
+    # via text2audio
 pysbd==0.3.4
     # via text2audio
 pyyaml==6.0.3
-    # via huggingface-hub
+    # via
+    #   huggingface-hub
+    #   pymupdf-layout
 rich==15.0.0
     # via typer
 shellingham==1.5.4
     # via typer
+tabulate==0.10.0
+    # via pymupdf4llm
 tqdm==4.70.1
     # via huggingface-hub
 truststore==0.10.5 ; sys_platform != 'emscripten'

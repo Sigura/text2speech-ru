@@ -21,6 +21,7 @@ from urllib.parse import unquote
 from xml.etree.ElementTree import Element
 
 from text2audio.readers.document import (
+    DINKUS,
     Block,
     Cover,
     Document,
@@ -51,7 +52,6 @@ _NOTE_LABEL = re.compile(r"\[?\(?\s*(\d{1,4}|[*†‡§]+|[a-z])\s*\)?\]?")
 _POEM_CLASS = re.compile(r"\b(poem|poetry|stanza|verse)\b", re.I)
 _EPIGRAPH_CLASS = re.compile(r"\bepigraph\b", re.I)
 _AUTHOR_CLASS = re.compile(r"\b(text-?author|attribution|signature|epigraph-?author|cite)\b", re.I)
-_DINKUS = re.compile(r"[*•·◊⁂~#=_\-–—\s]{1,20}")
 _SKIP = {"script", "style", "head", "img", "image", "svg", "audio", "video", "object", "nav"}
 _INLINE: dict[str, InlineKind] = {"em": "emph", "i": "emph", "cite": "emph", "dfn": "emph"}
 _STRONG = {"strong", "b"}
@@ -445,7 +445,7 @@ class _Reader:
             ):
                 inl = self.inlines(el, in_note=in_note)
                 text = plain(inl).strip()
-                if _DINKUS.fullmatch(text):
+                if DINKUS.fullmatch(text):
                     out.append(SceneBreak())
                 elif text or any(i.kind == "note" for i in inl):
                     out.append(Paragraph(inl))

@@ -1,0 +1,28 @@
+{
+  "title": "Alice’s Adventures in Wonderland",
+  "authors": [
+    "Lewis Carroll"
+  ],
+  "language": null,
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": 0.8,
+  "source": {
+    "name": "alice.pdf",
+    "format": "pdf",
+    "sha256": "42cde7cfdb6664855e9ad512df24271eea95b6890b75b9294cec9417812520fb",
+    "bytes": 52890
+  },
+  "reader": {
+    "name": "pymupdf4llm"
+  },
+  "cover": null,
+  "warnings": []
+}

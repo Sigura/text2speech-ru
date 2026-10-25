@@ -1,0 +1,28 @@
+{
+  "title": "Капитанская дочка",
+  "authors": [
+    "Александр Пушкин"
+  ],
+  "language": "ru",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": 0.8,
+  "source": {
+    "name": "kapitanskaya-dochka.pdf",
+    "format": "pdf",
+    "sha256": "867c5ab256cb673caee23b34ccda2ed2b97c13e51d18ad8fbf550b7b412cbd36",
+    "bytes": 79438
+  },
+  "reader": {
+    "name": "pymupdf4llm"
+  },
+  "cover": null,
+  "warnings": []
+}
