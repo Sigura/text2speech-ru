@@ -1,0 +1,28 @@
+{
+  "title": "Alice’s Adventures in Wonderland",
+  "authors": [
+    "Lewis Carroll"
+  ],
+  "language": "en",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 1,
+  "heading_confidence": null,
+  "source": {
+    "name": "alice.epub",
+    "format": "epub",
+    "sha256": "367308f52f941ac728d1929d9f8f147c944d69878bd33ee265fb40cfdd3dafeb",
+    "bytes": 1441
+  },
+  "reader": {
+    "name": "epub"
+  },
+  "cover": null,
+  "warnings": []
+}

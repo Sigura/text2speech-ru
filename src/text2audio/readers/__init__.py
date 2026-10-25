@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from text2audio.readers.detect import Format
 from text2audio.readers.document import Document
+from text2audio.readers.epub import read_epub
 from text2audio.readers.fb2 import read_fb2, read_fb2_zip
 from text2audio.readers.markdown import read_md
 from text2audio.readers.safety import InputError
@@ -18,6 +19,7 @@ READERS: dict[str, tuple[str, ReadFn]] = {
     # format → (reader name recorded in metadata.json, function)
     "fb2": ("fb2", lambda data, lang: read_fb2(data)),
     "fb2.zip": ("fb2", lambda data, lang: read_fb2_zip(data)),
+    "epub": ("epub", lambda data, lang: read_epub(data)),
     "txt": ("txt", read_txt),
     "md": ("md", read_md),
 }

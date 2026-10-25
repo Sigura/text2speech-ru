@@ -109,6 +109,22 @@ class Document:
         )
 
 
+def drop_empty_headings(blocks: list[Block]) -> list[Block]:
+    """Remove headings (other than the book title) that head no content.
+
+    A heading is empty when the next block is a heading of the same or a higher rank,
+    or when nothing follows — e.g. "Примечания" whose notes moved to the footnotes.
+    """
+    out: list[Block] = []
+    for i, block in enumerate(blocks):
+        if isinstance(block, Heading) and block.level > 1:
+            nxt = blocks[i + 1] if i + 1 < len(blocks) else None
+            if nxt is None or (isinstance(nxt, Heading) and nxt.level <= block.level):
+                continue
+        out.append(block)
+    return out
+
+
 def plain(inlines: list[Inline]) -> str:
     """Text of inline spans without markup or note references."""
     return "".join(i.text for i in inlines if i.kind != "note")

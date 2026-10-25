@@ -19,6 +19,9 @@ CASES = [
     "ru/kapitanskaya-dochka.txt",
     "ru/blank-lines-parts.txt",
     "ru/kapitanskaya-dochka.md",
+    "ru/kapitanskaya-dochka.epub",
+    "ru/kapitanskaya-dochka-epub2.epub",
+    "en/alice.epub",
 ]
 
 

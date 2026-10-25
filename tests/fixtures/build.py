@@ -236,6 +236,194 @@ LAUGHS_FB2 = (
 )
 
 
+# -- EPUB ----------------------------------------------------------------------------
+
+CONTAINER = (
+    '<?xml version="1.0"?>\n<container version="1.0" '
+    'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+    '<rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>'
+    "</rootfiles></container>\n"
+)
+
+
+def xhtml(title: str, body: str, *, epub3: bool = True) -> str:
+    ns = ' xmlns:epub="http://www.idpf.org/2007/ops"' if epub3 else ""
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n'
+        f'<html xmlns="http://www.w3.org/1999/xhtml"{ns}><head><title>{escape(title)}</title>'
+        f"</head><body>{body}</body></html>\n"
+    )
+
+
+def html_inline(text: str, note_link: str) -> str:
+    """*x* → <em>, [^id] → a note link built by `note_link(id)`."""
+    import re
+
+    out = escape(text)
+    out = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", out)
+    return re.sub(r"\[\^(\w+)\]", lambda m: note_link(m.group(1)), out)
+
+
+def epub3_book() -> bytes:
+    first, _, last = AUTHOR
+
+    def ref(n: str) -> str:
+        return f'<a epub:type="noteref" href="#{n}">{n[1:]}</a>'
+
+    chapters = []
+    for i, ch in enumerate(CHAPTERS, 1):
+        title = ". ".join(ch["title"])
+        lines = "<br/>".join(escape(v) for v in ch["epigraph"])
+        notes = [n for n in NOTES if f"[^{n}]" in str(ch)]
+        body = (
+            f'<section epub:type="chapter"><h2>{escape(title)}</h2>'
+            f'<blockquote class="epigraph"><p class="poem">{lines}</p>'
+            f'<p class="text-author">{html_inline(ch["epigraph_author"], ref)}</p></blockquote>'
+            + "".join(f"<p>{html_inline(p, ref)}</p>" for p in ch["paragraphs"])
+            + "".join(
+                f'<aside epub:type="footnote" id="{n}"><p>{html_inline(NOTES[n], ref)}</p></aside>'
+                for n in notes
+            )
+            + "</section>"
+        )
+        chapters.append((f"ch{i}.xhtml", xhtml(title, body.replace(" т. е.", "&nbsp;т.&nbsp;е."))))
+    nav_items = "".join(
+        f'<li><a href="ch{i}.xhtml">{escape(". ".join(ch["title"]))}</a></li>'
+        for i, ch in enumerate(CHAPTERS, 1)
+    )
+    nav = xhtml("Оглавление", f'<nav epub:type="toc"><h1>Оглавление</h1><ol>{nav_items}</ol></nav>')
+    opf = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        f'<dc:identifier id="id">urn:uuid:00000000-0000-0000-0000-000000001836</dc:identifier>'
+        f"<dc:title>{TITLE}</dc:title><dc:creator>{first} {last}</dc:creator>"
+        "<dc:language>ru-RU</dc:language><dc:date>1836</dc:date>"
+        "<dc:subject>Историческая проза</dc:subject>"
+        '<meta property="belongs-to-collection" id="c1">Повести и романы</meta>'
+        '<meta refines="#c1" property="group-position">7</meta>'
+        "</metadata><manifest>"
+        '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+        '<item id="cover" href="images/cover.png" media-type="image/png" '
+        'properties="cover-image"/>'
+        + "".join(
+            f'<item id="c{i}" href="ch{i}.xhtml" media-type="application/xhtml+xml"/>'
+            for i in range(1, len(chapters) + 1)
+        )
+        + '</manifest><spine><itemref idref="nav" linear="no"/>'
+        + "".join(f'<itemref idref="c{i}"/>' for i in range(1, len(chapters) + 1))
+        + "</spine></package>\n"
+    )
+    members = [
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER.encode()),
+        ("OEBPS/content.opf", opf.encode()),
+        ("OEBPS/nav.xhtml", nav.encode()),
+        ("OEBPS/images/cover.png", tiny_png()),
+        *[(f"OEBPS/{name}", text.encode()) for name, text in chapters],
+    ]
+    return zip_bytes(members, stored=("mimetype",))
+
+
+def epub2_book() -> bytes:
+    """EPUB 2: NCX, one text file with anchors, notes in their own file, stanza divs."""
+    first, _, last = AUTHOR
+
+    def ref(n: str) -> str:
+        return f'<a id="r{n}" href="notes.xhtml#{n}"><sup>{n[1:]}</sup></a>'
+
+    parts = []
+    for i, ch in enumerate(CHAPTERS, 1):
+        lines = "".join(f"<p>{escape(v)}</p>" for v in ch["epigraph"])
+        parts.append(
+            f'<h2 id="ch{i}">{escape(ch["title"][0])}<br/>{escape(ch["title"][1])}</h2>'
+            f'<div class="epigraph"><div class="stanza">{lines}</div>'
+            f'<p class="text-author">— {html_inline(ch["epigraph_author"], ref)}</p></div>'
+            + "".join(f'<p class="text">{html_inline(p, ref)}</p>' for p in ch["paragraphs"])
+        )
+    text = xhtml(TITLE, "".join(parts), epub3=False)
+    notes_body = "<h2>Примечания</h2>" + "".join(
+        f'<p id="{n}"><a href="text.xhtml#r{n}">{n[1:]}</a> {html_inline(v, ref)}</p>'
+        for n, v in NOTES.items()
+    )
+    notes = xhtml("Примечания", notes_body, epub3=False)
+    nav_points = "".join(
+        f'<navPoint id="p{i}" playOrder="{i}"><navLabel><text>{escape(". ".join(ch["title"]))}'
+        f'</text></navLabel><content src="text.xhtml#ch{i}"/></navPoint>'
+        for i, ch in enumerate(CHAPTERS, 1)
+    )
+    ncx = (
+        '<?xml version="1.0" encoding="utf-8"?>\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" '
+        f'version="2005-1"><head/><docTitle><text>{TITLE}</text></docTitle>'
+        f"<navMap>{nav_points}</navMap></ncx>\n"
+    )
+    opf = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/" '
+        'xmlns:opf="http://www.idpf.org/2007/opf">'
+        '<dc:identifier id="id" opf:scheme="ISBN">978-5-00-000000-0</dc:identifier>'
+        f'<dc:title>{TITLE}</dc:title><dc:creator opf:role="aut">{first} {last}</dc:creator>'
+        "<dc:language>ru</dc:language>"
+        '<meta name="cover" content="cover-img"/>'
+        '<meta name="calibre:series" content="Повести и романы"/>'
+        '<meta name="calibre:series_index" content="7.0"/>'
+        "</metadata><manifest>"
+        '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        '<item id="cover-img" href="cover.png" media-type="image/png"/>'
+        '<item id="text" href="text.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="notes" href="notes.xhtml" media-type="application/xhtml+xml"/>'
+        '</manifest><spine toc="ncx"><itemref idref="text"/><itemref idref="notes"/></spine>'
+        "</package>\n"
+    )
+    members = [
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER.encode()),
+        ("OEBPS/content.opf", opf.encode()),
+        ("OEBPS/toc.ncx", ncx.encode()),
+        ("OEBPS/cover.png", tiny_png()),
+        ("OEBPS/text.xhtml", text.encode()),
+        ("OEBPS/notes.xhtml", notes.encode()),
+    ]
+    return zip_bytes(members, stored=("mimetype",))
+
+
+ALICE = [
+    "Alice was beginning to get very tired of sitting by her sister on the bank, and of "
+    "having nothing to do: once or twice she had peeped into the book her sister was "
+    "reading, but it had no pictures or conversations in it, “and what is the use of a "
+    "book,” thought Alice “without pictures or conversations?”",
+    "So she was considering in her own mind (as well as she could, for the hot day made "
+    "her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would "
+    "be worth the trouble of getting up and picking the daisies, when suddenly a White "
+    "Rabbit with pink eyes ran close by her.",
+]
+
+
+def epub_english() -> bytes:
+    body = '<h1 class="chapter">CHAPTER I.<br/>Down the Rabbit-Hole</h1>' + "".join(
+        f"<p>{escape(p)}</p>" for p in ALICE
+    )
+    chapter = xhtml("Down the Rabbit-Hole", body)
+    opf = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:identifier id="id">alice</dc:identifier>'
+        "<dc:title>Alice’s Adventures in Wonderland</dc:title>"
+        "<dc:creator>Lewis Carroll</dc:creator><dc:language>en</dc:language></metadata>"
+        '<manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+        '</manifest><spine><itemref idref="c1"/></spine></package>\n'
+    )
+    members = [
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", CONTAINER.encode()),
+        ("OEBPS/content.opf", opf.encode()),
+        ("OEBPS/c1.xhtml", chapter.encode()),
+    ]
+    return zip_bytes(members, stored=("mimetype",))
+
+
 # -- TXT and MD ---------------------------------------------------------------------
 
 
@@ -326,6 +514,9 @@ def main() -> None:
     write(HERE / "ru/kapitanskaya-dochka.txt", txt_librus(), "cp1251")
     write(HERE / "ru/blank-lines-parts.txt", BLANK_LINES_TXT)
     write(HERE / "ru/kapitanskaya-dochka.md", md_book())
+    write(HERE / "ru/kapitanskaya-dochka.epub", epub3_book())
+    write(HERE / "ru/kapitanskaya-dochka-epub2.epub", epub2_book())
+    write(HERE / "en/alice.epub", epub_english())
     write(HERE / "evil/xxe.fb2", XXE_FB2)
     write(HERE / "evil/billion-laughs.fb2", LAUGHS_FB2)
     write(HERE / "evil/traversal.fb2.zip", zip_bytes([("../../evil.fb2", fb2)]))

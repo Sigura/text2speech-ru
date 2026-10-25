@@ -42,6 +42,11 @@ All notable changes to this project are documented here. The format follows
   the language pack, contents lists skipped, heading confidence in `metadata.json`;
   `.md` kept verbatim; `convert --lang`. First language pack `plugins/lang-ru`
   (text structure only; installed with the core via the `langs` dependency group).
+- EPUB 2/3 input (M1): chapters from the nav document or NCX (levels by depth, in-text
+  duplicates folded), XHTML headings otherwise; footnotes from `epub:type` semantics
+  and EPUB 2 numbered links (back-links ignored, notes never read in place);
+  epigraphs, poems, OPF metadata (series via `belongs-to-collection` or calibre,
+  ISBN, translators) and cover; empty headings dropped.
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`

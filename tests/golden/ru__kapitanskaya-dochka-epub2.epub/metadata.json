@@ -1,0 +1,32 @@
+{
+  "title": "Капитанская дочка",
+  "authors": [
+    "Александр Пушкин"
+  ],
+  "language": "ru",
+  "series": "Повести и романы",
+  "series_index": 7,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": "978-5-00-000000-0",
+  "chapters": 2,
+  "heading_confidence": null,
+  "source": {
+    "name": "kapitanskaya-dochka-epub2.epub",
+    "format": "epub",
+    "sha256": "eb1cc2bb8c0c089dae214dc58b82ad121279ff03dc96e64733f2da3edb31688c",
+    "bytes": 3674
+  },
+  "reader": {
+    "name": "epub"
+  },
+  "cover": {
+    "file": "cover.png",
+    "origin": "embedded",
+    "type": "image/png"
+  },
+  "warnings": []
+}
