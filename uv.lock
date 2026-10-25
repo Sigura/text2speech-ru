@@ -11,6 +11,7 @@ resolution-markers = [
 members = [
     "text2audio",
     "text2audio-backend-sine",
+    "text2audio-lang-ru",
 ]
 
 [[package]]
@@ -1190,6 +1191,9 @@ dev = [
     { name = "text2audio-backend-sine" },
     { name = "types-defusedxml" },
 ]
+langs = [
+    { name = "text2audio-lang-ru" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1215,11 +1219,23 @@ dev = [
     { name = "text2audio-backend-sine", editable = "plugins/backend-sine" },
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
 ]
+langs = [{ name = "text2audio-lang-ru", editable = "plugins/lang-ru" }]
 
 [[package]]
 name = "text2audio-backend-sine"
 version = "0.1.0"
 source = { editable = "plugins/backend-sine" }
+dependencies = [
+    { name = "text2audio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "text2audio", editable = "." }]
+
+[[package]]
+name = "text2audio-lang-ru"
+version = "0.1.0"
+source = { editable = "plugins/lang-ru" }
 dependencies = [
     { name = "text2audio" },
 ]

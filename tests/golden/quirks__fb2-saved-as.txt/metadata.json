@@ -15,6 +15,7 @@
   "publisher": null,
   "isbn": null,
   "chapters": 2,
+  "heading_confidence": null,
   "source": {
     "name": "fb2-saved-as.txt",
     "format": "fb2",

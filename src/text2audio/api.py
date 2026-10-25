@@ -54,6 +54,7 @@ def convert(
     name: str | None = None,
     overwrite: bool = False,
     reconvert: bool = False,
+    lang: str | None = None,
     config: Config | None = None,
 ) -> list[ConvertResult]:
     """Input files or directories → one book folder each (§5.2).
@@ -61,8 +62,10 @@ def convert(
     With `reconvert`, `inputs` are book folders and their stored source is read again;
     an edited `<book>.md` is kept and the new text goes to `<book>.reconverted.md`.
     """
-    root = output_root or (config or load_config()).output.root
-    return _convert(inputs, root, name=name, overwrite=overwrite, reconvert=reconvert)
+    config = config or load_config()
+    root = output_root or config.output.root
+    lang = lang or config.synthesis.language
+    return _convert(inputs, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang)
 
 
 def models_list(

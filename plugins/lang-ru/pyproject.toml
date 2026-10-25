@@ -1,0 +1,19 @@
+[project]
+name = "text2audio-lang-ru"
+version = "0.1.0"
+description = "Russian language pack for text2audio (M1: text structure; M2: stress, normalization, voices)"
+requires-python = ">=3.11"
+dependencies = ["text2audio"]
+
+[project.entry-points."text2audio.languages"]
+ru = "text2audio_lang_ru:PROFILE"
+
+[tool.uv.sources]
+text2audio = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/text2audio_lang_ru"]

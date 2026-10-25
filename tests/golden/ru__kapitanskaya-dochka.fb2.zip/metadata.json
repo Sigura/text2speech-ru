@@ -15,6 +15,7 @@
   "publisher": null,
   "isbn": null,
   "chapters": 2,
+  "heading_confidence": null,
   "source": {
     "name": "kapitanskaya-dochka.fb2.zip",
     "format": "fb2.zip",

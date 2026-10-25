@@ -1,6 +1,8 @@
 # Generated from uv.lock by scripts/export-requirements.sh — do not edit.
 # Runtime: pip install -r requirements.txt
 -e .
+    # via text2audio-lang-ru
+-e ./plugins/lang-ru
 annotated-doc==0.0.5
     # via typer
 annotated-types==0.8.0

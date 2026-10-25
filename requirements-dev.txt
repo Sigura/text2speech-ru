@@ -1,8 +1,11 @@
 # Generated from uv.lock by scripts/export-requirements.sh — do not edit.
 # Development (tests, lint, sine backend): pip install -r requirements-dev.txt
 -e .
-    # via text2audio-backend-sine
+    # via
+    #   text2audio-backend-sine
+    #   text2audio-lang-ru
 -e ./plugins/backend-sine
+-e ./plugins/lang-ru
 annotated-doc==0.0.5
     # via typer
 annotated-types==0.8.0

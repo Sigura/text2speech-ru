@@ -122,6 +122,25 @@ class Segment(BaseModel):
         return self.text_norm if self.text_norm is not None else self.text
 
 
+class LanguageProfile(BaseModel):
+    """What a language pack tells the core about its language (§6.6.5).
+
+    Only text structure for now (M1); stress, normalization, voices and QA bounds are
+    added with the first pack that needs them (M2).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str  # ISO 639-1
+    name: str
+    script: str  # ISO 15924, e.g. "Cyrl", "Latn"
+    # Regexes matched (case-insensitive) against a whole stripped line of plain text.
+    part_headings: tuple[str, ...] = ()  # "Часть первая", "Книга 2"
+    chapter_headings: tuple[str, ...] = ()  # "Глава I", "Пролог"
+    front_matter: tuple[str, ...] = ()  # "Содержание" — skipped in TXT/PDF
+    segmenter: str | None = None  # pySBD language code; None = no sentence splitting
+
+
 class SynthesisResult(BaseModel):
     duration_ms: int
     elapsed_ms: int

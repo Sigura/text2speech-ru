@@ -1,0 +1,28 @@
+{
+  "title": "blank-lines-parts",
+  "authors": [],
+  "language": "ru",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": 0.9,
+  "source": {
+    "name": "blank-lines-parts.txt",
+    "format": "txt",
+    "sha256": "0879e0714a98971d772df24d7c6d9e2ccda23d3a68d5f1606e910f9c3f43fd5b",
+    "bytes": 771
+  },
+  "reader": {
+    "name": "txt"
+  },
+  "cover": null,
+  "warnings": [
+    "skipped a table of contents (5 lines)"
+  ]
+}

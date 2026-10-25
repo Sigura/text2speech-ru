@@ -236,6 +236,80 @@ LAUGHS_FB2 = (
 )
 
 
+# -- TXT and MD ---------------------------------------------------------------------
+
+
+def _strip_markup(text: str) -> str:
+    import re
+
+    return re.sub(r"\[\^\w+\]", "", text).replace("*", "")
+
+
+def txt_librus() -> str:
+    """lib.ru layout: indented, hard-wrapped paragraphs; chapter title on the next line."""
+    import textwrap
+
+    first, _, last = AUTHOR
+    out = [f"{first} {last}", TITLE, ""]
+    for ch in CHAPTERS:
+        number, name = ch["title"]
+        out += ["", f"     {number}", f"     {name.upper()}", ""]
+        out += [f"                    {_strip_markup(v)}" for v in ch["epigraph"]]
+        out += [f"                              {_strip_markup(ch['epigraph_author'])}", ""]
+        for p in ch["paragraphs"]:
+            lines = textwrap.wrap(_strip_markup(p), width=66)
+            out += ["     " + lines[0], *lines[1:]]
+    # cp1251 has no "ê"; real cp1251 texts write a plain "e".
+    return ("\r\n".join(out) + "\r\n").replace("ê", "e")
+
+
+BLANK_LINES_TXT = """Содержание
+
+Часть первая
+Глава 1. Начало
+Глава 2. Дорога
+Часть вторая
+Глава 3. Конец
+
+Часть первая
+
+Глава 1. Начало
+
+Первый абзац первой главы. Он достаточно длинный, чтобы считаться прозой, а не \
+строкой оглавления, и продолжается на следующей строке без пустой строки между ними.
+Вторая строка того же абзаца с перено-
+сом слова.
+
+* * *
+
+После перерыва.
+
+Глава 2. Дорога
+
+Дорога шла через лес.
+
+Часть вторая
+
+Глава 3. Конец
+
+Конец книги.
+"""
+
+
+def md_book() -> str:
+    """The canonical book in the §6.4.1 dialect, written by hand (not by our writer)."""
+    first, _, last = AUTHOR
+    out = [f"# {first} {last}. {TITLE}", ""]
+    for ch in CHAPTERS:
+        out += [f"## {ch['title'][0]}. {ch['title'][1]}", ""]
+        out.append("\\\n".join(f"> {v}" for v in ch["epigraph"]))
+        out += [">", f"> — {ch['epigraph_author']}".replace("[^n", "[^"), ""]
+        for p in ch["paragraphs"]:
+            out += [p.replace("[^n", "[^"), ""]
+    out += [f"[^{k[1:]}]: {v}" for k, v in NOTES.items()]
+    return "\n".join(out) + "\n"
+
+
 def write(path: Path, data: bytes | str, encoding: str = "utf-8") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data if isinstance(data, bytes) else data.encode(encoding))
@@ -249,6 +323,9 @@ def main() -> None:
     write(HERE / "quirks/royallib-style.fb2", QUIRKS_FB2, "cp1251")
     write(HERE / "quirks/fb2-saved-as.txt", fb2)
     write(HERE / "quirks/wrapped-parts.fb2", WRAPPED_FB2)
+    write(HERE / "ru/kapitanskaya-dochka.txt", txt_librus(), "cp1251")
+    write(HERE / "ru/blank-lines-parts.txt", BLANK_LINES_TXT)
+    write(HERE / "ru/kapitanskaya-dochka.md", md_book())
     write(HERE / "evil/xxe.fb2", XXE_FB2)
     write(HERE / "evil/billion-laughs.fb2", LAUGHS_FB2)
     write(HERE / "evil/traversal.fb2.zip", zip_bytes([("../../evil.fb2", fb2)]))

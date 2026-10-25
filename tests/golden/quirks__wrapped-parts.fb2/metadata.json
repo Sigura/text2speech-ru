@@ -13,6 +13,7 @@
   "publisher": null,
   "isbn": null,
   "chapters": 2,
+  "heading_confidence": null,
   "source": {
     "name": "wrapped-parts.fb2",
     "format": "fb2",

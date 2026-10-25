@@ -151,4 +151,20 @@ class _Writer:
 
 
 def to_markdown(doc: Document) -> str:
+    if doc.markdown is not None:
+        return doc.markdown
     return _Writer(doc).write()
+
+
+def read_md(data: bytes, lang: str | None = None) -> Document:
+    """`.md` input is already the editable text (§5.2): keep it, read only the title."""
+    from text2audio.core.languages import guess_language
+    from text2audio.readers.txt import decode
+
+    text = decode(data).replace("\r\n", "\n").replace("\r", "\n")
+    text = text.rstrip("\n") + "\n"
+    doc = Document(markdown=text)
+    title = next((line[2:].strip() for line in text.splitlines() if line.startswith("# ")), None)
+    doc.metadata.title = title
+    doc.metadata.language = lang or guess_language(text)
+    return doc

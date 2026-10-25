@@ -21,7 +21,7 @@ from text2audio.core.workspace import (
     write_markdown,
 )
 from text2audio.readers.detect import detect
-from text2audio.readers.document import Document
+from text2audio.readers.document import Document, Heading, Inline
 from text2audio.readers.markdown import to_markdown
 from text2audio.readers.safety import InputError, read_input
 
@@ -69,6 +69,7 @@ def _metadata(doc: Document, fmt: str, reader: str, src: Path, data: bytes) -> d
     return {
         **meta,
         "chapters": doc.chapters(),
+        "heading_confidence": doc.heading_confidence,
         "source": {"name": src.name, "format": fmt, "sha256": sha256(data), "bytes": len(data)},
         "reader": {"name": reader, "version": __version__},
         "cover": None,
@@ -83,8 +84,13 @@ def convert_one(
     name: str | None = None,
     overwrite: bool = False,
     reconvert: bool = False,
+    lang: str | None = None,
 ) -> ConvertResult:
-    """Convert one input file, or with `reconvert` the stored source of a book folder."""
+    """Convert one input file, or with `reconvert` the stored source of a book folder.
+
+    `lang` overrides the language of untagged text (TXT, MD); a re-conversion reuses
+    the language recorded at the first conversion.
+    """
     try:
         if reconvert:
             folder = BookFolder(src)
@@ -94,14 +100,19 @@ def convert_one(
             data, resumed = read_input(stored), True
             original = (folder.metadata() or {}).get("source", {}).get("name") or stored.name
             src_name = Path(str(original))
+            lang = lang or (folder.metadata() or {}).get("language")
         else:
             data, src_name = read_input(src), src
         fmt = detect(data, src_name.name)
-        reader, doc = readers.read(fmt, data)
+        reader, doc = readers.read(fmt, data, lang)
         if not reconvert:
             folder, resumed = resolve_folder(
                 root, folder_name(src_name, name), fmt, sha256(data), overwrite=overwrite
             )
+        if not doc.metadata.title:  # TXT and title-less inputs: the folder name
+            doc.metadata.title = folder.path.name
+        if not doc.has_title() and doc.markdown is None:
+            doc.blocks.insert(0, Heading(1, [Inline("text", doc.metadata.title)]))
         folder.work.mkdir(parents=True, exist_ok=True)
         stale = folder.source()
         target = folder.work / f"source.{fmt}"
@@ -147,10 +158,12 @@ def convert(
     name: str | None = None,
     overwrite: bool = False,
     reconvert: bool = False,
+    lang: str | None = None,
 ) -> list[ConvertResult]:
     paths = inputs if reconvert else expand_inputs(inputs)
     if name is not None and len(paths) != 1:
         raise ValueError("--name needs exactly one input file")
     return [
-        convert_one(p, root, name=name, overwrite=overwrite, reconvert=reconvert) for p in paths
+        convert_one(p, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang)
+        for p in paths
     ]

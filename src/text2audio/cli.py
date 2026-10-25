@@ -184,6 +184,9 @@ def convert(
     reconvert: Annotated[
         bool, typer.Option("--reconvert", help="Convert the stored source of book folders again.")
     ] = False,
+    lang: Annotated[
+        str | None, typer.Option("--lang", help="Language of TXT/MD input (default: guessed).")
+    ] = None,
 ) -> None:
     """Convert books to editable Markdown, one folder per book."""
     from text2audio import api

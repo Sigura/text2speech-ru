@@ -16,6 +16,9 @@ CASES = [
     "quirks/royallib-style.fb2",
     "quirks/fb2-saved-as.txt",
     "quirks/wrapped-parts.fb2",
+    "ru/kapitanskaya-dochka.txt",
+    "ru/blank-lines-parts.txt",
+    "ru/kapitanskaya-dochka.md",
 ]
 
 

@@ -37,6 +37,11 @@ All notable changes to this project are documented here. The format follows
   batch folders, `--reconvert` that never overwrites an edited `<book>.md`. Library
   banners outside the FB2 schema are dropped, `* * *` becomes a scene break, a lone
   wrapper section is unwrapped. Safe input: defusedxml, ZIP limits.
+- TXT and `.md` input (M1): encoding detection (UTF-8/16, cp1251, KOI8-R), three
+  paragraph layouts (blank lines, lib.ru indents, line per paragraph), headings from
+  the language pack, contents lists skipped, heading confidence in `metadata.json`;
+  `.md` kept verbatim; `convert --lang`. First language pack `plugins/lang-ru`
+  (text structure only; installed with the core via the `langs` dependency group).
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`
