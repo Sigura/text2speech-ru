@@ -1,0 +1,9 @@
+[project]
+name = "pdf-readers-pymupdf"
+version = "0"
+description = "Throwaway spike: pymupdf4llm (with and without its layout model); also typesets the test PDFs"
+requires-python = ">=3.11,<3.13"
+dependencies = ["pymupdf4llm==1.28.2"]
+
+[tool.uv]
+package = false

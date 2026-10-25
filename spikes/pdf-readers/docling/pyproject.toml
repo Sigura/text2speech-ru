@@ -1,0 +1,9 @@
+[project]
+name = "pdf-readers-docling"
+version = "0"
+description = "Throwaway spike: Docling PDF reader"
+requires-python = ">=3.11,<3.13"
+dependencies = ["docling==2.136.0"]
+
+[tool.uv]
+package = false
