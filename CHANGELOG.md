@@ -52,6 +52,12 @@ All notable changes to this project are documented here. The format follows
   breaks re-joined, page numbers and repeated running headers dropped, plain headings
   with chapters at `##`; scanned and password-protected PDFs refused. A Markdown →
   Document parser (markdown-it-py) feeds the PDF output through the same writer.
+- Segment manifest `_work/segments.jsonl` (M1, §6.4.2) on every conversion, always
+  from the current (possibly edited) `<book>.md`: title, headings, prose chunked at
+  sentence boundaries (≤ 300 characters), quotes, poem stanzas, footnotes at the end
+  of their chapter, default pauses. Rule-based sentence splitter (dialogue remarks,
+  initials and the language pack's abbreviations stay inside a sentence) instead of
+  pySBD, which split Russian dialogue wrongly.
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from text2audio import __version__, readers
+from text2audio.core.languages import profile
 from text2audio.core.workspace import (
     WORK,
     BookFolder,
@@ -24,6 +25,7 @@ from text2audio.readers.detect import detect
 from text2audio.readers.document import Document, Heading, Inline
 from text2audio.readers.markdown import to_markdown
 from text2audio.readers.safety import InputError, read_input
+from text2audio.text.segment import segment_markdown, write_manifest
 
 Status = Literal["converted", "unchanged", "kept-edits", "failed"]
 _STATUS: dict[MarkdownStatus, Status] = {
@@ -41,6 +43,7 @@ class ConvertResult:
     markdown: Path | None = None
     format: str | None = None
     chapters: int = 0
+    segments: int = 0
     resumed: bool = False
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
@@ -132,6 +135,12 @@ def convert_one(
             folder.converted.unlink(missing_ok=True)
         status = write_markdown(folder, to_markdown(doc))
         write_json(folder.metadata_path, meta)
+        # The manifest follows the Markdown the user reads and edits (§6.4.2, FR-08).
+        code = doc.metadata.language or "und"
+        segments = segment_markdown(
+            folder.markdown.read_text(encoding="utf-8"), code, profile(code)
+        )
+        write_manifest(folder.work / "segments.jsonl", segments)
         markdown = folder.reconverted if status == "kept-edits" else folder.markdown
         return ConvertResult(
             input=src,
@@ -140,6 +149,7 @@ def convert_one(
             markdown=markdown if markdown.exists() else folder.markdown,
             format=fmt,
             chapters=doc.chapters(),
+            segments=len(segments),
             resumed=resumed,
             warnings=doc.warnings,
         )

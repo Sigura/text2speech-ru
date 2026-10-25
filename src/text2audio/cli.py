@@ -205,7 +205,9 @@ def convert(
             "unchanged": " (unchanged)",
             "kept-edits": " (your edits kept; new text in this file)",
         }[r.status]
-        typer.echo(f"{r.markdown}{note} — {r.format}, {r.chapters} chapter(s)")
+        typer.echo(
+            f"{r.markdown}{note} — {r.format}, {r.chapters} chapter(s), {r.segments} segments"
+        )
         for w in r.warnings:
             typer.echo(f"  warning: {w}")
     failed = [r for r in results if r.status == "failed"]

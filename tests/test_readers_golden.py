@@ -43,6 +43,10 @@ def test_reader_matches_golden(case: str, tmp_path: Path) -> None:
         _golden_dir(case) / "metadata.json",
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
     )
+    assert_golden(
+        _golden_dir(case) / "segments.jsonl",
+        (result.folder / "_work/segments.jsonl").read_text(encoding="utf-8"),
+    )
 
 
 def test_chapter_count_matches_fb2_sections(tmp_path: Path) -> None:

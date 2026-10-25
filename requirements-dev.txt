@@ -127,8 +127,6 @@ pymupdf-layout==1.28.2
     # via pymupdf4llm
 pymupdf4llm==1.28.2
     # via text2audio
-pysbd==0.3.4
-    # via text2audio
 pytest==9.1.1
     # via
     #   pytest-cov

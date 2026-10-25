@@ -138,7 +138,9 @@ class LanguageProfile(BaseModel):
     part_headings: tuple[str, ...] = ()  # "Часть первая", "Книга 2"
     chapter_headings: tuple[str, ...] = ()  # "Глава I", "Пролог"
     front_matter: tuple[str, ...] = ()  # "Содержание" — skipped in TXT/PDF
-    segmenter: str | None = None  # pySBD language code; None = no sentence splitting
+    # Abbreviations that end with a full stop but not a sentence ("т. е.", "г."),
+    # lowercase; initials (one capital letter and a stop) are handled by the core.
+    abbreviations: tuple[str, ...] = ()
 
 
 class SynthesisResult(BaseModel):
