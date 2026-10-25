@@ -261,6 +261,7 @@ def _synthesize_one(
     workers: int | None,
     lang: str | None,
     ui: StageProgress,
+    qa: str | None = None,
 ) -> int:
     """Synthesize one book folder; returns its exit code."""
     from text2audio import api
@@ -269,8 +270,14 @@ def _synthesize_one(
     from text2audio.core.envs import EnvMissing
     from text2audio.core.synthesize import SynthesisError
 
-    overrides = {"synthesis": {"language": lang}} if lang else {}
-    config = load_config([user_config_path(), folder / "_work" / "text2audio.toml"], overrides)
+    overrides: dict[str, Any] = {"synthesis": {"language": lang}} if lang else {}
+    if qa:
+        overrides["qa"] = {"mode": qa}
+    try:
+        config = load_config([user_config_path(), folder / "_work" / "text2audio.toml"], overrides)
+    except ValueError as exc:  # pydantic's ValidationError is a ValueError
+        ui.print(f"  [red]✗ bad configuration:[/] {escape(str(exc))}")
+        return ExitCode.USAGE
     try:
         result = api.synthesize(
             folder, config=config, tier=_tier(tier), max_workers=workers, progress=ui
@@ -297,6 +304,18 @@ def _synthesize_one(
         + (f"RTF {rtf}, " if rtf is not None else "")
         + f"took {duration(r['wall_s'])}; split: {r['split']['reason']}"
     )
+    q = r.get("qa", {})
+    if q.get("checked"):
+        ui.print(
+            f"  [dim]QA ({escape(str(q['asr']))}): {q['checked']} checked, "
+            f"mean WER {q['mean_wer']}, {q['flagged']} flagged "
+            f"({q['flagged_share']:.1%})[/]"
+        )
+    stages = sorted(
+        ((k, v) for k, v in r.get("timings_s", {}).items() if k != "total"), key=lambda kv: -kv[1]
+    )
+    if stages:
+        ui.print("  [dim]time: " + ", ".join(f"{k} {duration(v)}" for k, v in stages[:4]) + "[/]")
     if result.flagged:
         ui.warn(f"{result.flagged} segment(s) flagged — see {result.folder / 'report.json'}")
         return ExitCode.QA_WARNINGS
@@ -305,6 +324,10 @@ def _synthesize_one(
 
 TierFlag = Annotated[str | None, typer.Option("--tier", help="fast | expressive (default: auto).")]
 WorkersFlag = Annotated[int | None, typer.Option("--workers", help="Max parallel TTS workers.")]
+QaFlag = Annotated[
+    str | None,
+    typer.Option("--qa", help="QA gate: on | off | sample=N% (default: on, or the config)."),
+]
 
 
 @app.command()
@@ -313,13 +336,14 @@ def synthesize(
     tier: TierFlag = None,
     workers: WorkersFlag = None,
     lang: Annotated[str | None, typer.Option("--lang", help="Book language override.")] = None,
+    qa: QaFlag = None,
 ) -> None:
     """Render book folders to audio; only changed segments are synthesized again."""
     codes: list[int] = []
     with StageProgress() as ui:
         for n, folder in enumerate(folders, 1):
             ui.book(folder.name, folder, n, len(folders))
-            codes.append(_synthesize_one(folder, tier, workers, lang, ui))
+            codes.append(_synthesize_one(folder, tier, workers, lang, ui, qa))
     raise typer.Exit(max(codes, default=ExitCode.OK))
 
 
@@ -336,6 +360,7 @@ def run(
     lang: Annotated[str | None, typer.Option("--lang", help="Language of TXT/MD input.")] = None,
     tier: TierFlag = None,
     workers: WorkersFlag = None,
+    qa: QaFlag = None,
 ) -> None:
     """Convert and synthesize in one step, one folder per book."""
     from text2audio import api
@@ -369,7 +394,7 @@ def run(
             )
             for w in r.warnings:
                 ui.warn(w)
-            codes.append(_synthesize_one(r.folder, tier, workers, lang, ui))
+            codes.append(_synthesize_one(r.folder, tier, workers, lang, ui, qa))
     if len(results) > 1:
         ok = sum(c in (ExitCode.OK, ExitCode.QA_WARNINGS) for c in codes)
         typer.echo(f"{ok} of {len(results)} book(s) done")

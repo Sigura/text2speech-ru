@@ -24,7 +24,7 @@ def config(**output: Any) -> Any:
     return load_config(
         [],
         {
-            "lang": {"ru": {"backend": {"fast": "sine"}, "g2p": "backend"}},
+            "lang": {"ru": {"backend": {"fast": "sine"}, "g2p": "backend", "asr": "sine-echo"}},
             "synthesis": {"tier": "fast"},
             "output": output,
         },
@@ -104,6 +104,60 @@ def test_report(book: Path, tmp_path: Path) -> None:
         "Глава II. Вожатый",
     ]
     assert sum(c["duration_ms"] for c in report["chapters"]) == report["duration_ms"]
+    assert report["segments"]["cached"] == 0
+    assert report["rtf_wall"] > 0
+    timings = report["timings_s"]
+    assert set(timings) >= {"segment", "normalize", "stress", "synthesize", "qa", "assemble"}
+    assert timings["total"] == report["wall_s"]
+    qa = report["qa"]
+    assert (qa["mode"], qa["asr"], qa["flagged"], qa["mean_wer"]) == ("on", "sine-echo", 0, 0)
+    assert qa["checked"] == len(qa["segments"]) == report["segments"]["total"]
+    md = (book / "report.md").read_text("utf-8")
+    assert md.startswith("# Капитанская дочка\n")
+    assert "## Quality check" in md and "**0 flagged (0.0%)**" in md
+    assert "## Time per stage" in md
+
+
+def test_cached_and_duplicate_counted_apart(book: Path, tmp_path: Path) -> None:
+    md = book / f"{book.name}.md"
+    md.write_text(md.read_text("utf-8") + "\nКонец.\n\nКонец.\n", "utf-8")
+    first = run(book, tmp_path / "store").report["segments"]
+    assert first["duplicate"] == 1 and first["cached"] == 0
+    second = run(book, tmp_path / "store").report["segments"]
+    assert second["cached"] == second["total"] and second["rendered_now"] == 0
+
+
+def test_subtitles_next_to_each_mp3(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path / "store", min_part_minutes=0.2)
+    for mp3 in result.files:
+        srt = mp3.with_suffix(".srt").read_text("utf-8")
+        blocks = srt.strip().split("\n\n")
+        first = blocks[0].splitlines()
+        assert first[0] == "1" and first[1].startswith("00:00:00,300 --> ")
+        last_end = blocks[-1].splitlines()[1].split(" --> ")[1]
+        h, m, rest = last_end.split(":")
+        end_s = int(h) * 3600 + int(m) * 60 + float(rest.replace(",", "."))
+        assert end_s <= float(probe(mp3)["format"]["duration"]) + 0.1
+    srt = result.files[0].with_suffix(".srt").read_text("utf-8")
+    assert "Глава I. Сержант гвардии" in srt  # the book's text, not «Глава первая»
+
+
+def test_subtitles_off_removes_them(book: Path, tmp_path: Path) -> None:
+    [mp3] = run(book, tmp_path / "store", split="none").files
+    assert mp3.with_suffix(".srt").is_file()
+    run(book, tmp_path / "store", split="none", subtitles=False)
+    assert not mp3.with_suffix(".srt").exists()
+
+
+def test_missing_subtitles_written_without_reencoding(book: Path, tmp_path: Path) -> None:
+    [mp3] = run(book, tmp_path / "store", split="none").files
+    srt = mp3.with_suffix(".srt")
+    expected = srt.read_text("utf-8")
+    srt.unlink()
+    mtime = mp3.stat().st_mtime_ns
+    run(book, tmp_path / "store", split="none")
+    assert srt.read_text("utf-8") == expected
+    assert mp3.stat().st_mtime_ns == mtime
 
 
 def test_normalized_text_in_manifest(book: Path, tmp_path: Path) -> None:

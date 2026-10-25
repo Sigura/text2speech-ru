@@ -2,9 +2,11 @@
 # Runtime: pip install -r requirements.txt
 -e .
     # via
+    #   text2audio-asr-gigaam
     #   text2audio-backend-silero
     #   text2audio-g2p-ruaccent
     #   text2audio-lang-ru
+-e ./plugins/asr-gigaam
 -e ./plugins/backend-silero
 -e ./plugins/g2p-ruaccent
 -e ./plugins/lang-ru

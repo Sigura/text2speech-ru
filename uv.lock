@@ -1746,6 +1746,7 @@ dev = [
     { name = "types-defusedxml" },
 ]
 langs = [
+    { name = "text2audio-asr-gigaam" },
     { name = "text2audio-backend-silero" },
     { name = "text2audio-g2p-ruaccent" },
     { name = "text2audio-lang-ru" },
@@ -1780,6 +1781,7 @@ dev = [
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
 ]
 langs = [
+    { name = "text2audio-asr-gigaam", editable = "plugins/asr-gigaam" },
     { name = "text2audio-backend-silero", editable = "plugins/backend-silero" },
     { name = "text2audio-g2p-ruaccent", editable = "plugins/g2p-ruaccent" },
     { name = "text2audio-lang-ru", editable = "plugins/lang-ru" },

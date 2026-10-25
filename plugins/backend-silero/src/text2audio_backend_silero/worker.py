@@ -5,6 +5,10 @@ The model is a `torch.package` file from the model store, loaded with
 only Cyrillic letters and punctuation; digits and Latin words are dropped silently, so
 the `ru` pack's normalization and FR-24 stage run before it. Stress arrives as `+`
 before the vowel (RUAccent); Silero fills in only unmarked words.
+
+Silero is deterministic, so a QA retry (`attempt` ≥ 2) cannot just change the seed: it
+reads the unmarked text with Silero's own stress and homograph rules instead — the one
+other reading it has — and replies `final` (§6.9).
 """
 
 from __future__ import annotations
@@ -49,7 +53,10 @@ def synthesize(msg: dict[str, Any]) -> dict[str, Any]:
 
     model, torch = state["model"], state["torch"]
     seg = msg["segment"]
-    text = seg.get("text_stress") or seg.get("text_norm") or seg["text"]
+    retry = int(msg.get("attempt", 1)) > 1
+    text = seg.get("text_norm") or seg["text"]
+    if not retry:
+        text = seg.get("text_stress") or text
     out = msg["out"]
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     warnings = []
@@ -58,7 +65,7 @@ def synthesize(msg: dict[str, Any]) -> dict[str, Any]:
         warnings.append("no Cyrillic text to read; wrote 250 ms of silence")
     else:
         torch.manual_seed(int(seg.get("seed", 1234)))
-        own = state["own_stress"]
+        own = state["own_stress"] or retry
         with torch.inference_mode():
             wav = model.apply_tts(
                 text=text,
@@ -73,7 +80,10 @@ def synthesize(msg: dict[str, Any]) -> dict[str, Any]:
     tmp = out + ".partial.wav"
     sf.write(tmp, audio, SAMPLE_RATE, subtype="PCM_16")
     os.replace(tmp, out)
-    return {"duration_ms": len(audio) * 1000 // SAMPLE_RATE, "warnings": warnings}
+    reply: dict[str, Any] = {"duration_ms": len(audio) * 1000 // SAMPLE_RATE, "warnings": warnings}
+    if retry:
+        reply["final"] = True  # a further attempt would read exactly the same way
+    return reply
 
 
 if __name__ == "__main__":

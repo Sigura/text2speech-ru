@@ -140,6 +140,9 @@ class QaProfile(BaseModel):
 
     asr: str | None = None  # entry point in `text2audio.asr`
     wer_threshold: float = 0.15
+    # A segment fails on text only if its character error rate also exceeds this, so
+    # names spelled differently by ASR do not count (§6.9).
+    cer_threshold: float = 0.10
     chars_per_sec: tuple[float, float] = (8.0, 25.0)
     # Letters folded before comparing texts (ASR writes "е" for "ё").
     fold: dict[str, str] = {}

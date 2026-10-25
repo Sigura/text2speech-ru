@@ -32,11 +32,16 @@ LABELS = {
     "normalize": "Normalize",
     "stress": "Stress",
     "synthesize": "Synthesize",
+    "qa": "QA",
     "assemble": "Encode",
 }
 WIDTH = max(len(v) for v in LABELS.values())
 # What a running stage is waiting for before its first item is done.
-STARTING = {"stress": "loading stress model", "synthesize": "loading voices"}
+STARTING = {
+    "stress": "loading stress model",
+    "synthesize": "loading voices",
+    "qa": "loading ASR model",
+}
 
 
 def plural(n: int, word: str) -> str:
@@ -203,6 +208,11 @@ class StageProgress:
             if f.get("audio_ms"):
                 parts.append(f"{duration(f['audio_ms'] / 1000)} audio")
             parts.append(plural(f.get("workers", 1), "worker"))
+            return " · ".join(parts)
+        if stage == "qa" or stage.startswith("qa retry"):
+            parts = [f"{done} checked"]
+            if f.get("device"):
+                parts.append(f"{plural(f.get('workers', 1), 'worker')} on {f['device']}")
             return " · ".join(parts)
         if stage == "assemble":
             encoded = f.get("encoded", 0)

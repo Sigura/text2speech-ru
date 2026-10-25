@@ -9,6 +9,9 @@ dependencies = ["text2audio"]
 [project.entry-points."text2audio.backends"]
 sine = "text2audio_backend_sine.descriptor:SineBackend"
 
+[project.entry-points."text2audio.asr"]
+sine-echo = "text2audio_backend_sine.descriptor:SineEcho"
+
 [tool.uv.sources]
 text2audio = { workspace = true }
 

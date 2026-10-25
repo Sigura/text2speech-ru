@@ -1,0 +1,18 @@
+[project]
+name = "t2a-env-asr-gigaam"
+version = "0"
+description = "Worker environment of the GigaAM QA ASR component (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.14.1",
+    "torchaudio==2.11.0",
+    "transformers==4.57.6",  # imported by the model code for its HF wrapper classes
+    "hydra-core>=1.3",
+    "omegaconf>=2.3",
+    "sentencepiece==0.2.2",
+    "numpy==2.5.4",
+    "soundfile==0.14.0",
+]
+
+[tool.uv]
+package = false

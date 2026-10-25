@@ -27,7 +27,12 @@ text2audio = "text2audio.cli:main"
 
 [dependency-groups]
 # Language packs run in the core environment (text rules, no heavy deps); one per language.
-langs = ["text2audio-lang-ru", "text2audio-g2p-ruaccent", "text2audio-backend-silero"]
+langs = [
+    "text2audio-lang-ru",
+    "text2audio-g2p-ruaccent",
+    "text2audio-backend-silero",
+    "text2audio-asr-gigaam",
+]
 dev = [
     "text2audio-backend-sine",
     "pytest>=8",
@@ -51,6 +56,7 @@ text2audio-backend-sine = { workspace = true }
 text2audio-lang-ru = { workspace = true }
 text2audio-g2p-ruaccent = { workspace = true }
 text2audio-backend-silero = { workspace = true }
+text2audio-asr-gigaam = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

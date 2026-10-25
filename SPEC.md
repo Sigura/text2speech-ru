@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.9-M2 |
+| Document version | 1.10-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-25 |
 | Primary language | Python 3.11+ |
@@ -32,6 +32,7 @@
 | 1.7-M1 | 2026-10-25 | M1 implementation feedback: readers as built (§6.3: TOC-driven EPUB chapters, FB2 banners/dinkus/wrapper rules, TXT layouts and confidence, PDF clean-up); XML through defusedxml with an HTML-entity pass, no lxml (§6.12, §7); **PDF default pymupdf4llm 1.28.2 with its bundled layout model** (benchmark `spikes/pdf-readers`); rule-based sentence splitting with pack abbreviations instead of pySBD (§6.5); the `ru` pack exists from M1 with text-structure data. |
 | 1.8-M2 | 2026-10-25 | M2 step 1 (first audiobook on CPU): **rutextnorm rejected** after the audit — the `ru` pack owns its normalization (rules + num2words + pymorphy3, §6.6.5); lexicon applied **before** normalization (§6.5); plugin worker environments outside the repo, Python 3.12, stdlib worker runtime with a network guard (§6.6.3, ADR-0010); manifest fields `heading_level`, `text_stress`, `route`, `duration_ms` and the resumable journals `render.jsonl` / `stress.jsonl` (§5.2, §6.4.2); long sections split at lower headings are **grouped** into files near the target length (§6.8.1); Silero runs on CPU slots, at most 8 workers by default (§9.1). |
 | 1.9-M2 | 2026-10-25 | Progress display for `run` / `synthesize` (FR-17, §6.11): `rich` stage lines + live bar on stderr, results on stdout; `Progress` callables may add `detail(stage, **fields)`; Ctrl-C exits 130. |
+| 1.10-M2 | 2026-10-25 | M2 step 2: QA gate as built (§6.9) — GigaAM-v3 worker, WER **and** CER rule, signal checks, up to 3 attempts, exit code 4; QA results in `render.jsonl` (§6.4.2); `.srt` per MP3 (§6.8) and `report.md` (§5.2); parallel part encoding and RUAccent workers; T0 numbers (§9). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -169,12 +170,14 @@ player; everything needed to edit and resume lives in `_work/`.
 output/                                  # output root
 ├── War and Peace/                       # from "War and Peace.fb2.zip"
 │   ├── 01 - Book One, Chapter 1.mp3     # one MP3 per section (split mode)…
+│   ├── 01 - Book One, Chapter 1.srt     # …each with subtitles: the book text, timed
 │   ├── 02 - Book One, Chapter 2.mp3
 │   ├── …
 │   ├── War and Peace.m3u                # playlist in reading order
 │   ├── War and Peace.m4b                # optional, only if enabled
 │   ├── War and Peace.md                 # editable Markdown text — edit, then re-run
 │   ├── report.json                      # QA results, timings, split decision, warnings
+│   ├── report.md                        # the same, readable: files, QA flags, timings
 │   └── _work/                           # resumable workspace
 │       ├── text2audio.toml              # per-book settings (voices, expression, output)
 │       ├── source.fb2.zip               # copy of the original input, for re-conversion
@@ -258,7 +261,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-14 | **Layered expression** (§6.7): E0 neutral, E1 structural (default), E2 inferred emotion, E3 manual directives. | Should | E1 works on every backend; E2/E3 work on every backend that declares emotion support. |
 | FR-15 | **Multi-voice**: separate voices for narrator, dialogue, quotes/epigraphs; voices are configurable per book. | Should | A test book with dialogue renders dialogue in the configured dialogue voice. |
 | FR-16 | **Offline bundle**: export all installed models and wheels to an archive and import it on an air-gapped machine. | Should | Import on a machine with networking disabled followed by `doctor` passes. |
-| FR-17 | Progress reporting (TTY progress bar), structured JSON logs, and a final `report.json`. | Should | `report.json` lists per-chapter durations, real-time factor, QA failures. |
+| FR-17 | Progress reporting (TTY progress bar), structured JSON logs, and a final `report.json` with a readable `report.md` next to it. | Should | `report.json` lists per-chapter durations, real-time factor, QA failures, time per stage; `report.md` lists the files, flagged segments (text vs what ASR heard) and warnings. |
 | FR-18 | Per-paragraph **language detection** for mixed-language books, routing each segment to **its own language's pipeline and backend** (which may be a different model from the main language), with a per-language narrator voice chosen to sound close to the main narrator. | May | A test book with embedded foreign quotes routes them correctly or warns. |
 | FR-19 | **Voice cloning** from a reference clip on backends that support it, subject to the consent policy (§6.12). | May | Clone works on Chatterbox; refusal message shown when consent flag is absent. |
 | FR-20 | **Automatic splitting** into one file per book section when the detected structure passes the sanity checks in §6.8.1; otherwise fall back to a **single file**. Mode is `auto` (default), `section` (force) or `none` (always one file). | Must | Fixture with clean chapters → one MP3 per chapter; fixture with 500 tiny sections or no headings → single MP3; the decision and reason are recorded in `report.json`. |
@@ -338,7 +341,11 @@ the split plan), `text_stress` (normalized text with `+` stress marks, what the 
 reads), `route` and `duration_ms`. Rendered segments are recorded in the append-only,
 fsynced journal `_work/render.jsonl`, keyed by hash; a rerun skips every segment found
 there, so an interrupted job loses only the segments in flight (FR-10). Audio is
-`_work/audio/segments/<hash>.wav`; segments with identical text and settings share it.
+`_work/audio/segments/<hash>.wav`; segments with identical text and settings share it
+(`report.json` counts them as `duplicate`, apart from `cached` segments rendered by an
+earlier run). The QA gate (§6.9) adds a line per checked hash with `qa` (`wer`,
+`heard`, `flags`, chosen `attempt`, every attempt's WER and flags), `attempts` and
+`flagged`; later lines for a hash win.
 
 ### 6.5 Text Processing
 
@@ -760,6 +767,7 @@ listeners prefer it, and automatic MOS prediction
 |---|---|---|
 | Container / codec | **MP3** (LAME, 64 kbps CBR, mono, 44.1 kHz) | Optional: **M4B** (AAC-LC 64 kbps mono, with chapters), Opus (32–48 kbps), WAV (PCM 24-bit). The `acx` profile switches MP3 to 192 kbps CBR as ACX requires. |
 | File layout | One MP3 per section, or a single MP3 | Decided by the split plan (§6.8.1). Files are named `NN - <Section title>.mp3` (zero-padded, filesystem-safe), with an `.m3u` playlist in reading order. |
+| Subtitles | A SubRip `.srt` next to every MP3 (`output.subtitles`, default on) | One cue per segment with the **book's text** (not the normalized reading), timed from the assembly itself (lead-in, trimmed speech, generated pauses); long segments are cut at word boundaries into cues of ≤ 2 lines × 42 characters, timed by their share of characters. Written whenever the MP3 is, and on its own when only the `.srt` is missing. |
 | Chapters | M4B: one chapter per section of the split plan. Single-file MP3: ID3v2 `CHAP`/`CTOC` chapter frames | Written via [FFmpeg metadata](https://ffmpeg.org/ffmpeg-formats.html#Metadata-1); not all MP3 players show ID3 chapters, which is why split files are preferred. |
 | Tags | Album = book title, title = section title, artist = author, narrator (= voice name), track N/total, year, cover | Taken from `metadata.json`; identical album tags keep split files grouped as one book in players. |
 | Pauses | Sentence 300 ms · paragraph 700 ms · section 1500 ms · chapter 3000 ms | Configurable; silence is generated, not trimmed from model output. |
@@ -856,18 +864,42 @@ Generated and typographic covers get title and author drawn on top. Settings:
 Each synthesized segment goes through:
 
 1. **ASR round-trip** — transcribe with the language profile's QA ASR
-   (`qa.asr_model`: [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) for `ru`,
+   (`qa.asr`: [GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3) `rnnt` for `ru`,
    [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for `en` — `small` on
-   T0, `large-v3-turbo` on T1), normalize both texts, compute WER.
-2. **Sanity checks** — duration vs. expected speaking rate (characters per second
-   within language-specific bounds), clipping, long internal silences.
-3. **Retry policy** — if WER > threshold (from the language profile: `ru` 0.18,
-   `en` 0.12; core default 0.15) or a sanity check fails,
-   re-synthesize with a new seed, up to 3 attempts; then keep the best attempt and flag
-   it in `report.json` for manual review.
+   T0, `large-v3-turbo` on T1), fold both texts the same way (case, punctuation, stress
+   marks, the profile's letter folds such as `ё` → `е`, hyphens as word breaks) and
+   compute word-level WER against `text_norm` (substitutions, deletions, insertions).
+   The ASR is a component worker in its own environment (§6.6.3), planned right before
+   the stage like a backend: on a GPU with enough free VRAM (at most 2 workers, GPUs
+   are shared), otherwise on CPU slots. `[lang.<code>] asr = "…"` overrides it.
+2. **Sanity checks** — on the segment's own WAV, numpy only:
+   - `rate-low` / `rate-high`: letters of `text_norm` per second of trimmed speech
+     outside the profile's `chars_per_sec` (`ru` 6–25); skipped below 15 letters
+     (headings);
+   - `clipping`: more than 0.1 % of samples at full scale;
+   - `long-silence`: an internal pause longer than 2 s (20 ms frames below −50 dBFS);
+   - `silent`: nothing above the trimming threshold.
+3. **Retry policy** — the text fails when WER > threshold (from the language profile:
+   `ru` 0.18, `en` 0.12; core default 0.15; `[qa] wer_threshold` overrides) **and**
+   CER > `cer_threshold` (character edit distance over the folded text with spaces
+   removed; core default 0.10; `[qa] cer_threshold` overrides). The CER condition keeps
+   invented names that ASR spells differently (Дизиэт → «дизиет») and words it joins
+   or splits from counting as errors. If the text fails or a sanity check fails, the
+   segment is rendered again with `attempt` = 2, then 3 (into
+   `<hash>.a<n>.wav`) and checked again. Stochastic backends change the seed;
+   deterministic ones offer another reading if they have one — Silero reads attempt 2
+   without the RUAccent marks, with its own stress and homograph rules — and reply
+   `final: true` when a further attempt would sound the same, which ends the retries.
+   The best attempt (fewest failed signal checks, then lowest CER, then lowest WER)
+   becomes the segment's audio;
+   if it still fails, it is **flagged** in `report.json` / `report.md` with the text and
+   what ASR heard, and `run` / `synthesize` exit with code 4.
 
-QA can be disabled (`--qa off`) for speed, and sampled (`--qa sample=10%`) on slow
-hardware.
+Results are journaled in `render.jsonl` (§6.4.2), so a killed QA stage resumes where it
+stopped and a rerun checks only new segments. QA can be disabled (`--qa off`, `[qa]
+mode`) for speed, and sampled (`--qa sample=10%`) on slow hardware; the sample is
+chosen by segment hash, so reruns check the same segments. The QA gate cannot hear a
+wrong stress (§6.6.6); that remains a listening task.
 
 ### 6.10 Offline Operation Contract
 
@@ -974,6 +1006,7 @@ max_parts        = 150
 [qa]
 mode          = "on"          # on | off | sample=10%
 wer_threshold = 0.15
+cer_threshold = 0.10
 
 [resources]                   # all optional; automatic plan otherwise (§9.1)
 devices            = ["cuda:0", "cuda:3"]   # or ["cpu"]
@@ -1087,6 +1120,12 @@ Targets are provisional and will be validated on reference machines in M2.
 | **T0 — CPU** | 4-core x86_64/arm64, 8 GB RAM, no GPU | ru: Silero v5.6 `xenia` + GigaAM-v3; en: Kokoro (or Piper) + faster-whisper `small` | ≤ 0.5 | ~2 GB |
 | **T1 — GPU** | NVIDIA GPU with 8 GB VRAM (CUDA), 16 GB RAM; Apple Silicon 16 GB best-effort | ru: hybrid Silero → Chatterbox VC / Chatterbox Multilingual (§6.6.6) + GigaAM-v3; en: Chatterbox + faster-whisper `large-v3-turbo` | ≤ 0.5 | ~8 GB |
 
+**Measured, T0 `ru`** (M2 step 2, `tests/e2e/test_novel.py`; 4 cores, 8 GB, no GPU):
+«Капитанская дочка», 1246 segments, 3 h 53 m of audio in 1 h 06 m wall — **`rtf_wall`
+0.28**; stress 1 m 44 s, synthesis 18 m 31 s (Silero RTF 0.08), QA 41 m 40 s (GigaAM on
+CPU, ~63 % of the run), assembly 4 m 04 s. QA: mean WER 0.027, 7 flagged (0.6 %), all
+short archaic epigraphs and verse lines.
+
 ---
 
 ### 9.1 Resource Planning
@@ -1188,8 +1227,8 @@ The model store defaults to `~/.local/share/text2audio/models` (overridable with
 | **Split plan** | Table-driven tests on synthetic section-duration lists: clean chapters, tiny front-matter sections, one giant chapter, hundreds of spurious headings, no headings → expected files or single-file fallback with the expected reason. |
 | **Output folders** | Name derivation (`.fb2.zip`, Unicode, invalid characters, long names), resume into an existing folder, `(pdf)` / `(2)` clash suffixes, batch run with one failing book. |
 | **Zero-config** | Fixtures run with an empty `text2audio.toml`; the effective config (`config show`) matches an expected snapshot per language and content type. |
-| **Resume** | Kill mid-job, restart, verify no completed segment is re-synthesized. |
-| **Fault injection** | Backend returns silence / truncated / garbage audio → QA gate retries and reports. |
+| **Resume** | Kill mid-job (SIGKILL to the process group, workers included — during synthesis and during QA), restart, verify no completed segment is re-synthesized or re-checked. |
+| **Fault injection** | Backend returns silence / truncated / garbage audio → QA gate retries and reports. The `sine` test backend injects them (`T2A_SINE_FAULT=garbage\|silence\|truncate[:n]`, per segment id) and writes what an ASR would hear next to each WAV, read back by the `sine-echo` test ASR. |
 | **Security** | XXE payloads, zip bombs, path-traversal archives, oversized PDFs. |
 | **Performance** | RTF and memory benchmarks on reference hardware (nightly, trend tracked). |
 | **Listening** | Human A/B test at M3 (§6.7). |
@@ -1250,6 +1289,11 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-25 | Plugin worker environments live under `<data dir>/text2audio/envs/` (Python 3.12), created by `envs sync`; workers share a stdlib runtime with a network guard; components (RUAccent, GigaAM) run as workers like backends ([ADR-0010](docs/adr/0010-plugin-worker-environments.md)). | Decided |
 | 2026-10-25 | RUAccent stress is fed to Silero as `+` marks (`put_accent` fills only unmarked words; Silero's own homograph stress off); `[lang.ru] g2p = "backend"` switches to Silero's own stress if the listening test prefers it. | Decided — listening pending |
 | 2026-10-25 | Split plan: long sections split at lower headings are grouped into files near `target_part_minutes` instead of one file per subsection. | Decided |
+| 2026-10-25 | QA gate (§6.9) as built in M2 step 2: GigaAM-v3 `rnnt` runs as a component worker (pinned `modeling_gigaam.py` loaded from the store and built with hydra — no `trust_remote_code`, no pyannote, no ffmpeg; `weights_only=True`), on a GPU when one has free VRAM (≤ 2 workers), else on CPU slots. WER against `text_norm` plus signal checks (rate, clipping, > 2 s silence, silent); up to 3 attempts, best kept, rest flagged, exit code 4. Silero is deterministic, so its attempt 2 reads without RUAccent marks (own stress) and replies `final`. | Decided |
+| 2026-10-25 | QA text rule: a segment fails only when WER > threshold **and** CER > `cer_threshold` (0.10; spaces ignored). On Banks "Выбор оружия" WER alone flagged 209 / 4088 segments (5.1 %), almost all invented names (Дизиэт → «дизиет») or joined words; with the CER rule 44 / 4088 (1.1 %), mean WER 0.040, QA 8 m 10 s on 2 GPU workers. Best attempt ranked by signal checks, then CER, then WER. | Decided |
+| 2026-10-25 | T0 confirmed for `ru` (M2 exit criterion, §9): full «Капитанская дочка» on 4 cores / 8 GB / no GPU, `rtf_wall` 0.28 (target ≤ 0.5), 0.6 % flagged (target ≤ 5 %). QA on CPU is the largest stage (~63 %); `--qa sample=N%` is the lever on slower machines. | Decided |
+| 2026-10-25 | Every MP3 gets a SubRip `.srt` with the book text (owner request); every run writes a readable `report.md` next to `report.json` (owner request). | Decided |
+| 2026-10-25 | Performance from the step-1 smoke: output parts are encoded in parallel (≤ 8 threads; loudnorm is single-threaded) and stress runs on up to 8 RUAccent workers. Banks "Выбор оружия" (9 h): assembly 3 m 41 s instead of ~23 min, stress 1 m 39 s instead of 2 m 08 s; `report.json` has `timings_s` per stage. | Decided |
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |
 | 2026-10-25 | CLI progress uses **rich** (already pulled in by typer) instead of tqdm: several stages, live notes and log-friendly output without a terminal from one library (FR-17). | Decided |

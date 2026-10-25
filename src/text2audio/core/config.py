@@ -6,13 +6,14 @@ Order (later wins): built-in defaults → user config → book `_work/text2audio
 
 from __future__ import annotations
 
+import re
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
 import platformdirs
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from text2audio.core.contracts import Tier
 
@@ -39,15 +40,39 @@ class OutputConfig(_Section):
     min_parts: int = 2
     max_parts: int = 150
     max_merge_ratio: float = 0.5
+    subtitles: bool = True  # an .srt with the book text next to every MP3
 
 
 class ToolsConfig(_Section):
     ffmpeg: str | None = None  # None = from PATH
 
 
+_QA_SAMPLE = re.compile(r"^sample=(\d{1,3})%$")
+
+
+def parse_qa_mode(value: str) -> int:
+    """`on` | `off` | `sample=N%` → the share of segments checked, in percent (§6.9)."""
+    value = value.strip().lower()
+    if value == "on":
+        return 100
+    if value == "off":
+        return 0
+    m = _QA_SAMPLE.match(value)
+    if m and 1 <= int(m[1]) <= 100:
+        return int(m[1])
+    raise ValueError(f"QA mode must be on, off or sample=N% (1–100), not {value!r}")
+
+
 class QaConfig(_Section):
-    mode: str = "on"
+    mode: str = "on"  # on | off | sample=N%
     wer_threshold: float | None = None  # None = from the language profile
+    cer_threshold: float | None = None  # None = from the language profile
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, v: str) -> str:
+        parse_qa_mode(v)
+        return v.strip().lower()
 
 
 class ResourcesConfig(_Section):

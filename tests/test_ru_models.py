@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import soundfile as sf
+from text2audio_asr_gigaam.descriptor import GigaAM
 from text2audio_backend_silero.descriptor import SileroBackend
 from text2audio_g2p_ruaccent.descriptor import RuAccent
 
@@ -17,6 +18,7 @@ from text2audio.core.contracts import Segment
 from text2audio.core.envs import plugin_env
 from text2audio.models.lock import assets_for
 from text2audio.models.store import ModelStore
+from text2audio.qa.wer import wer
 from text2audio.workers.backend import Worker, WorkerBackend
 
 pytestmark = pytest.mark.models
@@ -34,6 +36,9 @@ needs_ruaccent = pytest.mark.skipif(
 )
 needs_silero = pytest.mark.skipif(
     not ready(SileroBackend(), "silero"), reason="Silero env or assets missing"
+)
+needs_gigaam = pytest.mark.skipif(
+    not ready(GigaAM(), "asr:gigaam"), reason="GigaAM env or assets missing"
 )
 
 
@@ -65,3 +70,46 @@ def test_silero_xenia_48k_offline(tmp_path: Path) -> None:
     assert rate == 48000 and result.sample_rate == 48000
     assert 1500 < result.duration_ms < 6000
     assert abs(audio).max() > 0.05  # not silent
+
+
+NUMBERS = Segment(
+    id="n",
+    text="В 1812 году было 25 градусов мороза.",
+    text_norm="В тысяча восемьсот двенадцатом году было двадцать пять градусов мороза.",
+    text_stress="В т+ысяча восемьс+от двен+адцатом год+у б+ыло дв+адцать п+ять гр+адусов мор+оза.",
+    lang="ru",
+)
+
+
+def _silero(seg: Segment, out: Path, attempt: int = 1) -> dict[str, object]:
+    with WorkerBackend(SileroBackend(), STORE.root) as b:
+        b.load(assets=STORE.payload(assets_for("silero")))
+        return b.call(
+            "synthesize",
+            segment=seg.model_dump(mode="json"),
+            out=str(out),
+            voice_id="xenia",
+            attempt=attempt,
+        )
+
+
+@needs_silero
+def test_silero_retry_reads_with_own_stress(tmp_path: Path) -> None:
+    first = _silero(NUMBERS, tmp_path / "a1.wav")
+    retry = _silero(NUMBERS, tmp_path / "a2.wav", attempt=2)
+    assert "final" not in first and retry["final"] is True
+    audio, _ = sf.read(str(tmp_path / "a2.wav"))
+    assert abs(audio).max() > 0.05
+
+
+@needs_silero
+@needs_gigaam
+def test_gigaam_hears_silero_numbers_in_spoken_form(tmp_path: Path) -> None:
+    # QA ASR (§6.9): GigaAM `rnnt` writes numbers as words, so WER against the
+    # normalized text is 0; runs on CPU with the network guard on.
+    out = tmp_path / "n.wav"
+    _silero(NUMBERS, out)
+    with Worker(GigaAM(), STORE.root) as w:
+        w.load(assets=STORE.payload(assets_for("asr:gigaam")))
+        [heard] = w.call("transcribe", paths=[str(out)])["texts"]
+    assert wer(NUMBERS.speech_text, heard, {"ё": "е"}).wer == 0.0, heard

@@ -1,8 +1,8 @@
 """`synthesize`: book folder → audiobook (SPEC §5.1, §6.8, FR-08, FR-10, FR-17).
 
     <book>.md → segments → lexicon → normalization → stress → route + hash
-              → render missing segments in workers (journaled) → split plan
-              → part WAVs → loudness + MP3 + tags → playlist → report.json
+              → render missing segments in workers (journaled) → QA gate (ASR, retries)
+              → split plan → part WAVs → loudness + MP3 + tags → playlist → report.json
 
 Language-specific work is done by the components the language profile names; the core
 never imports a model or a language (§6.6.1). Every segment's audio is cached by a
@@ -15,10 +15,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import queue
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -26,9 +27,11 @@ from typing import Any
 from text2audio import __version__
 from text2audio.audio import split as splitting
 from text2audio.audio.encode import Chapter, encode_mp3, find_ffmpeg, write_m3u
-from text2audio.audio.wav import ASSEMBLY_RATE, PartWriter, speech
+from text2audio.audio.srt import Cue, split_cue, write_srt
+from text2audio.audio.wav import ASSEMBLY_RATE, LEAD_IN_MS, PartWriter, speech
+from text2audio.core import report_md
 from text2audio.core import resources as res
-from text2audio.core.config import Config
+from text2audio.core.config import Config, parse_qa_mode
 from text2audio.core.contracts import (
     BackendDescriptor,
     LanguageProfile,
@@ -37,17 +40,21 @@ from text2audio.core.contracts import (
     Tier,
     TierRoute,
 )
+from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.languages import profile as language_profile
 from text2audio.core.plugins import discover
+from text2audio.core.pool import cpu_slots, parallel
 from text2audio.core.workspace import BookFolder, sanitize_name, write_json
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
+from text2audio.qa import gate
 from text2audio.text.lexicon import Lexicon, user_lexicon
 from text2audio.text.segment import PAUSE_MS, segment_markdown, write_manifest
 from text2audio.text.stress import acute_to_plus, merge_marks, strip_marks
 from text2audio.workers.backend import Worker, WorkerBackend
-from text2audio.workers.process import WorkerError
+
+__all__ = ["SynthesisError", "synthesize"]
 
 HASH_VERSION = 1  # bump when the meaning of a segment hash changes
 DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
@@ -66,8 +73,16 @@ def _detail(progress: Progress | None, stage: str, **fields: Any) -> None:
         hook(stage, **fields)
 
 
-class SynthesisError(Exception):
-    """The book cannot be synthesized as configured (missing pack, plugin, env…)."""
+class Timings(dict[str, float]):
+    """Wall seconds per stage, for report.json (`timings_s`)."""
+
+    @contextmanager
+    def stage(self, name: str) -> Iterator[None]:
+        started = time.monotonic()
+        try:
+            yield
+        finally:
+            self[name] = round(self.get(name, 0.0) + time.monotonic() - started, 2)
 
 
 @dataclass
@@ -190,12 +205,18 @@ def prepare(
     config: Config,
     store: ModelStore,
     progress: Progress | None = None,
+    timings: Timings | None = None,
 ) -> tuple[list[Segment], list[dict[str, str]]]:
     """Segments with normalized, stressed text, route and hash; and uncertain spans."""
     prof = plan.profile
-    segments = segment_markdown(
-        folder.markdown.read_text(encoding="utf-8"), plan.lang, prof, seed=config.synthesis.seed
-    )
+    timings = Timings() if timings is None else timings
+    with timings.stage("segment"):
+        segments = segment_markdown(
+            folder.markdown.read_text(encoding="utf-8"),
+            plan.lang,
+            prof,
+            seed=config.synthesis.seed,
+        )
     lexicon = Lexicon.layered(
         Path(prof.lexicon) if prof.lexicon else None,
         user_lexicon(plan.lang),
@@ -204,19 +225,21 @@ def prepare(
     pauses = _pause_map(prof)
     uncertain: list[dict[str, str]] = []
     marked: dict[str, str] = {}
-    for i, seg in enumerate(segments, 1):
-        text = acute_to_plus(lexicon.apply(seg.text))
-        if plan.normalizer is not None:
-            result = plan.normalizer.normalize(text, seg.role)
-            text = result.text
-            uncertain += [{"segment": seg.id, "span": s} for s in result.uncertain]
-        seg.text_norm = strip_marks(text)
-        marked[seg.id] = text
-        seg.pause_after_ms = pauses.get(seg.pause_after_ms, seg.pause_after_ms)
-        if progress:
-            progress("normalize", i, len(segments))
+    with timings.stage("normalize"):
+        for i, seg in enumerate(segments, 1):
+            text = acute_to_plus(lexicon.apply(seg.text))
+            if plan.normalizer is not None:
+                result = plan.normalizer.normalize(text, seg.role)
+                text = result.text
+                uncertain += [{"segment": seg.id, "span": s} for s in result.uncertain]
+            seg.text_norm = strip_marks(text)
+            marked[seg.id] = text
+            seg.pause_after_ms = pauses.get(seg.pause_after_ms, seg.pause_after_ms)
+            if progress:
+                progress("normalize", i, len(segments))
     _detail(progress, "normalize", segments=len(segments), uncertain=len(uncertain))
-    stressed = _stress(folder, plan, store, list(marked.values()), progress)
+    with timings.stage("stress"):
+        stressed = _stress(folder, plan, store, list(marked.values()), progress)
     voices = prof.voices
     model = _model_id(plan.route.backend, load_lock())
     for seg in segments:
@@ -257,8 +280,11 @@ def _stress(
         payload = store.payload(assets_for(owner, load_lock()))
         batches = [todo[i : i + STRESS_BATCH] for i in range(0, len(todo), STRESS_BATCH)]
         threads = getattr(plan.g2p, "threads", 2)
-        slots = _cpu_slots(threads, ram_mb=1500, count=max(1, min(4, len(batches) // 8)))
+        slots = cpu_slots(
+            threads, ram_mb=1500, count=max(1, min(DEFAULT_MAX_WORKERS, len(batches) // 8))
+        )
         done = [0]
+        lock = threading.Lock()
         _detail(progress, "stress", workers=len(slots))
         if progress:
             progress("stress", 0, len(todo))
@@ -267,11 +293,12 @@ def _stress(
             out = worker.call("process", texts=batch)["texts"]
             for src, dst in zip(batch, out, strict=True):
                 journal.add({"key": key(src), "text": dst})
-            done[0] += len(batch)
-            if progress:
-                progress("stress", done[0], len(todo))
+            with lock:
+                done[0] += len(batch)
+                if progress:
+                    progress("stress", done[0], len(todo))
 
-        _parallel(
+        parallel(
             [Worker(plan.g2p, store.root, slot) for slot in slots],
             batches,
             work,
@@ -283,53 +310,50 @@ def _stress(
 # --------------------------------------------------------------------------- workers
 
 
-def _cpu_slots(threads: int, ram_mb: int, count: int) -> list[res.WorkerSlot]:
-    from text2audio.core.contracts import Capabilities
+def _render_pool(
+    plan: Plan,
+    segments: list[Segment],
+    config: Config,
+    store: ModelStore,
+    out_for: Callable[[Segment], Path],
+    on_done: Callable[[Segment, dict[str, Any]], None],
+    on_fail: Callable[[Segment, Exception], None],
+    max_workers: int | None = None,
+    attempt: int = 1,
+    on_start: Callable[[int], None] | None = None,
+) -> int:
+    """Synthesize `segments` on a pool of TTS workers; returns the number of workers."""
+    caps = plan.backend.capabilities
+    rc = config.resources
+    slots = res.plan(
+        res.probe(),
+        caps,
+        tier=plan.tier,
+        devices=rc.devices,
+        max_workers=rc.max_workers,
+        threads_per_worker=rc.threads_per_worker,
+    ).slots
+    cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
+    n = max(1, min(len(slots), cap, math.ceil(len(segments) / SEGMENTS_PER_WORKER)))
+    voices = plan.profile.voices
+    payload = store.payload(assets_for(plan.route.backend, load_lock()))
 
-    caps = Capabilities(languages=("*",), threads=threads, ram_mb=ram_mb)
-    plan = res.plan(res.probe(), caps, tier="fast")
-    return plan.slots[: max(1, count)]
+    def work(worker: WorkerBackend, seg: Segment) -> None:
+        voice_id = voices.get(seg.voice, voices.get("narrator", {})).get(worker.name, "")
+        reply = worker.call(
+            "synthesize",
+            segment=seg.model_dump(mode="json"),
+            out=str(out_for(seg)),
+            voice_id=voice_id,
+            attempt=attempt,
+        )
+        on_done(seg, reply)
 
-
-def _parallel(
-    workers: list[Any],
-    items: list[Any],
-    work: Callable[[Any, Any], None],
-    load: dict[str, Any] | None = None,
-    on_error: Callable[[Any, Exception], None] | None = None,
-) -> None:
-    """Run `work(worker, item)` for every item on a pool of loaded workers."""
-    todo: queue.Queue[Any] = queue.Queue()
-    for item in items:
-        todo.put(item)
-    errors: list[BaseException] = []
-
-    def run(worker: Any) -> None:
-        try:
-            worker.load(**(load or {}))
-            while True:
-                try:
-                    item = todo.get_nowait()
-                except queue.Empty:
-                    return
-                try:
-                    work(worker, item)
-                except WorkerError as exc:
-                    if on_error is None:
-                        raise
-                    on_error(item, exc)
-        except BaseException as exc:
-            errors.append(exc)
-        finally:
-            worker.close()
-
-    threads = [threading.Thread(target=run, args=(w,), daemon=True) for w in workers]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    if errors and (todo.qsize() or len(errors) == len(workers)):
-        raise SynthesisError(f"workers failed: {errors[0]}") from errors[0]
+    workers = [WorkerBackend(plan.backend, store.root, slot) for slot in slots[:n]]
+    if on_start:
+        on_start(len(workers))
+    parallel(workers, segments, work, load={"assets": payload}, on_error=on_fail)
+    return len(workers)
 
 
 def render(
@@ -345,50 +369,42 @@ def render(
     """Synthesize every segment whose hash is not in the journal yet."""
     audio_dir = folder.work / "audio" / "segments"
     unique: dict[str, Segment] = {}
+    cached = duplicate = 0
     for seg in segments:
         assert seg.hash is not None
         entry = journal.get(seg.hash)
-        done = entry is not None and (audio_dir / f"{seg.hash[:24]}.wav").is_file()
-        if not done and seg.hash not in unique:
+        if entry is not None and gate.wav_path(audio_dir, seg.hash).is_file():
+            cached += 1  # rendered by an earlier run
+        elif seg.hash in unique:
+            duplicate += 1  # same text and settings as a segment rendered now
+        else:
             unique[seg.hash] = seg
     pending = list(unique.values())
-    stats: dict[str, Any] = {"rendered": 0, "elapsed_ms": 0, "workers": 0, "wall_s": 0.0}
+    stats: dict[str, Any] = {
+        "rendered": 0,
+        "cached": cached,
+        "duplicate": duplicate,
+        "elapsed_ms": 0,
+        "workers": 0,
+        "wall_s": 0.0,
+    }
     _detail(progress, "synthesize", segments=len(segments), pending=len(pending))
     if not pending:
         return stats
-    caps = plan.backend.capabilities
-    rc = config.resources
-    slots = res.plan(
-        res.probe(),
-        caps,
-        tier=plan.tier,
-        devices=rc.devices,
-        max_workers=rc.max_workers,
-        threads_per_worker=rc.threads_per_worker,
-    ).slots
-    cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
-    n = max(1, min(len(slots), cap, math.ceil(len(pending) / SEGMENTS_PER_WORKER)))
-    voices = plan.profile.voices
-    payload = store.payload(assets_for(plan.route.backend, load_lock()))
     lock = threading.Lock()
     started = time.monotonic()
     processed = [0]  # rendered + failed, so the bar ends even when segments fail
     audio_ms = [0]
 
-    def work(worker: WorkerBackend, seg: Segment) -> None:
+    def done(seg: Segment, reply: dict[str, Any]) -> None:
         assert seg.hash is not None
-        out = audio_dir / f"{seg.hash[:24]}.wav"
-        voice_id = voices.get(seg.voice, voices.get("narrator", {})).get(worker.name, "")
-        reply = worker.call(
-            "synthesize", segment=seg.model_dump(mode="json"), out=str(out), voice_id=voice_id
-        )
         journal.add(
             {
                 "hash": seg.hash,
                 "segment": seg.id,
                 "duration_ms": int(reply["duration_ms"]),
                 "elapsed_ms": int(reply.get("elapsed_ms", 0)),
-                "backend": worker.name,
+                "backend": plan.route.backend,
                 "warnings": reply.get("warnings", []),
             }
         )
@@ -409,14 +425,63 @@ def render(
             if progress:
                 progress("synthesize", processed[0], len(pending))
 
-    workers = [WorkerBackend(plan.backend, store.root, slot) for slot in slots[:n]]
-    stats["workers"] = len(workers)
-    _detail(progress, "synthesize", workers=len(workers), backend=plan.route.backend)
-    if progress:
-        progress("synthesize", 0, len(pending))
-    _parallel(workers, pending, work, load={"assets": payload}, on_error=failed)
+    def start(n: int) -> None:
+        _detail(progress, "synthesize", workers=n, backend=plan.route.backend)
+        if progress:
+            progress("synthesize", 0, len(pending))
+
+    stats["workers"] = _render_pool(
+        plan,
+        pending,
+        config,
+        store,
+        lambda seg: gate.wav_path(audio_dir, seg.hash or ""),
+        done,
+        failed,
+        max_workers,
+        on_start=start,
+    )
     stats["wall_s"] = round(time.monotonic() - started, 2)
     return stats
+
+
+def rerenderer(
+    folder: BookFolder,
+    plan: Plan,
+    config: Config,
+    store: ModelStore,
+    max_workers: int | None,
+    warnings: list[dict[str, str]],
+) -> gate.Rerender:
+    """`gate.Rerender` for this book: attempt `n` of a segment goes to `<hash>.a<n>.wav`."""
+    audio_dir = folder.work / "audio" / "segments"
+
+    def rerender(segments: list[Segment], attempt: int) -> dict[str, dict[str, Any]]:
+        replies: dict[str, dict[str, Any]] = {}
+        lock = threading.Lock()
+
+        def done(seg: Segment, reply: dict[str, Any]) -> None:
+            with lock:
+                replies[seg.hash or ""] = reply
+
+        def failed(seg: Segment, exc: Exception) -> None:
+            with lock:
+                warnings.append({"segment": seg.id, "warning": f"attempt {attempt}: {exc}"})
+
+        _render_pool(
+            plan,
+            segments,
+            config,
+            store,
+            lambda seg: gate.wav_path(audio_dir, seg.hash or "", attempt),
+            done,
+            failed,
+            max_workers,
+            attempt,
+        )
+        return replies
+
+    return rerender
 
 
 # --------------------------------------------------------------------------- assembly
@@ -495,10 +560,7 @@ def assemble(
     state: dict[str, Any] = {}
     files: list[Path] = []
     playlist: list[tuple[str, int, str]] = []
-    encoded = 0
-    _detail(progress, "assemble", parts=len(split.parts), reason=split.reason)
-    if progress:
-        progress("assemble", 0, len(split.parts))
+    jobs: list[tuple[int, splitting.Part, Path, dict[str, str], list[Chapter]]] = []
     for n, (part, name) in enumerate(zip(split.parts, names, strict=True), 1):
         tags = {
             "title": part.title,
@@ -531,24 +593,48 @@ def assemble(
         out = folder.path / name
         state[name] = fingerprint
         if previous.get(name) != fingerprint or not out.is_file():
-            _detail(progress, "assemble", current=name)
-            wav = parts_dir / f"{n:04d}.wav"
-            with PartWriter(wav, ASSEMBLY_RATE) as writer:
-                for seg in segments[part.start : part.end]:
-                    path = audio_dir / f"{(seg.hash or '')[:24]}.wav"
-                    if path.is_file():
-                        writer.add(speech(path))
-                    writer.silence(seg.pause_after_ms)
-            encode_mp3(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
-            wav.unlink(missing_ok=True)
-            encoded += 1
-            _detail(progress, "assemble", encoded=encoded)
+            jobs.append((n, part, out, tags, chapters))
         files.append(out)
         playlist.append((name, part.duration_ms, part.title))
-        if progress:
-            progress("assemble", n, len(split.parts))
+
+    subtitles = config.output.subtitles
+    if subtitles:  # parts whose MP3 is current but whose subtitles are missing
+        current = {j[2] for j in jobs}
+        for n, part in enumerate(split.parts, 1):
+            out = folder.path / names[n - 1]
+            if out not in current and not out.with_suffix(".srt").is_file():
+                write_srt(
+                    out.with_suffix(".srt"),
+                    _part_audio(segments[part.start : part.end], audio_dir, None),
+                )
+
+    def encode(job: tuple[int, splitting.Part, Path, dict[str, str], list[Chapter]]) -> None:
+        n, part, out, tags, chapters = job
+        wav = parts_dir / f"{n:04d}.wav"
+        with PartWriter(wav, ASSEMBLY_RATE) as writer:
+            cues = _part_audio(segments[part.start : part.end], audio_dir, writer)
+        encode_mp3(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
+        wav.unlink(missing_ok=True)
+        if subtitles:
+            write_srt(out.with_suffix(".srt"), cues)
+
+    # Parts are independent and FFmpeg's loudnorm is single-threaded: encode in parallel.
+    threads = max(1, min(len(jobs), res.probe().usable_cpus, DEFAULT_MAX_WORKERS))
+    unchanged = len(split.parts) - len(jobs)
+    _detail(progress, "assemble", parts=len(split.parts), reason=split.reason, threads=threads)
+    if progress:
+        progress("assemble", unchanged, len(split.parts))
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        for encoded, _ in enumerate(pool.map(encode, jobs), 1):
+            _detail(progress, "assemble", encoded=encoded)
+            if progress:
+                progress("assemble", unchanged + encoded, len(split.parts))
     for stale in set(previous) - set(state):
         (folder.path / stale).unlink(missing_ok=True)
+        (folder.path / stale).with_suffix(".srt").unlink(missing_ok=True)
+    if not subtitles:
+        for out in files:
+            out.with_suffix(".srt").unlink(missing_ok=True)
     write_json(state_path, state)
     if not split.single:
         write_m3u(folder.path / f"{folder.path.name}.m3u", playlist)
@@ -557,9 +643,26 @@ def assemble(
     return files, split
 
 
-def _offset(items: list[splitting.Item], index: int) -> int:
-    from text2audio.audio.wav import LEAD_IN_MS
+def _part_audio(segments: list[Segment], audio_dir: Path, writer: PartWriter | None) -> list[Cue]:
+    """Write a part's audio (or only measure it) and return its subtitle cues."""
+    frames = ASSEMBLY_RATE * LEAD_IN_MS // 1000 if writer is None else writer.frames
+    cues: list[Cue] = []
+    for seg in segments:
+        path = gate.wav_path(audio_dir, seg.hash or "")
+        if path.is_file():
+            samples = speech(path)
+            start = frames * 1000 // ASSEMBLY_RATE
+            if writer is not None:
+                writer.add(samples)
+            frames += samples.size
+            cues += split_cue(start, frames * 1000 // ASSEMBLY_RATE, seg.text)
+        if writer is not None:
+            writer.silence(seg.pause_after_ms)
+        frames += ASSEMBLY_RATE * seg.pause_after_ms // 1000
+    return cues
 
+
+def _offset(items: list[splitting.Item], index: int) -> int:
     return LEAD_IN_MS + sum(i.duration_ms for i in items[:index])
 
 
@@ -580,6 +683,8 @@ def synthesize(
         raise SynthesisError(f"{path}: not a book folder (no {folder.markdown.name})")
     store = store or ModelStore()
     started = time.monotonic()
+    timings = Timings()
+    qa_percent = parse_qa_mode(config.qa.mode)
     plan = make_plan(folder, config, tier)
     meta = folder.metadata() or {}
     voices = plan.profile.voices
@@ -593,19 +698,45 @@ def synthesize(
         voice=narrator,
         notes=plan.notes,
     )
-    segments, uncertain = prepare(folder, plan, config, store, progress)
+    segments, uncertain = prepare(folder, plan, config, store, progress, timings)
     write_manifest(folder.work / "segments.jsonl", segments)
     journal = Journal(folder.work / "render.jsonl")
-    stats = render(folder, plan, segments, config, store, journal, progress, max_workers)
+    with timings.stage("synthesize"):
+        stats = render(folder, plan, segments, config, store, journal, progress, max_workers)
+    retry_warnings: list[dict[str, str]] = []
+    with timings.stage("qa"):
+        qa = gate.run_qa(
+            segments,
+            journal,
+            folder.work / "audio" / "segments",
+            plan.profile,
+            config,
+            store,
+            rerenderer(folder, plan, config, store, max_workers, retry_warnings),
+            progress,
+        )
     for seg in segments:
         entry = journal.get(seg.hash or "")
         seg.status = "done" if entry else "failed"
         seg.duration_ms = int(entry["duration_ms"]) if entry else None
+        if entry and "qa" in entry:
+            seg.wer = entry["qa"]["wer"]
+            seg.attempts = int(entry.get("attempts", 1))
+            seg.flags = list(entry["qa"]["flags"])
+            seg.status = "flagged" if entry.get("flagged") else "done"
     write_manifest(folder.work / "segments.jsonl", segments)
-    files, split = assemble(folder, segments, journal, config, meta, narrator, plan, progress)
+    with timings.stage("assemble"):
+        files, split = assemble(folder, segments, journal, config, meta, narrator, plan, progress)
     report = _report(folder, plan, segments, journal, stats, split, files, uncertain, meta)
+    report["qa"] = gate.summary(segments, journal, qa, qa_percent)
+    report["warnings"] += retry_warnings
     report["wall_s"] = round(time.monotonic() - started, 2)
+    if report["duration_ms"]:
+        report["rtf_wall"] = round(report["wall_s"] * 1000 / report["duration_ms"], 4)
+    timings["total"] = report["wall_s"]
+    report["timings_s"] = dict(timings)
     write_json(folder.path / "report.json", report)
+    (folder.path / "report.md").write_text(report_md.render(report), encoding="utf-8")
     return SynthesisReport(folder.path, files, report)
 
 
@@ -648,7 +779,8 @@ def _report(
         "segments": {
             "total": len(segments),
             "rendered_now": stats.get("rendered", 0),
-            "cached": len(segments) - stats.get("rendered", 0),
+            "cached": stats.get("cached", 0),
+            "duplicate": stats.get("duplicate", 0),
             "failed": sum(1 for s in segments if s.status == "failed"),
             "failures": stats.get("failures", []),
         },
@@ -661,13 +793,19 @@ def _report(
             "rtf": round(elapsed / synth_ms, 4) if synth_ms else None,
             "wall_s_this_run": stats.get("wall_s", 0.0),
         },
+        # Whole-run wall time ÷ audio duration (stress, QA and encoding included); set by
+        # `synthesize` once the run is over.
+        "rtf_wall": None,
         "chapters": [
             {"chapter": c, "title": titles.get(c, ""), "duration_ms": ms}
             for c, ms in sorted(chapters.items())
         ],
         "split": split.summary(),
         "files": [f.name for f in files],
+        "parts": [
+            {"file": f.name, "title": p.title, "duration_ms": p.duration_ms}
+            for f, p in zip(files, split.parts, strict=True)
+        ],
         "normalization": {"uncertain": uncertain},
         "warnings": warnings,
-        "qa": {"mode": "off"},
     }

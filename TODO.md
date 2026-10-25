@@ -31,7 +31,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 1 — first audiobook on CPU: normalization, RUAccent, Silero worker, plugin
     environments, assembly + split plan + MP3 tags, `run` / `synthesize`, incremental
     re-render and resume;
-  - [ ] step 2 — QA gate (GigaAM `rnnt`, WER, retries, `report.json`), full-novel T0 run;
+  - [x] step 2 — QA gate (GigaAM `rnnt`, WER + signal checks, retries, keep-best,
+    `--qa`), kill-and-restart resume test, stage timings and parallel encoding, `.srt`
+    subtitles and `report.md`, full-novel T0 run;
   - [ ] step 3 — GPU hybrid (Silero → Chatterbox VC, Chatterbox TTS for Latin words),
     FR-24 Latin-span stage, T1 run;
   - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template.

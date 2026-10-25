@@ -91,6 +91,22 @@ All notable changes to this project are documented here. The format follows
   and × realtime, and a "loading voices" note while workers start. Plain stage lines
   without a terminal; segment failures shown as they happen; Ctrl-C exits 130 with a
   resume hint.
+- M2 step 2 — QA gate (§6.9, FR-12): every rendered segment is transcribed by the
+  language's QA ASR (plugin `asr-gigaam`: GigaAM-v3 `rnnt`, own environment, GPU when one
+  has free VRAM, else CPU), compared with the normalized text (fails only when both WER
+  and CER are above their thresholds, so differently spelled names pass) and checked for speaking rate, clipping, long silences and silence; failures are rendered
+  again (Silero: own stress on attempt 2), the best attempt is kept, the rest flagged
+  in `report.json`, exit code 4. `--qa on|off|sample=N%`; results journaled, so QA
+  resumes too.
+- Subtitles: a `.srt` with the book text next to every MP3, timed from the assembly
+  (`output.subtitles`).
+- `report.md`: readable summary next to `report.json` (files, QA flags with what ASR
+  heard, time per stage, warnings).
+- `report.json`: time per stage (`timings_s`), whole-run `rtf_wall`, `cached` vs
+  `duplicate` segments, per-part titles and durations.
+- Test fixtures: the `sine` backend injects faults (`T2A_SINE_FAULT`) and has a
+  `sine-echo` ASR; a kill-and-restart resume test; `tests/e2e/test_novel.py::test_t0`
+  renders the full «Капитанская дочка» (`tests/fixtures/fetch_novel.py`) on 4 cores.
 
 ### Changed
 
@@ -103,3 +119,6 @@ All notable changes to this project are documented here. The format follows
   environments, manifest fields and journals, grouping in the split plan, CPU-only
   Silero and a default cap of 8 workers.
 - `segments.jsonl` records each heading's level (golden manifests regenerated).
+- Output parts are encoded in parallel (two-pass loudnorm is single-threaded): Banks
+  "Выбор оружия" (9 h, 18 files) assembles in 3 m 41 s instead of ~23 min; stress runs
+  on up to 8 RUAccent workers.

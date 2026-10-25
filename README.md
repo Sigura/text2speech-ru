@@ -91,13 +91,14 @@ CI fails when they are stale.
 
 ### Usage examples
 
-Available now (M0, M1, M2 step 1):
+Available now (M0, M1, M2 steps 1–2):
 
 ```bash
-CUDA_VISIBLE_DEVICES="2,3" text2audio run "./inputs/Бэнкс. Выбор Оружия.fb2" --workers 4 -o ./outputs/        # convert + synthesize → MP3s, playlist, report.json
+CUDA_VISIBLE_DEVICES="2,3" text2audio run "./inputs/Бэнкс. Выбор Оружия.fb2" --workers 4        # convert + synthesize → MP3s, playlist, report.json
 CUDA_VISIBLE_DEVICES="" text2audio run book.fb2    # CPU only (Silero is CPU-only anyway)
 text2audio synthesize "output/Станции Ангелов"     # after editing the .md: only changed sentences
 text2audio run book.fb2 --workers 4                # at most 4 TTS workers (default: up to 8)
+text2audio run book.fb2 --qa sample=10%            # QA gate on every 10th segment (default: all; --qa off)
 text2audio convert "inputs/Станции Ангелов.fb2"    # → output/Станции Ангелов/Станции Ангелов.md
 text2audio convert inputs/ -o ~/Audiobooks         # every book in a folder, one sub-folder each
 text2audio convert book.txt --lang ru              # language of untagged text (default: guessed)
@@ -237,10 +238,12 @@ setting and where it came from.
 ```text
 output/Война и мир/
 ├── 01 - Том первый. Часть первая.mp3   # one MP3 per section (or one file)
+├── 01 - Том первый. Часть первая.srt   # subtitles: the book text, timed to the MP3
 ├── …
 ├── Война и мир.m3u
 ├── Война и мир.md                      # editable text — edit, then re-run
 ├── report.json                         # QA, timings, split decision
+├── report.md                           # the same, readable: files, flagged segments, timings
 └── _work/                              # source copy, metadata, cover, segments, cache
 ```
 
