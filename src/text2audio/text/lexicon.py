@@ -4,7 +4,8 @@ The language pack's list → user-global `~/.config/text2audio/lexicon/<lang>.ts
 per-book `_work/lexicon.tsv`. Each line is `word<TAB>replacement`; `#` starts a comment.
 Entries match whole words, ignoring case, and are applied **before** normalization so
 they can name source spellings (*США*, *Docker*); stress in a replacement is written
-`+` before the vowel or with U+0301 and is kept by the stress stage.
+`+` before the vowel or with U+0301 and is kept by the stress stage. A native ending
+after an apostrophe joins the replacement (*iPhone'а* → «айфо́на», FR-24).
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ import re
 from pathlib import Path
 
 import platformdirs
+
+from text2audio.core.languages import script_of
 
 
 def user_lexicon(lang: str) -> Path:
@@ -55,5 +58,14 @@ class Lexicon:
         if self._pattern is None:
             words = sorted(self.entries, key=len, reverse=True)
             alts = "|".join(re.escape(w) for w in words)
-            self._pattern = re.compile(rf"(?<![\w+]){'(?:' + alts + ')'}(?![\w+])", re.IGNORECASE)
-        return self._pattern.sub(lambda m: self.entries[m[0].lower()], text)
+            self._pattern = re.compile(
+                rf"(?<![\w+])({alts})(?![\w+])(?:(['’])(?=([^\W\d_])))?", re.IGNORECASE
+            )
+
+        def repl(m: re.Match[str]) -> str:
+            out = self.entries[m[1].lower()]
+            if m[2] and script_of(m[1][-1]) == script_of(m[3]):
+                out += m[2]  # "Docker's": the apostrophe belongs to the word
+            return out
+
+        return self._pattern.sub(repl, text)

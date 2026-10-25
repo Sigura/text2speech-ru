@@ -29,7 +29,7 @@ from text2audio.core.pool import parallel
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
 from text2audio.qa.checks import check_file
-from text2audio.qa.wer import cer, wer
+from text2audio.qa.wer import cer, drop_unheard, wer
 from text2audio.workers.backend import Worker
 
 MAX_ATTEMPTS = 3
@@ -37,6 +37,8 @@ ASR_BATCH = 16
 MAX_GPU_WORKERS = 2  # GPUs are shared with other jobs (§9.1)
 MAX_CPU_WORKERS = 8
 SEGMENTS_PER_WORKER = 25
+# FR-24 readings the QA ASR may be unable to write (GigaAM: Cyrillic letters only, §13.1)
+UNVERIFIABLE = frozenset({"acronym", "transliterated"})
 
 # Re-renders `segments` as attempt `n` into `<hash>.a<n>.wav`; replies by hash.
 Rerender = Callable[[list[Segment], int], dict[str, dict[str, Any]]]
@@ -61,6 +63,7 @@ class Attempt:
     heard: str
     flags: list[str]
     duration_ms: int | None = None
+    unverified: list[str] = field(default_factory=list)
 
     @property
     def score(self) -> tuple[int, float, float]:
@@ -136,12 +139,23 @@ def asr_slots(asr: Any, config: Config, pending: int) -> list[res.WorkerSlot]:
 
 def _evaluate(ctx: _Context, seg: Segment, path: Path, heard: str, attempt: int) -> Attempt:
     text = seg.speech_text
-    result = wer(text, heard, ctx.profile.qa.fold)
-    chars = cer(text, heard, ctx.profile.qa.fold)
+    letters = ctx.profile.qa.fold
+    score = (wer(text, heard, letters).wer, cer(text, heard, letters))
+    unverified: list[str] = []
+    readings = [s.reading for s in seg.spans if s.resolution in UNVERIFIABLE and s.reading]
+    if readings:
+        # Dropping a reading ASR spelled its own way («эппл» for «эпл») turns one
+        # substitution into an insertion, so the drop is kept only when it scores better.
+        checked, dropped = drop_unheard(text, heard, readings, letters)
+        reduced = (wer(checked, heard, letters).wer, cer(checked, heard, letters))
+        if dropped and reduced < score:
+            score, unverified = reduced, dropped
     flags = check_file(path, text, ctx.profile.qa.chars_per_sec)
-    if result.wer > ctx.threshold and chars > ctx.cer_threshold:
+    if score[0] > ctx.threshold and score[1] > ctx.cer_threshold:
         flags.insert(0, "wer")
-    return Attempt(attempt, round(result.wer, 4), round(chars, 4), heard, flags)
+    return Attempt(
+        attempt, round(score[0], 4), round(score[1], 4), heard, flags, unverified=unverified
+    )
 
 
 def _record(ctx: _Context, seg_hash: str, attempts: list[Attempt]) -> None:
@@ -165,6 +179,7 @@ def _record(ctx: _Context, seg_hash: str, attempts: list[Attempt]) -> None:
         "cer": best.cer,
         "heard": best.heard,
         "flags": best.flags,
+        "unverified": best.unverified,
         "attempt": best.attempt,
         "attempts": [
             {"attempt": a.attempt, "wer": a.wer, "cer": a.cer, "flags": a.flags} for a in attempts
@@ -313,11 +328,14 @@ def summary(
         return {**out, "checked": 0, "flagged": 0}
     rows: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []
+    unverified: list[dict[str, Any]] = []
     for seg in segments:
         entry = journal.get(seg.hash or "")
         qa = entry.get("qa") if entry else None
         if not qa:
             continue
+        if qa.get("unverified"):
+            unverified.append({"segment": seg.id, "words": qa["unverified"]})
         rows.append(
             {
                 "segment": seg.id,
@@ -349,5 +367,6 @@ def summary(
         "flagged_share": round(len(flagged) / checked, 4) if checked else 0.0,
         "mean_wer": round(sum(r["wer"] for r in rows) / checked, 4) if checked else None,
         "flagged_list": flagged,
+        "unverified": unverified,
         "segments": rows,
     }

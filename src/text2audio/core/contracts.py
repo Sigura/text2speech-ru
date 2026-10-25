@@ -97,6 +97,16 @@ class ModelAsset(BaseModel):
         return lang_ok and tier_ok
 
 
+class Span(BaseModel):
+    """A foreign-script span of a segment and how it was resolved (FR-24)."""
+
+    text: str
+    script: str  # ISO 15924
+    # lexicon | homoglyph | acronym | transliterated | unresolved
+    resolution: str = "unresolved"
+    reading: str | None = None
+
+
 class Segment(BaseModel):
     """One synthesis unit; a line of `segments.jsonl` (§6.4.2)."""
 
@@ -122,6 +132,7 @@ class Segment(BaseModel):
     route: str | None = None  # synthesis route chosen by the tier plan, e.g. "silero"
     duration_ms: int | None = None
     flags: list[str] = []
+    spans: list[Span] = []  # foreign-script spans (FR-24)
 
     @property
     def speech_text(self) -> str:
@@ -192,6 +203,8 @@ class NormResult(BaseModel):
     text: str
     # Spans the rules could not verbalize with confidence; listed in report.json.
     uncertain: list[str] = []
+    # Foreign-script spans the normalizer rewrote itself (homoglyphs, acronyms; FR-24).
+    resolved: list[Span] = []
 
 
 @runtime_checkable
@@ -199,6 +212,14 @@ class Normalizer(Protocol):
     """Text normalization stage of one language (§6.5, FR-11)."""
 
     def normalize(self, text: str, role: str = "narration") -> NormResult: ...
+
+
+@runtime_checkable
+class Transliterator(Protocol):
+    """Optional normalizer hook: a reading in the book's script for a foreign span,
+    or None when the pack cannot read that script."""
+
+    def transliterate(self, span: str, script: str) -> str | None: ...
 
 
 @runtime_checkable

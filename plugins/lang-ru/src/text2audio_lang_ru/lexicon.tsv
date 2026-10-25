@@ -9,3 +9,17 @@
 вуз	в+уз
 ГУЛАГ	гул+аг
 МИД	м+ид
+# Latin-script terms whose usual Russian reading is not their English sound (FR-24);
+# other Latin words are transliterated from English pronunciation.
+Python	п+айтон
+React	ре+акт
+iPhone	айф+он
+iPad	айп+ад
+Windows	в+индоус
+Linux	л+инукс
+Jupyter	юп+итер
+SQL	эскьюэ+ль
+Wi-Fi	вайф+ай
+YouTube	ют+уб
+Jira	дж+ира
+NASA	н+аса

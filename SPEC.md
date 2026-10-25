@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.10-M2 |
+| Document version | 1.11-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-25 |
 | Primary language | Python 3.11+ |
@@ -33,6 +33,7 @@
 | 1.8-M2 | 2026-10-25 | M2 step 1 (first audiobook on CPU): **rutextnorm rejected** after the audit — the `ru` pack owns its normalization (rules + num2words + pymorphy3, §6.6.5); lexicon applied **before** normalization (§6.5); plugin worker environments outside the repo, Python 3.12, stdlib worker runtime with a network guard (§6.6.3, ADR-0010); manifest fields `heading_level`, `text_stress`, `route`, `duration_ms` and the resumable journals `render.jsonl` / `stress.jsonl` (§5.2, §6.4.2); long sections split at lower headings are **grouped** into files near the target length (§6.8.1); Silero runs on CPU slots, at most 8 workers by default (§9.1). |
 | 1.9-M2 | 2026-10-25 | Progress display for `run` / `synthesize` (FR-17, §6.11): `rich` stage lines + live bar on stderr, results on stdout; `Progress` callables may add `detail(stage, **fields)`; Ctrl-C exits 130. |
 | 1.10-M2 | 2026-10-25 | M2 step 2: QA gate as built (§6.9) — GigaAM-v3 worker, WER **and** CER rule, signal checks, up to 3 attempts, exit code 4; QA results in `render.jsonl` (§6.4.2); `.srt` per MP3 (§6.8) and `report.md` (§5.2); parallel part encoding and RUAccent workers; T0 numbers (§9). |
+| 1.11-M2 | 2026-10-25 | M2 step 3a: FR-24 Latin-script spans as built (§6.6.5) — acronyms spelled as one word («эйчтитипи́»), T0 transliteration through `espeak-ng` English IPA → Cyrillic; `report.json` `foreign_spans`. **Decision:** FR-24 acceptance is "no segment flagged by the QA gate and no unresolved span", not WER 0 — GigaAM-v3 cannot write English-sounding words; the QA gate lists such readings as `unverified` instead of scoring them (§6.9, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -268,7 +269,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-21 | **One output folder per book**, named after the input file name, under a configurable output root; work files in `_work/`; batch input of several files or a directory (§5.2). | Must | `run a.fb2 b.epub` creates `output/a/` and `output/b/`; re-running `a.fb2` resumes in `output/a/`; a name clash produces `a (pdf)` or `a (2)` as specified. |
 | FR-22 | **Zero-config quality**: every setting has an automatic value derived from the language profile, content profile and hardware (§6.6.5); `text2audio config show <book>` prints the effective value and the source of each setting. | Must | With an empty `text2audio.toml`, fixtures in each supported language select the expected backend, voices, pauses, normalization and footnote policy; output passes the QA gate. |
 | FR-23 | **Cover for every book**: use the embedded cover (FB2, EPUB); otherwise generate one with a cover plugin (local Stable Diffusion WebUI); otherwise render a typographic cover (title + author). Embed it in every output file (§6.8.2). | Should | A TXT fixture gets a generated cover when the SD plugin is available and a typographic one when it is not; the source of the cover is recorded in `metadata.json`. |
-| FR-24 | **Foreign-script spans inside a sentence**: the core tags runs of words whose Unicode script differs from the book language's script (language-independent); the language pack resolves each span — pronunciation lexicon, acronym spelling, routing the segment to a backend that can read it, or transliteration — before synthesis, so no word is silently dropped. Every span and its resolution is listed in `report.json`. Longer spans (whole sentences or quotes) follow FR-18. | Must | The Russian code-switch fixture (English terms, brands, acronyms, an English quote) loses no word on T0 and T1: QA ASR, compared against the resolved text, scores WER 0; `report.json` lists every span. |
+| FR-24 | **Foreign-script spans inside a sentence**: the core tags runs of words whose Unicode script differs from the book language's script (language-independent); the language pack resolves each span — pronunciation lexicon, acronym spelling, routing the segment to a backend that can read it, or transliteration — before synthesis, so no word is silently dropped. Every span and its resolution is listed in `report.json`. Longer spans (whole sentences or quotes) follow FR-18. | Must | The Russian code-switch fixture (English terms, brands, acronyms, an English quote) loses no word on T0 and T1: no segment is flagged by the QA gate (§6.9) against the resolved text, and `report.json` lists every span with no `unresolved` one. WER 0 is not required: the Russian QA ASR leaves English-sounding words out even when they are spoken (§13.1). |
 
 ### 6.2 Non-Functional Requirements
 
@@ -642,14 +643,16 @@ Text rules:
      compounds attach to the result (*iPhone'а* → «айфо́на», *Docker-контейнер* →
      «до́кер-контейнер»). Pack, user and per-book levels as in FR-13.
   3. **Acronyms** (all capitals, ≤ 5 letters, not in the lexicon): spelled with English
-     letter names (*HTTP* → «эйч-ти-ти-пи́»); conventional readings go in the lexicon
+     letter names, joined into one word with stress on the last letter (*HTTP* →
+     «эйчтитипи́»); conventional readings go in the lexicon
      (*SQL* → «эс-кью-э́ль»).
   4. **Remaining Latin words**: on T1 the segment is routed to Chatterbox Multilingual
      (same narrator reference, `language_id="ru"`), which reads English words in a
      Russian accent; a whole English sentence or quote uses `language_id="en"` with the
      same voice until the `en` pack exists (FR-18). On T0 (Silero only) the word is
-     transliterated from its English pronunciation (English G2P → Russian phonemes →
-     Cyrillic). Segments fully resolved by steps 1–3 stay on the Silero route.
+     transliterated from its English pronunciation: `espeak-ng -q --ipa -v en-us`
+     (system binary, offline; `doctor` reports it) → IPA → Cyrillic table → stress
+     mark on the vowel espeak-ng stressed. Segments fully resolved by steps 1–3 stay on the Silero route.
   5. Other scripts default to the generic fallback; any span the pack cannot resolve
      is flagged in `report.json`.
 - QA bounds: higher WER threshold than English (rich morphology makes ASR endings
@@ -872,6 +875,10 @@ Each synthesized segment goes through:
    The ASR is a component worker in its own environment (§6.6.3), planned right before
    the stage like a backend: on a GPU with enough free VRAM (at most 2 workers, GPUs
    are shared), otherwise on CPU slots. `[lang.<code>] asr = "…"` overrides it.
+   Words that FR-24 produced as an acronym spelling or a transliteration are not
+   scored when the ASR did not write them at all — an ASR with a native-script
+   vocabulary cannot spell them (GigaAM, §13.1); they are listed as `unverified` in
+   `report.json` / `report.md`. Anything else the ASR wrote counts as usual.
 2. **Sanity checks** — on the segment's own WAV, numpy only:
    - `rate-low` / `rate-high`: letters of `text_norm` per second of trimmed speech
      outside the profile's `chars_per_sec` (`ru` 6–25); skipped below 15 letters
@@ -1279,6 +1286,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |
+| 2026-10-25 | FR-24 on T0: unknown Latin words are transliterated with `espeak-ng` `en-us` IPA mapped to Cyrillic (a system binary already required for M4, offline, no weights); acronyms of ≤ 5 capitals are spelled as one stressed word («эйчтитипи́»). | Decided |
+| 2026-10-25 | **FR-24 acceptance = no QA-flagged segment and no unresolved span, not WER 0** (owner). GigaAM-v3 has a 33-letter Cyrillic vocabulary and leaves English-sounding words blank inside a sentence even when Silero says them, so WER against the transliterated text cannot reach 0; the CER rule (§6.9) keeps such segments unflagged. Exception found: «Протокол HTTP работает поверх TCP» — Silero says «эйчтитипи́ … тисипи́» clearly (owner listening), GigaAM hears neither acronym in any spelling tried, and two missing words out of five fail both WER and CER. **Decision (owner):** the QA gate does not score acronym / transliterated readings that ASR did not write at all and lists them as `unverified` (§6.9). | Decided |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
 | 2026-10-25 | **PDF default reader: pymupdf4llm 1.28.2 with its layout model** (benchmark `spikes/pdf-readers`: no header/page-number leaks, 0.4 s/page CPU, models inside the wheel). Pinned below PyMuPDF 2.0, which absorbed it. Docling: possible plugin; Marker 2.x excluded (vLLM Docker server). The layout model's `onnxruntime` runs in the core process: a reader, CPU-only, no downloads. | Decided |
 | 2026-10-25 | Readers parse XML with defusedxml over the stdlib parser and an HTML-entity pass for XHTML; lxml is not used. EPUB chapters come from the table of contents. FB2 elements outside the schema are dropped and reported. | Decided |

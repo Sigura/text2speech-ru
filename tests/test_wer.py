@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from text2audio.qa.wer import cer, fold, wer
+from text2audio.qa.wer import cer, drop_unheard, fold, wer
 
 RU = {"ё": "е"}
 
@@ -46,6 +46,24 @@ def test_cer_ignores_spacing_and_small_spelling_differences() -> None:
     assert cer("Дизиэт Сма вошла в комнату", "дизиет сма вошла в комнату", RU) < 0.1
     assert cer("Госпожа Дизиэт", "госпожадизиет", RU) < 0.1
     assert cer("Ёжик пошёл", "ежик пошел", RU) == 0.0
+
+
+def test_unheard_readings_are_dropped_not_scored() -> None:
+    ref = "Протокол эйчтитип+и работает поверх тисип+и."
+    checked, dropped = drop_unheard(ref, "протокол работает поверх", ["эйчтитип+и", "тисип+и"])
+    assert dropped == fold("эйчтитипи тисипи")
+    assert wer(checked, "протокол работает поверх").wer == 0.0
+
+
+def test_heard_or_other_words_still_scored() -> None:
+    optional = ["эйчтитипи"]
+    checked, dropped = drop_unheard("протокол эйчтитипи", "протокол эйчтитипи", optional)
+    assert (checked, dropped) == (" ".join(fold("протокол эйчтитипи")), [])
+    checked, dropped = drop_unheard("протокол эйчтитипи", "протокол эйч ти", optional)
+    assert dropped == fold("эйчтитипи")
+    checked, dropped = drop_unheard("протокол работает", "протокол", optional)
+    assert (checked, dropped) == ("протокол работает", [])
+    assert wer(checked, "протокол").wer == 0.5
 
 
 def test_cer_high_for_wrong_or_missing_words() -> None:

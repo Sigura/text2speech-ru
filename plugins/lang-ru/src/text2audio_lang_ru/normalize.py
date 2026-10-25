@@ -9,9 +9,11 @@ the gender from that noun (*с 5 книгами* → «с пятью книга�
 rutextnorm was audited against the pack's test set first (§13.1) and rejected: it gets
 gender agreement wrong («два книги»), turns *Пётр I* into «Пётр и» and drops ranges.
 
-Order: fixed multi-word abbreviations → dates and times (rewritten into words the
-token pass understands) → one token pass for numbers, Roman numerals, units and
-abbreviations → initials, acronyms and symbols.
+Order: Latin look-alike letters → fixed multi-word abbreviations → dates and times
+(rewritten into words the token pass understands) → one token pass for numbers, Roman
+numerals, units and abbreviations → initials, acronyms (Cyrillic, then Latin) and
+symbols. Other Latin words are left for the core's foreign-span stage, which calls
+`transliterate` (FR-24, `latin.py`).
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import re
 from dataclasses import dataclass
 
 from text2audio.core.contracts import NormResult
-from text2audio_lang_ru import morph
+from text2audio_lang_ru import latin, morph
 from text2audio_lang_ru.numbers import cardinal, decimal, digits, ordinal, roman_value
 
 # --------------------------------------------------------------------------- tables
@@ -863,6 +865,7 @@ class RussianNormalizer:
     """Entry point `text2audio.normalizers: ru`."""
 
     def normalize(self, text: str, role: str = "narration") -> NormResult:
+        text, resolved = latin.fix_homoglyphs(text)
         for pattern, repl in _FIXED:
             text = pattern.sub(repl, text)
         text = _DATE.sub(_date, text)
@@ -872,5 +875,9 @@ class RussianNormalizer:
         text = "".join(t.rendered for t in p.toks)
         text = _initials(text)
         text = _acronyms(text)
+        text, spelled = latin.spell_acronyms(text)
         text = _MIXED_SPACES.sub(" ", text).strip()
-        return NormResult(text=text, uncertain=p.uncertain)
+        return NormResult(text=text, uncertain=p.uncertain, resolved=resolved + spelled)
+
+    def transliterate(self, span: str, script: str) -> str | None:
+        return latin.transliterate(span) if script == "Latn" else None

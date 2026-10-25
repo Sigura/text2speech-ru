@@ -1,6 +1,6 @@
 """`synthesize`: book folder → audiobook (SPEC §5.1, §6.8, FR-08, FR-10, FR-17).
 
-    <book>.md → segments → lexicon → normalization → stress → route + hash
+    <book>.md → segments → lexicon → normalization → foreign spans → stress → route + hash
               → render missing segments in workers (journaled) → QA gate (ASR, retries)
               → split plan → part WAVs → loudness + MP3 + tags → playlist → report.json
 
@@ -17,6 +17,7 @@ import json
 import math
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -37,8 +38,10 @@ from text2audio.core.contracts import (
     LanguageProfile,
     Normalizer,
     Segment,
+    Span,
     Tier,
     TierRoute,
+    Transliterator,
 )
 from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
@@ -51,6 +54,7 @@ from text2audio.models.store import ModelStore
 from text2audio.qa import gate
 from text2audio.text.lexicon import Lexicon, user_lexicon
 from text2audio.text.segment import PAUSE_MS, segment_markdown, write_manifest
+from text2audio.text.spans import foreign_spans, replace_spans
 from text2audio.text.stress import acute_to_plus, merge_marks, strip_marks
 from text2audio.workers.backend import Worker, WorkerBackend
 
@@ -225,13 +229,29 @@ def prepare(
     pauses = _pause_map(prof)
     uncertain: list[dict[str, str]] = []
     marked: dict[str, str] = {}
+    translit = plan.normalizer if isinstance(plan.normalizer, Transliterator) else None
     with timings.stage("normalize"):
         for i, seg in enumerate(segments, 1):
-            text = acute_to_plus(lexicon.apply(seg.text))
+            found = foreign_spans(seg.text, prof.script)
+            text = lexicon.apply(seg.text)
+            left = Counter(r.text for r in foreign_spans(text, prof.script))
+            spans: list[Span] = []
+            for r in found:
+                if left[r.text]:
+                    left[r.text] -= 1
+                else:
+                    reading = lexicon.entries.get(r.text.lower())
+                    spans.append(
+                        Span(text=r.text, script=r.script, resolution="lexicon", reading=reading)
+                    )
+            text = acute_to_plus(text)
             if plan.normalizer is not None:
                 result = plan.normalizer.normalize(text, seg.role)
                 text = result.text
                 uncertain += [{"segment": seg.id, "span": s} for s in result.uncertain]
+                spans += result.resolved
+            text = _resolve_foreign(text, prof.script, translit, spans)
+            seg.spans = spans
             seg.text_norm = strip_marks(text)
             marked[seg.id] = text
             seg.pause_after_ms = pauses.get(seg.pause_after_ms, seg.pause_after_ms)
@@ -254,6 +274,23 @@ def prepare(
         voice_id = voices.get(seg.voice, voices.get("narrator", {})).get(seg.backend, "")
         seg.hash = segment_hash(seg, voice_id, model)
     return segments, uncertain
+
+
+def _resolve_foreign(
+    text: str, script: str, translit: Transliterator | None, spans: list[Span]
+) -> str:
+    """Spans left after the lexicon and the normalizer: the pack's reading, or flagged."""
+    runs = foreign_spans(text, script)
+    readings = {
+        r.text: translit.transliterate(r.text, r.script) if translit is not None else None
+        for r in runs
+    }
+    for r in runs:
+        reading = readings[r.text]
+        how = "unresolved" if reading is None else "transliterated"
+        spans.append(Span(text=r.text, script=r.script, resolution=how, reading=reading))
+    readable = [r for r in runs if readings[r.text] is not None]
+    return replace_spans(text, readable, lambda r: readings[r.text] or "")
 
 
 def _stress(
@@ -807,5 +844,9 @@ def _report(
             for f, p in zip(files, split.parts, strict=True)
         ],
         "normalization": {"uncertain": uncertain},
+        # FR-24: every foreign-script span and how it was read.
+        "foreign_spans": [
+            {"segment": seg.id, **span.model_dump()} for seg in segments for span in seg.spans
+        ],
         "warnings": warnings,
     }

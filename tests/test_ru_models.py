@@ -6,6 +6,8 @@ and the plugin environments (`text2audio envs sync`) are installed.
 
 from __future__ import annotations
 
+import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,8 @@ from text2audio_asr_gigaam.descriptor import GigaAM
 from text2audio_backend_silero.descriptor import SileroBackend
 from text2audio_g2p_ruaccent.descriptor import RuAccent
 
+from text2audio import api
+from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment
 from text2audio.core.envs import plugin_env
 from text2audio.models.lock import assets_for
@@ -23,6 +27,7 @@ from text2audio.workers.backend import Worker, WorkerBackend
 
 pytestmark = pytest.mark.models
 STORE = ModelStore()
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def ready(plugin: object, owner: str) -> bool:
@@ -113,3 +118,31 @@ def test_gigaam_hears_silero_numbers_in_spoken_form(tmp_path: Path) -> None:
         w.load(assets=STORE.payload(assets_for("asr:gigaam")))
         [heard] = w.call("transcribe", paths=[str(out)])["texts"]
     assert wer(NUMBERS.speech_text, heard, {"ё": "е"}).wer == 0.0, heard
+
+
+@needs_ruaccent
+@needs_silero
+@needs_gigaam
+@pytest.mark.skipif(
+    shutil.which("espeak-ng") is None or shutil.which("ffmpeg") is None,
+    reason="needs espeak-ng and ffmpeg",
+)
+def test_codeswitch_loses_no_word_on_t0(tmp_path: Path) -> None:
+    # FR-24 acceptance on T0: Latin words are read (lexicon, acronyms, look-alike
+    # letters, transliteration) and every segment passes the QA gate against the
+    # resolved text. Not WER 0: in a sentence GigaAM leaves English-sounding words
+    # blank even when Silero says them (its vocabulary is 33 Cyrillic letters, §13.1).
+    [converted] = api.convert([FIXTURES / "ru" / "codeswitch.md"], tmp_path / "out")
+    assert converted.folder is not None
+    cfg = load_config([], {"synthesis": {"tier": "fast"}})
+    report = api.synthesize(converted.folder, config=cfg, store=STORE.root).report
+    segs = [
+        json.loads(x)
+        for x in (converted.folder / "_work/segments.jsonl").read_text("utf-8").splitlines()
+    ]
+    assert report["foreign_spans"] and all(
+        s["resolution"] != "unresolved" for s in report["foreign_spans"]
+    )
+    flagged = {s["text_norm"]: s["flags"] for s in segs if s["status"] != "done"}
+    assert not flagged, flagged
+    assert report["qa"]["flagged"] == 0

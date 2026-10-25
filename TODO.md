@@ -34,8 +34,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 2 — QA gate (GigaAM `rnnt`, WER + signal checks, retries, keep-best,
     `--qa`), kill-and-restart resume test, stage timings and parallel encoding, `.srt`
     subtitles and `report.md`, full-novel T0 run;
-  - [ ] step 3 — GPU hybrid (Silero → Chatterbox VC, Chatterbox TTS for Latin words),
-    FR-24 Latin-span stage, T1 run;
+  - [x] step 3a — FR-24 Latin-span stage (lexicon, acronyms, homoglyphs, espeak-ng
+    transliteration on T0, `foreign_spans` in the report);
+  - [ ] step 3b — GPU hybrid (Silero → Chatterbox VC, Chatterbox TTS for Latin words),
+    T1 run;
   - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template.
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.

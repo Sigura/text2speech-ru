@@ -35,15 +35,20 @@ def profile(code: str | None) -> LanguageProfile | None:
     return profiles().get(code) if code else None
 
 
+def script_of(ch: str) -> str | None:
+    """ISO 15924 code of a letter's script, if it is one we tell apart."""
+    name = unicodedata.name(ch, "")
+    for prefix, script in _SCRIPTS.items():
+        if name.startswith(prefix):
+            return script
+    return None
+
+
 def dominant_script(text: str, sample: int = 20000) -> str | None:
     counts: Counter[str] = Counter()
     for ch in text[:sample]:
-        if ch.isalpha():
-            name = unicodedata.name(ch, "")
-            for prefix, script in _SCRIPTS.items():
-                if name.startswith(prefix):
-                    counts[script] += 1
-                    break
+        if ch.isalpha() and (script := script_of(ch)) is not None:
+            counts[script] += 1
     return counts.most_common(1)[0][0] if counts else None
 
 

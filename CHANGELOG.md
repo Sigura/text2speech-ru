@@ -107,6 +107,14 @@ All notable changes to this project are documented here. The format follows
 - Test fixtures: the `sine` backend injects faults (`T2A_SINE_FAULT`) and has a
   `sine-echo` ASR; a kill-and-restart resume test; `tests/e2e/test_novel.py::test_t0`
   renders the full «Капитанская дочка» (`tests/fixtures/fetch_novel.py`) on 4 cores.
+- M2 step 3a — Latin-script words in Russian text (FR-24): the core tags foreign-script
+  spans; the `ru` pack fixes Latin look-alike letters in Cyrillic words, reads brands
+  and terms from the lexicon (Russian endings after `'` or `-` attach: `iPhone'а`),
+  spells acronyms (`HTTP` → «эйчтитипи́») and transliterates the rest through
+  `espeak-ng` English IPA. Every span and how it was read is listed in `report.json`
+  (`foreign_spans`) and `report.md`; segments carry `spans` in `segments.jsonl`
+  (golden manifests regenerated). The QA gate does not score acronym or transliterated
+  readings that GigaAM did not write at all and lists them as `unverified`.
 
 ### Changed
 

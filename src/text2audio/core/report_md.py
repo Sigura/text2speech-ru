@@ -73,6 +73,13 @@ def render(report: dict[str, Any]) -> str:
                 for f in flagged[:MAX_ROWS]
             ]
             out += _more(flagged)
+        unverified = qa.get("unverified", [])
+        if unverified:
+            out += ["", "Words read from Latin script that the ASR did not write (not scored):", ""]
+            out += [
+                f"- {u['segment']}: {_cell(' '.join(u['words']))}" for u in unverified[:MAX_ROWS]
+            ]
+            out += _more(unverified)
     timings = report.get("timings_s", {})
     if timings:
         out += ["", "## Time per stage", "", "| Stage | Time |", "|---|---|"]
@@ -82,6 +89,16 @@ def render(report: dict[str, Any]) -> str:
         out += ["", "## Uncertain normalization", ""]
         out += [f"- {u['segment']}: `{_cell(u['span'])}`" for u in uncertain[:MAX_ROWS]]
         out += _more(uncertain)
+    spans = report.get("foreign_spans", [])
+    if spans:
+        out += ["", "## Foreign-script spans", "", "| Segment | Span | Resolution | Reading |"]
+        out += ["|---|---|---|---|"]
+        out += [
+            f"| {s['segment']} | {_cell(s['text'])} | {s['resolution']}"
+            f" | {_cell(s['reading'] or '')} |"
+            for s in spans[:MAX_ROWS]
+        ]
+        out += _more(spans)
     warnings = report.get("warnings", []) + [
         {"segment": f["segment"], "warning": f["error"]} for f in seg.get("failures", [])
     ]

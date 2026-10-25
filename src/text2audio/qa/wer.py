@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 _WORD = re.compile(r"[^\W_]+")
@@ -27,6 +28,35 @@ def fold(text: str, letters: Mapping[str, str] | None = None) -> list[str]:
     for src, dst in (letters or {}).items():
         text = text.replace(src, dst)
     return _WORD.findall(text)
+
+
+def drop_unheard(
+    reference: str,
+    hypothesis: str,
+    optional: Iterable[str],
+    letters: Mapping[str, str] | None = None,
+) -> tuple[str, list[str]]:
+    """The reference without the `optional` words that ASR did not write at all.
+
+    For words the ASR cannot spell (FR-24 acronym and English readings in Russian):
+    when the hypothesis lacks the exact word it is unverified rather than an error, and
+    whatever ASR wrote instead still counts as insertions. Returns the folded reference
+    and the dropped words.
+    """
+    ref, heard = fold(reference, letters), Counter(fold(hypothesis, letters))
+    allowed = Counter(w for text in optional for w in fold(text, letters))
+    kept: list[str] = []
+    dropped: list[str] = []
+    for w in ref:
+        if heard[w]:
+            heard[w] -= 1
+            kept.append(w)
+        elif allowed[w]:
+            allowed[w] -= 1
+            dropped.append(w)
+        else:
+            kept.append(w)
+    return " ".join(kept), dropped
 
 
 def _distance(a: list[str] | str, b: list[str] | str) -> int:

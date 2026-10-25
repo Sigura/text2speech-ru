@@ -221,3 +221,25 @@ def test_missing_language_pack(book: Path, tmp_path: Path) -> None:
     cfg = load_config([], {"synthesis": {"language": "xx"}})
     with pytest.raises(SynthesisError, match="no language pack"):
         api.synthesize(book, config=cfg, store=tmp_path / "store")
+
+
+@pytest.mark.skipif(shutil.which("espeak-ng") is None, reason="needs espeak-ng")
+def test_foreign_spans_resolved_and_reported(tmp_path: Path) -> None:
+    # FR-24: no Latin word reaches the backend, and report.json lists every span.
+    [converted] = api.convert([FIXTURE.parent / "codeswitch.md"], tmp_path / "out")
+    assert converted.folder is not None
+    report = run(converted.folder, tmp_path / "store").report
+    segs = [
+        json.loads(x)
+        for x in (converted.folder / "_work/segments.jsonl").read_text("utf-8").splitlines()
+    ]
+    assert not any(ch.isascii() and ch.isalpha() for s in segs for ch in s["text_norm"])
+    how = {s["text"]: s["resolution"] for s in report["foreign_spans"]}
+    assert how["Python"] == how["iPhone"] == how["Wi-Fi"] == "lexicon"
+    assert how["HTTP"] == how["TCP"] == "acronym"
+    assert how["сoбака"] == "homoglyph"
+    assert how["Docker"] == how["It's not my problem"] == how["party"] == "transliterated"
+    assert how["NASA"] == how["Jira"] == "lexicon"
+    assert "unresolved" not in how.values()
+    assert len(report["foreign_spans"]) == 21
+    assert "## Foreign-script spans" in (converted.folder / "report.md").read_text("utf-8")
