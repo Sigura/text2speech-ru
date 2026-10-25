@@ -13,6 +13,8 @@ ast-serialize==0.13.1
     # via mypy
 cfgv==3.5.0
     # via pre-commit
+charset-normalizer==3.5.2
+    # via text2audio
 click==8.5.0
     # via huggingface-hub
 colorama==0.4.6 ; sys_platform == 'win32'
@@ -22,6 +24,8 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   typer
 coverage==7.17.0
     # via pytest-cov
+defusedxml==0.7.1
+    # via text2audio
 distlib==0.4.4
     # via virtualenv
 filelock==4.2.4
@@ -54,7 +58,12 @@ iniconfig==2.3.1
 librt==0.16.0 ; platform_python_implementation != 'PyPy'
     # via mypy
 markdown-it-py==4.2.0
-    # via rich
+    # via
+    #   mdit-py-plugins
+    #   rich
+    #   text2audio
+mdit-py-plugins==0.6.1
+    # via text2audio
 mdurl==0.1.2
     # via markdown-it-py
 mypy==2.4.0
@@ -86,6 +95,8 @@ pygments==2.21.0
     # via
     #   pytest
     #   rich
+pysbd==0.3.4
+    # via text2audio
 pytest==9.1.1
     # via
     #   pytest-cov
@@ -111,6 +122,7 @@ truststore==0.10.5 ; sys_platform != 'emscripten'
     #   httpx2
 typer==0.27.3
     # via text2audio
+types-defusedxml==0.7.0.20260504
 typing-extensions==4.16.0
     # via
     #   anyio

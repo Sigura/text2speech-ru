@@ -10,6 +10,11 @@ dependencies = [
     "platformdirs>=4.2",
     # Imported lazily, only by `text2audio models pull` (the sole network path, §6.10).
     "huggingface-hub>=0.24",
+    "defusedxml>=0.7",
+    "markdown-it-py>=3",
+    "mdit-py-plugins>=0.4",
+    "charset-normalizer>=3.3",
+    "pysbd>=0.3.4",
 ]
 
 [project.scripts]
@@ -24,6 +29,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pre-commit>=3.8",
+    "types-defusedxml>=0.7.0.20260504",
 ]
 
 [tool.uv.workspace]

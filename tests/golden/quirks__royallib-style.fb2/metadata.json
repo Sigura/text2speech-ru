@@ -1,0 +1,33 @@
+{
+  "title": "Станция",
+  "authors": [
+    "Иван Тестов"
+  ],
+  "language": "ru",
+  "series": null,
+  "series_index": null,
+  "genres": [
+    "sf"
+  ],
+  "translators": [
+    "П. Переводчиков"
+  ],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "source": {
+    "name": "royallib-style.fb2",
+    "format": "fb2",
+    "sha256": "81321bb2884252567b321aeef575cfcdaa50fcc4ac56e08f64abd92b9d8bed85",
+    "bytes": 1181
+  },
+  "reader": {
+    "name": "fb2"
+  },
+  "cover": null,
+  "warnings": [
+    "dropped elements outside the FB2 schema: <myfooter>×1, <myheader>×1"
+  ]
+}

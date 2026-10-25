@@ -12,6 +12,20 @@ from text2audio.models.store import ModelStore
 
 REV = "a" * 40
 RU_TEXT = "«Привет, мир», — сказал он. Ёлка стояла в углу."
+FIXTURES = Path(__file__).parent / "fixtures"
+GOLDEN = Path(__file__).parent / "golden"
+
+
+def assert_golden(path: Path, actual: str) -> None:
+    """Compare with a golden file; `UPDATE_GOLDEN=1 pytest` rewrites it for review."""
+    import os
+
+    if os.environ.get("UPDATE_GOLDEN") == "1":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(actual, encoding="utf-8")
+        return
+    assert path.exists(), f"missing golden {path}; run UPDATE_GOLDEN=1 pytest"
+    assert actual == path.read_text(encoding="utf-8"), f"differs from golden {path}"
 
 
 @pytest.fixture

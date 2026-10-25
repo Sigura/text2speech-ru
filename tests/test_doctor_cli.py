@@ -102,6 +102,6 @@ def test_cli_resources_json() -> None:
 
 
 def test_planned_commands_explain_their_milestone() -> None:
-    result = runner.invoke(app, ["convert", "Война и мир.fb2"])
+    result = runner.invoke(app, ["synthesize", "output/Война и мир"])
     assert result.exit_code == ExitCode.USAGE
-    assert "M1" in result.output
+    assert "M2" in result.output

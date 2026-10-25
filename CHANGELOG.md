@@ -31,6 +31,12 @@ All notable changes to this project are documented here. The format follows
 - `models.lock` supports `url` assets (content-addressed) and pins the Russian
   assets found by the `ru-smoke` spike (Silero v5.6, Piper irina, RUAccent, GigaAM-v3).
 - `spikes/ru-smoke`: offline Russian smoke test and findings.
+- `text2audio convert` (M1, FR-01–03, FR-05, FR-08, FR-21): FB2 / `.fb2.zip` → book
+  folder with the editable `<book>.md`, `_work/source.*`, `book.converted.md`,
+  `metadata.json` and the embedded cover; detection by content; resume, name clashes,
+  batch folders, `--reconvert` that never overwrites an edited `<book>.md`. Library
+  banners outside the FB2 schema are dropped, `* * *` becomes a scene break, a lone
+  wrapper section is unwrapped. Safe input: defusedxml, ZIP limits.
 - `spikes/ru-polish`: two-stage synthesis spike (enhancement, Chatterbox VC, Chatterbox
   Multilingual TTS) and Russian text with English terms; SPEC.md 1.5-M0 records the
   hybrid Russian T1 pipeline, 1.6-M0 adds FR-24 (foreign-script spans) and the `xenia`

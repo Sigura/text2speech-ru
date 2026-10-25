@@ -1,0 +1,33 @@
+{
+  "title": "Капитанская дочка",
+  "authors": [
+    "Александр Сергеевич Пушкин"
+  ],
+  "language": "ru",
+  "series": "Повести и романы",
+  "series_index": 7,
+  "genres": [
+    "prose_rus_classic"
+  ],
+  "translators": [],
+  "annotation": "Исторический роман о пугачевском восстании.",
+  "date": "1836-01-01",
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "source": {
+    "name": "kapitanskaya-dochka.fb2.zip",
+    "format": "fb2.zip",
+    "sha256": "ed9d6a75a62253fdb8d20bcca20bb8440e48356952dc6aa37c09ba27b8b9fb3b",
+    "bytes": 1934
+  },
+  "reader": {
+    "name": "fb2"
+  },
+  "cover": {
+    "file": "cover.png",
+    "origin": "embedded",
+    "type": "image/png"
+  },
+  "warnings": []
+}

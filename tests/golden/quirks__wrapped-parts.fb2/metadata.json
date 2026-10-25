@@ -1,0 +1,29 @@
+{
+  "title": "Книга в обёртке",
+  "authors": [
+    "Анна Обёрткина"
+  ],
+  "language": "ru",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "source": {
+    "name": "wrapped-parts.fb2",
+    "format": "fb2",
+    "sha256": "b6d8669312cf844e10e1f199f954f92474d5b41c9e942e54a657bd5b241ce19d",
+    "bytes": 945
+  },
+  "reader": {
+    "name": "fb2"
+  },
+  "cover": null,
+  "warnings": [
+    "unwrapped the single top-level section «Анна Обёрткина. КНИГА В ОБЁРТКЕ, ИЛИ РОМАН»"
+  ]
+}

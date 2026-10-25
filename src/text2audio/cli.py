@@ -169,8 +169,52 @@ def models_pull(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None
     typer.echo(f"{len(fetched)} file(s) downloaded")
 
 
+@app.command()
+def convert(
+    inputs: Annotated[
+        list[Path], typer.Argument(help="Book files or folders (with --reconvert: book folders).")
+    ],
+    output: Annotated[
+        Path | None, typer.Option("-o", "--output", help="Output root (default ./output).")
+    ] = None,
+    name: Annotated[str | None, typer.Option("--name", help="Book folder name.")] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Reuse a clashing folder name.")
+    ] = False,
+    reconvert: Annotated[
+        bool, typer.Option("--reconvert", help="Convert the stored source of book folders again.")
+    ] = False,
+) -> None:
+    """Convert books to editable Markdown, one folder per book."""
+    from text2audio import api
+
+    try:
+        results = api.convert(inputs, output, name=name, overwrite=overwrite, reconvert=reconvert)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.USAGE) from exc
+    for r in results:
+        if r.status == "failed":
+            typer.echo(f"FAILED {r.input}: {r.error}", err=True)
+            continue
+        note = {
+            "converted": "",
+            "unchanged": " (unchanged)",
+            "kept-edits": " (your edits kept; new text in this file)",
+        }[r.status]
+        typer.echo(f"{r.markdown}{note} — {r.format}, {r.chapters} chapter(s)")
+        for w in r.warnings:
+            typer.echo(f"  warning: {w}")
+    failed = [r for r in results if r.status == "failed"]
+    if len(results) > 1:
+        typer.echo(f"{len(results) - len(failed)} of {len(results)} book(s) converted")
+    if any(r.internal for r in failed):
+        raise typer.Exit(ExitCode.INTERNAL)
+    if failed or not results:
+        raise typer.Exit(ExitCode.INPUT)
+
+
 _PLANNED = {
-    "convert": "M1",
     "synthesize": "M2",
     "run": "M2",
     "preview": "M2",

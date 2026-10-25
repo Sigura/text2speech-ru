@@ -8,6 +8,8 @@ from text2audio import __version__
 from text2audio.core import resources as res
 from text2audio.core.config import Config, load_config
 from text2audio.core.contracts import Capabilities, ModelAsset, Tier
+from text2audio.core.convert import ConvertResult
+from text2audio.core.convert import convert as _convert
 from text2audio.core.doctor import DoctorReport, run_doctor
 from text2audio.core.plugins import Discovery, discover
 from text2audio.models.lock import load_lock
@@ -43,6 +45,24 @@ def resources(
 
 def plugins() -> Discovery:
     return discover()
+
+
+def convert(
+    inputs: list[Path],
+    output_root: Path | None = None,
+    *,
+    name: str | None = None,
+    overwrite: bool = False,
+    reconvert: bool = False,
+    config: Config | None = None,
+) -> list[ConvertResult]:
+    """Input files or directories → one book folder each (§5.2).
+
+    With `reconvert`, `inputs` are book folders and their stored source is read again;
+    an edited `<book>.md` is kept and the new text goes to `<book>.reconverted.md`.
+    """
+    root = output_root or (config or load_config()).output.root
+    return _convert(inputs, root, name=name, overwrite=overwrite, reconvert=reconvert)
 
 
 def models_list(

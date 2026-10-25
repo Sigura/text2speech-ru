@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE FictionBook [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0"><body><section><p>&xxe;</p></section></body></FictionBook>
