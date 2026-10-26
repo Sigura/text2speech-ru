@@ -155,6 +155,10 @@ All notable changes to this project are documented here. The format follows
   systems pass the WER floor, T0 stays Silero, and the T1 winner is decided by the
   owner's listening test. ADR-0007: "quality" means TTS quality judged by listening
   (SPEC 1.20-M2).
+- M2 step 4f — benchmark decided by the owner's blind listening: T1 stays the
+  hybrid (preferred to Silero, XTTS-v2 and ESpeech, tied with Qwen3-TTS); ESpeech and
+  XTTS-v2 dropped; Qwen3-TTS kept as an M3 candidate for dialogue and expressive
+  segments (SPEC 1.21-M2).
 
 ### Changed
 

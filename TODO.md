@@ -40,7 +40,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] T1 full-novel run (`tests/e2e/test_novel.py::test_t1`);
   - [x] QA limit: at most 100 segments checked per run, polish/QA in batches of ≤ 100
     (SPEC §6.9);
-  - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template:
+  - [x] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template:
     - [x] 4a — PDF compound hyphens (`ru` normalization);
     - [x] 4b — QA limit (100 per run) and polish/QA batches;
     - [x] 4c — covers: typographic, SD WebUI plugin, Opus-MT prompt translation;
@@ -48,8 +48,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
       embedded long side < 800 px → img2img at denoise 0.4, agreed 2026-10-26);
     - [x] 4d — `preview`;
     - [x] 4e — language-pack template (`scripts/new_lang.py`);
-    - [ ] 4f — benchmark: metrics done ([findings](spikes/ru-bench/FINDINGS.md));
-      winners after the owner's listening test (`spikes/ru-bench/out/listen/`);
+    - [x] 4f — benchmark ([findings](spikes/ru-bench/FINDINGS.md)): T0 Silero, T1 hybrid;
+      Qwen3-TTS → M3 candidate for dialogue/expressive segments;
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

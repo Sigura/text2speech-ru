@@ -6,12 +6,11 @@ three challengers, Qwen3-TTS 1.7B Base, ESpeech-TTS-1 SFT 256K (F5) and XTTS-v2.
 challenger is cloned from the `xenia` reference clip and runs as a spike environment,
 not as a plugin.
 
-**Status:** metrics only. "Quality" in the component priority (ADR-0007) means TTS
-quality: how natural the narration sounds, its intonation and stress. Only the blind
-listening test (protocol step 3: the owner, one female voice) measures that, and it
-is still open. So no winner is chosen here; §13.1 has the entry as *Proposed*. The
-numbers below come from ASR and timing. They show whether a system reads the words
-and whether it fits a tier. They do not rank how good it sounds.
+**Status:** decided (owner, 2026-10-26) after the blind listening test, see
+[Listening](#listening). "Quality" in the component priority (ADR-0007) means TTS
+quality: how natural the narration sounds, its intonation and stress. Only listening
+measures that. The metrics below come from ASR and timing. They show whether a system
+reads the words and whether it fits a tier. They do not rank how good it sounds.
 
 Set: 221 items (`set.tsv`, from `build_set.py`): homographs, ё, numbers, dialogue,
 ≥ 30 FR-24 sentences with Latin words and a poem, taken from the novel, the
@@ -102,9 +101,38 @@ Text stages (`ru` pack, whole set):
    number agreement after accusative nouns and in dates, ё in proper names (a lexicon
    or name list would fix most), and the 7 homograph misses.
 
-## Open
+## Listening
 
-- The listening results decide the T1 winner on quality: 40 blind A/B pairs (the
-  hybrid against each system) and 100 stress clips. Until then the defaults stay as
-  they are.
-- If a challenger wins on listening, it becomes a plugin in M3 or later, not here.
+Blind A/B, the owner alone, female `xenia` voice: 39 of the 40 pairs answered (each
+pairs the hybrid with one other system on 10 clips) and 13 of the 100 stress clips.
+Results come from `listen.py out/results-3.json`; the answers stay in the gitignored
+`out/`.
+
+| Hybrid against | Hybrid preferred | Other preferred | Tie |
+|---|---|---|---|
+| Silero | 6 | 3 | 1 |
+| XTTS-v2 | 6 | 3 | 0 |
+| ESpeech | 6 | 4 | 0 |
+| Qwen3-TTS | 5 | 5 | 0 |
+
+- Qwen3-TTS won dialogue (2–0), the poem and the number pair. It lost both homograph
+  and both Latin-word pairs. It got no stress marks, and its Latin words were not
+  routed to Chatterbox.
+- Wrong stress flagged in the pairs: hybrid 6/39, XTTS-v2 4/9, Qwen3-TTS 2/10, ESpeech
+  2/10, Silero 1/10. Wrong words flagged: Qwen3-TTS 4/10, ESpeech 3/10, hybrid 5/39,
+  XTTS-v2 1/9, Silero 0/10.
+- The 13 stress clips are too few to use, so stress accuracy stays the text measure
+  (RUAccent 56/63).
+- One listener with about 10 votes per system: these are clear preferences, not
+  statistics.
+
+## Decision (owner, 2026-10-26)
+
+1. **T0 = Silero `xenia`.**
+2. **T1 default = the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin
+   spans). It beats or ties every challenger and is preferred to plain Silero, so the
+   VC polish earns its cost.
+3. **ESpeech and XTTS-v2 are dropped.**
+4. **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments, where it won.
+   It is not a T1 replacement. It would need RUAccent stress marks, Latin spans routed
+   to Chatterbox, and speed work (RTF 2.5 on a 4090).

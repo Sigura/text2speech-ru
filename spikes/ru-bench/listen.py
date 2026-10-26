@@ -299,9 +299,10 @@ def unblind(results_path: Path) -> None:
     for p in key["pairs"]:
         other = p["b"] if p["a"] == BASE else p["a"]
         vote = answers.get(f"p{p['n']}")
-        if vote:
-            winner = {"A": p["a"], "B": p["b"], "=": None}[vote]
-            prefs[other]["same" if winner is None else "base" if winner == BASE else "other"] += 1
+        if not vote:
+            continue
+        winner = {"A": p["a"], "B": p["b"], "=": None}[vote]
+        prefs[other]["same" if winner is None else "base" if winner == BASE else "other"] += 1
         for side in "ab":
             system = p[side]
             flags[system]["clips"] += 1
