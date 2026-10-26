@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 1.12-M2 |
+| Document version | 1.13-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
-| Last updated | 2026-10-25 |
+| Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
@@ -35,6 +35,7 @@
 | 1.10-M2 | 2026-10-25 | M2 step 2: QA gate as built (§6.9) — GigaAM-v3 worker, WER **and** CER rule, signal checks, up to 3 attempts, exit code 4; QA results in `render.jsonl` (§6.4.2); `.srt` per MP3 (§6.8) and `report.md` (§5.2); parallel part encoding and RUAccent workers; T0 numbers (§9). |
 | 1.11-M2 | 2026-10-25 | M2 step 3a: FR-24 Latin-script spans as built (§6.6.5) — acronyms spelled as one word («эйчтитипи́»), T0 transliteration through `espeak-ng` English IPA → Cyrillic; `report.json` `foreign_spans`. **Decision:** FR-24 acceptance is "no segment flagged by the QA gate and no unresolved span", not WER 0 — GigaAM-v3 cannot write English-sounding words; the QA gate lists such readings as `unverified` instead of scoring them (§6.9, §13.1). |
 | 1.12-M2 | 2026-10-26 | M2 step 3b: the Russian T1 hybrid as built (§6.6.6) — `chatterbox` backend + polisher plugin, per-segment routes, fast-tier audio reused as VC source, `polish` stage, unpolished fallback on the last QA attempt; reference clip in the `ru` pack; T1 reference limits (§9, §13.1). |
+| 1.13-M2 | 2026-10-26 | T1 `ru` measured on the full novel (§9, §13.1); owner's QA limit — at most 100 segments checked per run, polish/QA in batches of ≤ 100 — recorded as proposed (§6.9). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -934,6 +935,12 @@ mode`) for speed, and sampled (`--qa sample=10%`) on slow hardware; the sample i
 chosen by segment hash, so reruns check the same segments. The QA gate cannot hear a
 wrong stress (§6.6.6); that remains a listening task.
 
+**Limit of 100 segments** (owner, 2026-10-26; not built yet): the QA gate checks at
+most **100 segments per run**, a sample chosen by segment hash like `sample=N%`, and
+the polish and QA stages work in **batches of ≤ 100 segments**. Open: whether the cap
+is per run or per batch, and how the M2 "flagged ≤ 5 %" criterion (§11) is measured
+over a sample (§13.1).
+
 ### 6.10 Offline Operation Contract
 
 **Installation**
@@ -1159,6 +1166,18 @@ Targets are provisional and will be validated on reference machines in M2.
 CPU, ~63 % of the run), assembly 4 m 04 s. QA: mean WER 0.027, 7 flagged (0.6 %), all
 short archaic epigraphs and verse lines.
 
+**Measured, T1 `ru`** (M2 step 3, `tests/e2e/test_novel.py::test_t1`; 1 GPU, 8 cores,
+16 GB): the same novel, 1246 segments, 3 h 53 m of audio in 49 m 23 s wall —
+**`rtf_wall` 0.21**; stress 1 m 09 s, synthesis 9 m 13 s (Silero on 2 CPU workers, RTF
+0.08), polish 31 m 20 s (4 Chatterbox workers on one GPU, RTF 0.56 per worker, ~63 %
+of the run), QA 4 m 12 s (GigaAM, 2 GPU workers), assembly 3 m 27 s. Routes: 1240
+segments Silero → VC, 6 Chatterbox TTS (Latin-script spans). QA: mean WER 0.041,
+13 retried, 6 flagged (0.5 %, archaic verse lines again), 5 kept unpolished
+(`qa.unpolished`), 2 `unverified`. The GPU was an RTX 3090 Ti shared with another
+job at ~100 % utilization (the test takes the GPU with most free memory at start), so
+polish ran at about twice the per-worker RTF measured alone on a 4090 (0.24); an
+uncontended run should be faster.
+
 ---
 
 ### 9.1 Resource Planning
@@ -1317,6 +1336,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | Russian T1 hybrid as built (§6.6.6): one `chatterbox` plugin is both the foreign backend and the polisher, one worker per GPU slot (VC on the TTS model's S3Gen, 4.3 GB VRAM peak); a polished segment's source has its fast-tier hash, so T0 audio is reused; attempt 3 of a polished segment is its unpolished source. | Decided |
 | 2026-10-26 | The Chatterbox narrator reference (15 s Silero `xenia` clip, 1.8 MB) is committed to the `ru` pack (`voices/ref-xenia.wav`), not listed in `models.lock`, which lists downloadable assets only; segment hashes count reference clips by content. | Decided |
 | 2026-10-26 | T1 reference limits for measurements: one GPU (the one with most free memory), 8 CPU cores near it, 16 GB RAM (`tests/e2e/test_novel.py::test_t1`). | Decided |
+| 2026-10-26 | T1 confirmed for `ru` (M2 exit criterion, §9): full «Капитанская дочка» on one shared RTX 3090 Ti / 8 cores / 16 GB, hybrid route, `rtf_wall` 0.21 (target ≤ 0.5), 0.5 % flagged (target ≤ 5 %), 5 segments kept unpolished. Chatterbox VC is the largest stage (~63 %). | Decided |
+| 2026-10-26 | **QA limit of 100 segments** (owner): the QA gate (GigaAM) checks at most 100 segments per run, a hash-chosen sample; polish and QA process work in batches of ≤ 100 segments (§6.9). Per-run vs per-batch cap and the effect on the M2 flagged-share criterion are still to be settled. | Proposed |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
 | 2026-10-25 | **PDF default reader: pymupdf4llm 1.28.2 with its layout model** (benchmark `spikes/pdf-readers`: no header/page-number leaks, 0.4 s/page CPU, models inside the wheel). Pinned below PyMuPDF 2.0, which absorbed it. Docling: possible plugin; Marker 2.x excluded (vLLM Docker server). The layout model's `onnxruntime` runs in the core process: a reader, CPU-only, no downloads. | Decided |
 | 2026-10-25 | Readers parse XML with defusedxml over the stdlib parser and an HTML-entity pass for XHTML; lxml is not used. EPUB chapters come from the table of contents. FB2 elements outside the schema are dropped and reported. | Decided |
