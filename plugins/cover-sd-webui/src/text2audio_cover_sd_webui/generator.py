@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import os
 import signal
@@ -28,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import platformdirs
+from PIL import Image
 
 from text2audio.core import resources as res
 from text2audio.core.config import CoverConfig, CoverSdConfig
@@ -37,6 +39,7 @@ from text2audio.core.offline import OFFLINE_VARS
 
 VRAM_MB = {"sdxl": 10000, "sd1": 5000}
 SIZE = {"sdxl": 1024, "sd1": 512}  # SD 1.x draws at 512 and upscales ×2 (hires fix)
+REPAINT_SIZE = 1024  # long side of a repainted cover; the init picture fixes the layout
 HOST = "127.0.0.1"
 
 
@@ -133,8 +136,12 @@ class SdWebUI:
             size = sd.size or SIZE[kind]
             out = []
             for req in requests:
-                png = session.txt2img(req, size, sd.steps, hires=sd.size is None and kind == "sd1")
-                final = size * 2 if sd.size is None and kind == "sd1" else size
+                if req.init is not None:
+                    png, final = session.img2img(req, REPAINT_SIZE, sd.steps)
+                else:
+                    hires = sd.size is None and kind == "sd1"
+                    png = session.txt2img(req, size, sd.steps, hires=hires)
+                    final = size * 2 if hires else size
                 out.append(
                     CoverImage(
                         key=req.key,
@@ -262,6 +269,35 @@ class Session:
         sha = entry.get("sha256") or _sha256(path)
         name = entry.get("model_name") or loaded.split(" [")[0]
         return {"checkpoint": name, "checkpoint_sha256": sha}
+
+    def img2img(self, req: CoverRequest, long_side: int, steps: int) -> tuple[bytes, int]:
+        """Repaint `req.init` at its aspect ratio; returns the PNG and its long side."""
+        assert req.init is not None
+        with Image.open(io.BytesIO(req.init)) as src:
+            w, h = src.size
+        scale = long_side / max(w, h)
+        width, height = (max(64, round(x * scale / 8) * 8) for x in (w, h))
+        body: dict[str, Any] = {
+            "init_images": [base64.b64encode(req.init).decode()],
+            "prompt": req.prompt,
+            "negative_prompt": req.negative_prompt,
+            "seed": req.seed,
+            "steps": steps,
+            "width": width,
+            "height": height,
+            "denoising_strength": req.denoise,
+            "resize_mode": 0,
+            "cfg_scale": 7,
+            "sampler_name": "DPM++ 2M",
+            "scheduler": "Karras",
+            "send_images": True,
+            "save_images": False,
+        }
+        reply = self._request("/sdapi/v1/img2img", body, timeout=600)
+        images = reply.get("images") or []
+        if not images:
+            raise CoverError(f"img2img returned no image for {req.key}")
+        return base64.b64decode(images[0]), max(width, height)
 
     def txt2img(self, req: CoverRequest, size: int, steps: int, hires: bool) -> bytes:
         body: dict[str, Any] = {

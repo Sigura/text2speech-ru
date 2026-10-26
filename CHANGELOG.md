@@ -143,6 +143,9 @@ All notable changes to this project are documented here. The format follows
 - M2 step 4d — `text2audio preview <book> [--chapter N] [--seconds 30]` (API
   `api.preview`): a short MP3 of a chapter's opening in `_work/preview/`, no QA; its
   segments are reused by `run` (SPEC 1.17-M2).
+- M2 step 4c+ — small embedded covers (< 800 px) are repainted with img2img from
+  WD14-tagger tags (plugin `tagger-wd14`, ONNX, pinned in `models.lock`; group
+  `taggers`); embedded placeholders under 64 px are replaced (SPEC 1.18-M2).
 
 ### Changed
 

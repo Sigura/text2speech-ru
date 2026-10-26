@@ -1,7 +1,8 @@
 """Cover choice for converted books (§6.8.2, FR-23, ADR-0009).
 
-    embedded (convert_one) → generated (a `text2audio.covers` plugin, one session for
-    the whole batch) → typographic (always works)
+    embedded (convert_one; repainted with img2img from WD14 tags when it is small)
+    → generated (a `text2audio.covers` plugin, one session for the whole batch)
+    → typographic (always works)
 
 A cover is cached in `_work/cover.jpg` under a key of everything that shapes it, so a
 re-conversion keeps it. A typographic cover that stood in for a generated one is
@@ -11,9 +12,14 @@ replaced once the generator can run.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
+import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 from text2audio.core.config import Config
 from text2audio.core.contracts import CoverImage, CoverRequest
@@ -30,6 +36,7 @@ from text2audio.workers.backend import Worker
 from text2audio.workers.process import WorkerError
 
 FILE = "cover.jpg"
+PLACEHOLDER_PX = 64  # an embedded "cover" smaller than this is a placeholder, not a picture
 FONT = "DejaVu Serif 2.37"
 
 
@@ -86,11 +93,18 @@ def make_covers(
     mode = config.cover.mode
     generator, unavailable = _generator(config) if mode in ("auto", "generate") else (None, None)
     todo: list[_Book] = []
+    repaint: list[_Book] = []
     warnings: dict[str, list[str]] = {}
     for folder in folders:
         meta = folder.metadata() or {}
         current = meta.get("cover") or {}
+        if current.get("origin") == "embedded" and _long_side(folder, current) < PLACEHOLDER_PX:
+            current = {}  # replaced like a missing cover
         if current.get("origin") == "embedded":
+            small = _small(folder, meta, config) if mode == "auto" else None
+            # A cached repaint is reused; without a generator the embedded cover stays.
+            if small is not None and not _reuse_repaint(small) and generator is not None:
+                repaint.append(small)
             continue
         if mode == "embedded-only":
             if current:
@@ -103,13 +117,74 @@ def make_covers(
         if cached and (current.get("origin") == "generated" or generator is None):
             continue
         todo.append(book)
-    if generator is not None and todo:
-        _generated(generator, todo, config, store)
+    if generator is not None and (todo or repaint):
+        _generated(generator, todo, repaint, config, store)
     for book in todo:
         if (book.meta.get("cover") or {}).get("key") != book.key:
             _typographic(book, unavailable)
+    for book in todo + repaint:
         warnings[str(book.folder.path)] = book.warnings
     return warnings
+
+
+def _long_side(folder: BookFolder, cover: dict[str, Any]) -> int:
+    path = folder.work / str(cover.get("file", ""))
+    if not path.is_file():
+        return 0
+    with Image.open(path) as img:
+        return max(img.size)
+
+
+def _small(folder: BookFolder, meta: dict[str, Any], config: Config) -> _Book | None:
+    """A book whose embedded cover is too small for a player, keyed for its repaint."""
+    limit = config.cover.repaint_below
+    path = folder.work / str((meta.get("cover") or {}).get("file", ""))
+    if not limit or not path.is_file():
+        return None
+    data = path.read_bytes()
+    with Image.open(io.BytesIO(data)) as img:
+        if max(img.size) >= limit:
+            return None
+    shape = {
+        "image": hashlib.sha256(data).hexdigest(),
+        "denoise": config.cover.repaint_denoise,
+        "tagger": config.cover.tagger,
+        "sd": config.cover.sd.model_dump(mode="json", exclude={"timeout_s"}),
+    }
+    key = hashlib.sha256(json.dumps(shape, sort_keys=True).encode()).hexdigest()[:16]
+    return _Book(folder, meta, key)
+
+
+def _repainted(book: _Book) -> tuple[Path, Path]:
+    work = book.folder.work
+    return work / f"repainted-{book.key}.jpg", work / f"repainted-{book.key}.json"
+
+
+def _reuse_repaint(book: _Book) -> bool:
+    image, entry = _repainted(book)
+    if not (image.is_file() and entry.is_file()):
+        return False
+    _apply_repaint(book, json.loads(entry.read_text(encoding="utf-8")))
+    return True
+
+
+def _apply_repaint(book: _Book, entry: dict[str, Any]) -> None:
+    """The repainted picture becomes `cover.jpg`; the embedded one stays as the original."""
+    work = book.folder.work
+    embedded = work / str(book.meta["cover"]["file"])
+    original = work / f"cover-original{embedded.suffix}"
+    if embedded.is_file():
+        embedded.replace(original)
+    shutil.copyfile(_repainted(book)[0], work / FILE)
+    book.meta["cover"] = {
+        "file": FILE,
+        "type": "image/jpeg",
+        "key": book.key,
+        "origin": "repainted",
+        "original": original.name,
+        **entry,
+    }
+    write_json(book.folder.metadata_path, book.meta)
 
 
 def _generator(config: Config) -> tuple[Any, str | None]:
@@ -137,9 +212,26 @@ def _typographic(book: _Book, note: str | None) -> None:
     _save(book, entry, typographic.render(book.title, book.author))
 
 
-def _generated(generator: Any, books: list[_Book], config: Config, store: ModelStore) -> None:
-    english = _translate(books, store)
+def _generated(
+    generator: Any, books: list[_Book], repaint: list[_Book], config: Config, store: ModelStore
+) -> None:
+    english = _translate(books, store) if books else {}
     requests: dict[str, tuple[_Book, CoverRequest, bool]] = {}
+    tags = _tag(repaint, config, store) if repaint else {}
+    for book in repaint:
+        if id(book) not in tags:
+            continue
+        text, negative = prompt.repaint(tags[id(book)])
+        init = (book.folder.work / str(book.meta["cover"]["file"])).read_bytes()
+        req = CoverRequest(
+            key=book.key,
+            prompt=text,
+            negative_prompt=negative,
+            seed=prompt.seed(book.key),
+            init=init,
+            denoise=config.cover.repaint_denoise,
+        )
+        requests[book.key] = (book, req, False)
     for book in books:
         title, blurb = english.get(id(book), (None, None))
         text, negative = prompt.build(
@@ -154,7 +246,7 @@ def _generated(generator: Any, books: list[_Book], config: Config, store: ModelS
             [r for _, r, _ in requests.values()], config.cover
         )
     except CoverError as exc:
-        for book in books:
+        for book, _, _ in requests.values():
             book.warnings.append(f"cover not generated: {exc}")
         return
     done = {img.key: img for img in images}
@@ -164,15 +256,47 @@ def _generated(generator: Any, books: list[_Book], config: Config, store: ModelS
             book.warnings.append("cover not generated: the generator returned no image")
             continue
         entry = {
-            "origin": "generated",
             "generator": generator.name,
             "prompt": req.prompt,
             "negative_prompt": req.negative_prompt,
             "seed": req.seed,
-            "translated": translated,
             **img.info,
         }
+        if req.init is not None:
+            image, sidecar = _repainted(book)
+            with Image.open(io.BytesIO(img.png)) as pic:
+                typographic.save(pic.convert("RGB"), image)
+            entry["denoise"] = req.denoise
+            sidecar.write_text(json.dumps(entry, ensure_ascii=False), encoding="utf-8")
+            _apply_repaint(book, entry)
+            continue
+        entry |= {"origin": "generated", "translated": translated}
         _save(book, entry, typographic.overlay(img.png, book.title, book.author))
+
+
+def _tag(books: list[_Book], config: Config, store: ModelStore) -> dict[int, list[str]]:
+    """WD14 tags of each book's embedded cover (offline tagger component)."""
+    name = config.cover.tagger
+    found = discover(("taggers",)).get("taggers", name)
+    if found is None:
+        for book in books:
+            book.warnings.append(f"cover not repainted: image tagger {name!r} is not installed")
+        return {}
+    paths = [str(b.folder.work / str(b.meta["cover"]["file"])) for b in books]
+    caps = found.capabilities
+    [slot] = cpu_slots(caps.threads, caps.ram_mb, 1)
+    try:
+        worker = Worker(found, store.root, slot)
+        try:
+            worker.load(assets=store.payload(assets_for(found.component, load_lock())))
+            tags = worker.call("tag", paths=paths)["tags"]
+        finally:
+            worker.close()
+    except (WorkerError, EnvMissing) as exc:
+        for book in books:
+            book.warnings.append(f"cover not repainted: {exc}")
+        return {}
+    return {id(b): [str(t) for t in found_tags] for b, found_tags in zip(books, tags, strict=True)}
 
 
 def _translate(books: list[_Book], store: ModelStore) -> dict[int, tuple[str | None, str | None]]:

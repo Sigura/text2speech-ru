@@ -276,6 +276,9 @@ class CoverRequest(BaseModel):
     prompt: str
     negative_prompt: str = ""
     seed: int
+    # Repaint (img2img) of this picture instead of drawing from scratch.
+    init: bytes | None = None
+    denoise: float = 0.4
 
 
 class CoverImage(BaseModel):

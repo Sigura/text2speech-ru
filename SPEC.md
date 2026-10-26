@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.17-M2 |
+| Document version | 1.18-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -40,6 +40,7 @@
 | 1.15-M2 | 2026-10-26 | M2 step 4b — **Decision:** QA limit as built: at most 100 segments checked per run (`[qa] max_segments`, `--qa-max`), the first in hash order; polish and QA run in batches of ≤ 100 segments on worker pools kept loaded; the M2 flagged-share criterion is measured over the checked sample (§6.9, §11, §13.1). |
 | 1.16-M2 | 2026-10-26 | M2 step 4c — covers as built (§6.8.2): typographic covers with bundled DejaVu Serif; `sd-webui` generator on a private WebUI instance (own data dir, the WebUI's default checkpoint); **Decision:** cover prompts of non-English books are translated offline by an Opus-MT `translators` component pinned in `models.lock` (closes the open §13.1 row); `[cover]` / `[cover.sd]` config; `doctor` covers line. |
 | 1.17-M2 | 2026-10-26 | M2 step 4d — `preview` as built (§6.11, §13.1). |
+| 1.18-M2 | 2026-10-26 | M2 step 4c+ — **Decision (owner):** a small embedded cover (long side < 800 px) is repainted with img2img at denoise 0.4 from WD14-tagger tags (a `taggers` component, pinned in `models.lock`); an embedded image under 64 px is a placeholder and is replaced like a missing cover (§6.8.2, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -872,7 +873,17 @@ caches it in `_work/` with its origin in `metadata.json` (`cover`):
 
 1. **Embedded** — FB2 `<coverpage>` → `<binary>`; EPUB 3 manifest item with
    `properties="cover-image"`, else EPUB 2 `<meta name="cover">`, else the `guide`
-   cover reference; saved as `_work/cover.<ext>`.
+   cover reference; saved as `_work/cover.<ext>`. An image whose long side is under
+   64 px is a placeholder, not a cover, and is replaced like a missing one. In `auto`
+   mode an embedded cover whose long side is under `[cover] repaint_below` (800 px) is
+   **repainted** when the generator can run: the language-independent `taggers`
+   component (WD14 `wd-swinv2-tagger-v3`, ONNX on CPU in its own environment, pinned
+   in `models.lock`) tags it, explicit tags are dropped, and the generator redraws it
+   with img2img at `repaint_denoise` (0.4) at a long side of 1024 px, keeping its
+   aspect ratio and layout; no title is drawn on top (the original has one). The
+   result becomes `cover.jpg` (`origin: repainted`), the original stays as
+   `cover-original.<ext>`, and the repaint is cached by the image's hash and the
+   settings (`_work/repainted-<key>.jpg`).
 2. **Generated** by a cover plugin (`text2audio.covers` entry points), when one is
    installed and can run now. The first plugin, `sd-webui`, drives a local
    [AUTOMATIC1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
@@ -915,6 +926,7 @@ an outline in the opposite extreme. A cover is cached under a key of everything 
 shapes it (mode, generator settings, title, authors, genres, annotation or opening
 words, date, language); a typographic cover that stood in for a generated one is
 replaced as soon as the generator can run. Settings:
+`[cover] repaint_below`, `repaint_denoise`, `tagger`,
 `[cover] mode = "auto" | "embedded-only" | "generate" | "typographic"` (auto:
 embedded → generated → typographic; generate: generated even when one is embedded;
 typographic: always drawn), `generator`, `[cover.sd] dir`, `python`, `checkpoint`,
@@ -1095,6 +1107,8 @@ threads_per_worker = 4
 [cover]
 mode = "auto"                 # auto | embedded-only | generate | typographic
 generator = "sd-webui"
+repaint_below = 800           # repaint smaller embedded covers (img2img); 0 = never
+repaint_denoise = 0.4
 
 [cover.sd]                    # off until dir is set
 dir        = "/path/to/stable-diffusion-webui"
@@ -1375,6 +1389,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | Prompt language for generated covers (owner): genre keywords **plus** the title and a description translated offline by a per-language `translators` component — Helsinki-NLP Opus-MT `ru-en` (Marian, CPU worker in its own environment, pinned in `models.lock`). The description is the annotation's first sentences, else the book's first 20 words. | Decided |
 | 2026-10-26 | Covers as built: typographic with bundled DejaVu Serif 2.37 (Pillow becomes a core dependency); the `sd-webui` instance uses a private `--data-dir`/working directory and hash cache so the shared WebUI checkout is never written; checkpoint = the WebUI's configured default unless `[cover.sd] checkpoint`; the title colour on generated covers is chosen by contrast. First real run: SD 1.x default checkpoint on a free RTX 4090, 87 s for start, model load, hashing and one 1024² cover. | Decided |
 | 2026-10-26 | `preview` renders through the normal stages and segment cache (no QA, no split, no report), so a sample costs no extra work in the later `run`; it picks segments by an estimated 14 characters per second before rendering. | Decided |
+| 2026-10-26 | **Small embedded covers are repainted** (owner): long side < 800 px → img2img at denoise 0.4 with a prompt from WD14-tagger tags (`wd-swinv2-tagger-v3`, ONNX, pinned); explicit tags are filtered (the tagger invents them for blank pictures) and `nsfw, nude` added to the negative prompt; an embedded image under 64 px is a placeholder and gets a generated or typographic cover instead. First real run: 30 s on a free RTX 4090. | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |

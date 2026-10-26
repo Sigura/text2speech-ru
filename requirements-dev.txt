@@ -10,6 +10,7 @@
     #   text2audio-g2p-ruaccent
     #   text2audio-lang-ru
     #   text2audio-mt-opus
+    #   text2audio-tagger-wd14
 -e ./plugins/asr-gigaam
 -e ./plugins/backend-chatterbox
 -e ./plugins/backend-silero
@@ -18,6 +19,7 @@
 -e ./plugins/g2p-ruaccent
 -e ./plugins/lang-ru
 -e ./plugins/mt-opus
+-e ./plugins/tagger-wd14
 annotated-doc==0.0.5
     # via typer
 annotated-types==0.8.0

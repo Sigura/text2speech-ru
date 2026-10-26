@@ -149,3 +149,15 @@ files = ["config.json", "generation_config.json", "pytorch_model.bin", "source.s
 "target.spm" = "16bebef1389a0b8ab452772c4e35b9e605e5713f8ac7baa71ca701394eaa086d"
 "tokenizer_config.json" = "8d826099b8c67179c83ab4ff94aff7ca7bf24ca14319cb0287b9a0b4c40b2a96"
 "vocab.json" = "33e95da3be3fa3b50169c4c46693ba2f29fbf4cb29d99044bd07d72d181fa1e9"
+
+# WD14 tagger v3 (SwinV2, ONNX): tags a small embedded cover for the img2img prompt that
+# repaints it (§6.8.2). CPU, onnxruntime; any language.
+[[asset]]
+repo = "SmilingWolf/wd-swinv2-tagger-v3"
+revision = "627aef95638667ddcaa3ac8ae625e88ea5b02f51"
+license = "Apache-2.0"
+component = "tagger:wd14"
+files = ["model.onnx", "selected_tags.csv"]
+[asset.sha256]
+"model.onnx" = "e6774bff34d43bd49f75a47db4ef217dce701c9847b546523eb85ff6dbba1db1"
+"selected_tags.csv" = "298633d94d0031d2081c0893f29c82eab7f0df00b08483ba8f29d1e979441217"

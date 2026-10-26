@@ -38,7 +38,7 @@ langs = [
     "text2audio-mt-opus",
 ]
 # Optional generators; covers fall back to typographic without them (§6.8.2).
-covers = ["text2audio-cover-sd-webui"]
+covers = ["text2audio-cover-sd-webui", "text2audio-tagger-wd14"]
 dev = [
     "text2audio-backend-sine",
     "pytest>=8",
@@ -66,6 +66,7 @@ text2audio-asr-gigaam = { workspace = true }
 text2audio-backend-chatterbox = { workspace = true }
 text2audio-mt-opus = { workspace = true }
 text2audio-cover-sd-webui = { workspace = true }
+text2audio-tagger-wd14 = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -21,6 +21,7 @@ GROUPS = (
     "polishers",
     "covers",
     "translators",
+    "taggers",
 )
 
 

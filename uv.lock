@@ -19,6 +19,7 @@ members = [
     "text2audio-g2p-ruaccent",
     "text2audio-lang-ru",
     "text2audio-mt-opus",
+    "text2audio-tagger-wd14",
 ]
 
 [[package]]
@@ -1831,6 +1832,7 @@ dependencies = [
 [package.dev-dependencies]
 covers = [
     { name = "text2audio-cover-sd-webui" },
+    { name = "text2audio-tagger-wd14" },
 ]
 dev = [
     { name = "mypy" },
@@ -1870,7 +1872,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-covers = [{ name = "text2audio-cover-sd-webui", editable = "plugins/cover-sd-webui" }]
+covers = [
+    { name = "text2audio-cover-sd-webui", editable = "plugins/cover-sd-webui" },
+    { name = "text2audio-tagger-wd14", editable = "plugins/tagger-wd14" },
+]
 dev = [
     { name = "mypy", specifier = ">=1.11" },
     { name = "pre-commit", specifier = ">=3.8" },
@@ -1979,6 +1984,17 @@ requires-dist = [
 name = "text2audio-mt-opus"
 version = "0.1.0"
 source = { editable = "plugins/mt-opus" }
+dependencies = [
+    { name = "text2audio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "text2audio", editable = "." }]
+
+[[package]]
+name = "text2audio-tagger-wd14"
+version = "0.1.0"
+source = { editable = "plugins/tagger-wd14" }
 dependencies = [
     { name = "text2audio" },
 ]

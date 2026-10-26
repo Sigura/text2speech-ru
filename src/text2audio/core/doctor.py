@@ -134,7 +134,7 @@ def run_doctor(
             "ok",
             f"languages {','.join(caps.languages)}; licenses: {', '.join(licenses)}",
         )
-    for group in ("backends", "g2p", "asr", "polishers", "translators"):
+    for group in ("backends", "g2p", "asr", "polishers", "translators", "taggers"):
         for name, plugin in sorted(plugins.plugins.get(group, {}).items()):
             penv = plugin_env(plugin)
             if penv is None:

@@ -1,0 +1,13 @@
+[project]
+name = "t2a-env-tagger-wd14"
+version = "0"
+description = "Worker environment of the WD14 tagger component (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "onnxruntime>=1.20",
+    "numpy>=2.0",
+    "pillow>=11",
+]
+
+[tool.uv]
+package = false

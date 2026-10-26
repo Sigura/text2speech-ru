@@ -65,8 +65,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        body.pop("init_images", None)
         with open(log + ".txt2img", "a") as f:
-            f.write(json.dumps(body) + "\n")
+            f.write(json.dumps({"path": self.path, **body}) + "\n")
         png = io.BytesIO()
         Image.new("RGB", (64, 48), (120, 30, 200)).save(png, "PNG")
         self.reply({"images": [base64.b64encode(png.getvalue()).decode()]})
@@ -166,7 +167,25 @@ def test_book_without_cover_gets_a_typographic_one(tmp_path: Path) -> None:
     assert again.folder == r.folder and path.stat().st_mtime_ns == stamp  # cached
 
 
-def test_embedded_cover_wins_unless_mode_says_otherwise(tmp_path: Path) -> None:
+@pytest.fixture
+def real_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The FB2 fixture's embedded cover (4 × 4 px) counts as a picture, not a placeholder."""
+    from text2audio.covers import make
+
+    monkeypatch.setattr(make, "PLACEHOLDER_PX", 1)
+
+
+def test_placeholder_embedded_cover_is_replaced(tmp_path: Path) -> None:
+    [r] = convert(
+        [FIXTURES / "kapitanskaya-dochka.fb2"], tmp_path / "out", config=_config(tmp_path)
+    )
+    assert _meta(r.folder)["cover"]["origin"] == "typographic"
+    assert r.folder is not None and [p.name for p in (r.folder / "_work").glob("cover*")] == [
+        "cover.jpg"
+    ]
+
+
+def test_embedded_cover_wins_unless_mode_says_otherwise(tmp_path: Path, real_size: None) -> None:
     store = ModelStore(tmp_path / "store")
     fb2 = FIXTURES / "kapitanskaya-dochka.fb2"
     [r] = convert([fb2], tmp_path / "out", config=_config(tmp_path), store=store)
@@ -332,6 +351,40 @@ def test_opening_words_stand_in_for_a_missing_annotation() -> None:
     assert prompt.opening(md, 5) == "Береги честь смолоду. Отец мой"
 
 
+@pytest.mark.enable_socket
+@pytest.mark.allow_hosts(["127.0.0.1"])
+def test_small_embedded_cover_is_repainted_from_its_tags(
+    tmp_path: Path, webui: Path, monkeypatch: pytest.MonkeyPatch, real_size: None
+) -> None:
+    from text2audio.covers import make
+
+    tags = ["castle", "snow", "nude", "1girl"]
+    monkeypatch.setattr(make, "_tag", lambda books, *a: {id(b): tags for b in books})
+    config = load_config([], {"cover": _sd(webui)})
+    fb2 = FIXTURES / "kapitanskaya-dochka.fb2"  # its embedded cover is 4 × 4 px
+    store = ModelStore(tmp_path / "s")
+    [r] = convert([fb2], tmp_path / "out", config=config, store=store)
+    assert r.folder is not None
+    cover = _meta(r.folder)["cover"]
+    assert cover["origin"] == "repainted" and cover["denoise"] == 0.4
+    assert cover["file"] == make.FILE and (r.folder / "_work" / cover["original"]).is_file()
+    assert "castle, snow, 1girl" in cover["prompt"]  # explicit tags are dropped
+    [call] = [json.loads(x) for x in (tmp_path / "webui.json.txt2img").read_text().splitlines()]
+    assert call["path"] == "/sdapi/v1/img2img" and call["denoising_strength"] == 0.4
+    assert (call["width"], call["height"]) == (1024, 1024) and call["seed"] == cover["seed"]
+    (tmp_path / "webui.json").unlink()
+    [r] = convert([fb2], tmp_path / "out", config=config, store=store)
+    assert _meta(r.folder)["cover"]["origin"] == "repainted"
+    assert not (tmp_path / "webui.json").exists()  # cached: no second start
+
+
+def test_large_embedded_cover_is_kept(tmp_path: Path, webui: Path, real_size: None) -> None:
+    config = load_config([], {"cover": {**_sd(webui), "repaint_below": 2}})
+    [r] = convert([FIXTURES / "kapitanskaya-dochka.fb2"], tmp_path / "out", config=config)
+    assert _meta(r.folder)["cover"]["origin"] == "embedded"
+    assert not (tmp_path / "webui.json").exists()  # no WebUI start for it
+
+
 # --------------------------------------------------------------------------- real models
 
 SD_DIR = Path(os.environ.get("T2A_SD_DIR", "/path/to/stable-diffusion-webui"))
@@ -383,3 +436,55 @@ def test_real_sd_webui_cover(tmp_path: Path) -> None:
     out = os.environ.get("T2A_COVER_OUT")
     if out:  # keep the image for a look
         Path(out).write_bytes((r.folder / "_work" / cover["file"]).read_bytes())
+
+
+def _tagger_ready() -> bool:
+    from text2audio_tagger_wd14.descriptor import Wd14Tagger
+
+    from text2audio.core.envs import plugin_env
+    from text2audio.models.lock import assets_for
+
+    env = plugin_env(Wd14Tagger())
+    assets = assets_for("tagger:wd14")
+    return bool(env and env.installed and assets and not ModelStore().verify(assets))
+
+
+@pytest.mark.models
+@pytest.mark.skipif(not _tagger_ready(), reason="WD14 tagger env or assets missing")
+def test_wd14_tags_an_image_offline(tmp_path: Path) -> None:
+    from text2audio.core.workspace import BookFolder
+    from text2audio.covers.make import _Book, _tag
+
+    work = tmp_path / "book" / "_work"
+    work.mkdir(parents=True)
+    img = Image.new("RGB", (256, 256), (250, 250, 250))
+    for x in range(40, 216):  # a dark square on white
+        for y in range(40, 216):
+            img.putpixel((x, y), (10, 10, 10))
+    img.save(work / "cover.png")
+    book = _Book(BookFolder(tmp_path / "book"), {"cover": {"file": "cover.png"}}, "k")
+    tags = _tag([book], load_config([], {}), ModelStore())
+    assert not book.warnings and tags[id(book)], book.warnings
+
+
+@pytest.mark.models
+@pytest.mark.gpu
+@pytest.mark.slow
+@pytest.mark.enable_socket
+@pytest.mark.allow_hosts(["127.0.0.1"])
+@pytest.mark.skipif(not (SD_DIR / "launch.py").is_file(), reason=f"no WebUI at {SD_DIR}")
+@pytest.mark.skipif(not _tagger_ready(), reason="WD14 tagger env or assets missing")
+def test_real_repaint_of_a_small_embedded_cover(tmp_path: Path, real_size: None) -> None:
+    from text2audio_cover_sd_webui.generator import SdWebUI
+
+    config = load_config([], {"cover": {"sd": {"dir": str(SD_DIR)}}})
+    reason = SdWebUI().unavailable(config.cover)
+    if reason:
+        pytest.skip(reason)
+    [r] = convert([FIXTURES / "kapitanskaya-dochka.fb2"], tmp_path / "out", config=config)
+    cover = _meta(r.folder)["cover"]
+    print(json.dumps(cover, ensure_ascii=False, indent=1), r.warnings)
+    assert cover["origin"] == "repainted", r.warnings
+    assert r.folder is not None
+    with Image.open(r.folder / "_work" / cover["file"]) as img:
+        assert max(img.size) == 1024

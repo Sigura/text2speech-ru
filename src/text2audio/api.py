@@ -155,7 +155,7 @@ def _book_config_files(folder: Path) -> list[Path]:
 
 def plugin_envs(names: list[str] | None = None) -> list[PluginEnv]:
     """Environments declared by installed plugins (backends and components)."""
-    found = discover(("backends", "g2p", "asr", "polishers", "translators"))
+    found = discover(("backends", "g2p", "asr", "polishers", "translators", "taggers"))
     envs: dict[str, PluginEnv] = {}
     for items in found.plugins.values():
         for plugin in items.values():

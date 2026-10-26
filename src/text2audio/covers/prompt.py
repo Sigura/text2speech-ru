@@ -58,7 +58,12 @@ FAMILIES = [
 STYLE = "book cover illustration, highly detailed, atmospheric lighting"
 NEGATIVE = (
     "text, letters, words, title, caption, typography, watermark, signature, logo, "
-    "frame, border, lowres, blurry, deformed, disfigured"
+    "frame, border, lowres, blurry, deformed, disfigured, nsfw, nude"
+)
+# WD14 tags never passed on: it guesses explicit tags even for blank pictures.
+_EXPLICIT = re.compile(
+    r"\b(sex|nude|naked|nsfw|nipples?|breasts?|cleavage|fellatio|penis|pussy|vagina|cum|"
+    r"erection|panties|underwear|lingerie|bdsm|bondage|rape|groping|ass|hetero|yuri|yaoi)\b"
 )
 _YEAR = re.compile(r"\b(1[0-9]{3}|20[0-9]{2})\b")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
@@ -123,6 +128,12 @@ def build(
     if (when := era(date)) is not None:
         parts.append(when)
     return ", ".join(parts), NEGATIVE
+
+
+def repaint(tags: list[str], limit: int = 30) -> tuple[str, str]:
+    """(prompt, negative prompt) for repainting a picture from its WD14 tags."""
+    kept = [t for t in tags if not _EXPLICIT.search(t.lower())]
+    return ", ".join([STYLE, *kept[:limit]]), NEGATIVE
 
 
 def seed(key: str) -> int:

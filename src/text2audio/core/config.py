@@ -93,6 +93,11 @@ class CoverConfig(_Section):
     # embedded; typographic: always drawn; embedded-only: no cover without one.
     mode: Literal["auto", "embedded-only", "generate", "typographic"] = "auto"
     generator: str = "sd-webui"  # entry point in `text2audio.covers`
+    # In auto mode an embedded cover whose long side is below this many pixels is
+    # repainted (img2img) from WD14 tags; 0 = never.
+    repaint_below: int = Field(default=800, ge=0)
+    repaint_denoise: float = Field(default=0.4, gt=0, lt=1)
+    tagger: str = "wd14"  # entry point in `text2audio.taggers`
     sd: CoverSdConfig = CoverSdConfig()
 
 
