@@ -1,0 +1,39 @@
+"""${name} language pack (SPEC §6.6.5), generated from templates/lang.
+
+Fill in the profile from your research (docs/adding-a-language.md): text structure for
+TXT/PDF headings, the normalizer, the stress/G2P component, tier routes, voices and QA
+bounds. Components are named by entry point; keep this package free of heavy deps.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from text2audio.core.contracts import LanguageProfile, QaProfile, TierRoute
+
+PROFILE = LanguageProfile(
+    code="${code}",
+    name="${name}",
+    script="${script}",  # ISO 15924; text in other scripts goes through FR-24
+    # Regexes matched (case-insensitive) against a whole stripped line of plain text.
+    part_headings=(),  # e.g. r"part\s+\d+"
+    chapter_headings=(),  # e.g. r"chapter\s+\d+"
+    front_matter=(),  # e.g. r"contents"
+    # Lowercase abbreviations ending with a full stop that do not end a sentence.
+    abbreviations=(),
+    normalizer="${code}",
+    g2p=None,  # a `text2audio.g2p` component (worker) that adds stress or phonemes
+    tiers={
+        # One backend per tier, chosen by the benchmark (§6.6.5), e.g.
+        # "fast": TierRoute(backend="piper"),
+        # "expressive": TierRoute(backend="chatterbox"),
+    },
+    voices={},  # role → backend → voice, e.g. {"narrator": {"piper": "…"}}
+    pauses_ms={},  # overrides of the core's structural pauses
+    qa=QaProfile(asr=None, wer_threshold=0.15, chars_per_sec=(8.0, 25.0)),
+    translator=None,  # a `text2audio.translators` component into English (cover prompts)
+    lexicon=str(Path(__file__).parent / "lexicon.tsv"),
+    part_title="{title} (part {n} of {total})",
+)
+
+__all__ = ["PROFILE", "TierRoute"]

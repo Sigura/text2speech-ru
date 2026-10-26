@@ -28,14 +28,18 @@ Watch for components that **download on first use** — they must be pre-fetched
 ## 2. Generate the pack
 
 ```bash
-uvx cookiecutter templates/lang          # asks for code (e.g. "de") and name
+python scripts/new_lang.py de "Deutsch" --script Latn [--sample "Guten Tag."]
 ```
 
-This creates `text2audio-lang-<code>/` with `pyproject.toml`, the language profile,
-tests and CI.
+This creates `plugins/lang-<code>/` with `pyproject.toml` (entry points), the language
+profile skeleton, a normalizer stub with the FR-24 hook, an empty lexicon, the
+normalization test set and its runner, and a README checklist that follows this guide.
+Then add `text2audio-lang-<code>` to `[tool.uv.sources]` and the `langs` group of the
+root `pyproject.toml` and run `uv sync`.
 
-The template is extracted from the Russian pack at the end of M2 (ADR-0008); the
-Russian pack itself is the only one written by hand.
+The template (`templates/lang/`, standard-library `string.Template`) was extracted from
+the Russian pack in M2 (ADR-0008); the Russian pack itself is the only one written by
+hand.
 
 ## 3. Fill in the profile
 

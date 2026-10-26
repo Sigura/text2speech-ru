@@ -1,0 +1,21 @@
+# text2audio-lang-${code} — ${name}
+
+Generated from `templates/lang` by `scripts/new_lang.py`. Follow
+[docs/adding-a-language.md](../../docs/adding-a-language.md); the Russian pack
+(`plugins/lang-ru`) is the worked example.
+
+- [ ] Research every stage (segmentation, normalization, stress/G2P, TTS per tier, QA
+      ASR, content conventions) and record offline candidates.
+- [ ] Profile (`src/text2audio_lang_${code}/__init__.py`): headings, front matter,
+      abbreviations, tier routes, voices, pauses, QA bounds, translator.
+- [ ] Normalizer (`normalize.py`) and its test set (`tests/normalization.tsv`, ≥ 300
+      cases, ≥ 95 % exact match); FR-24 `transliterate` for foreign-script words.
+- [ ] Components that need models as plugins with their own environments
+      (copy `plugins/g2p-ruaccent` or `plugins/backend-silero`); every asset pinned in
+      `models.lock` with `langs = ["${code}"]`.
+- [ ] Register the pack: `[tool.uv.sources]` and the `langs` group in the root
+      `pyproject.toml`; `uv sync`.
+- [ ] Benchmark set (≥ 200 sentences) and golden fixtures per input format; choose
+      defaults by measurement and record them in SPEC.md §13.1.
+- [ ] Done when no change was needed in `src/text2audio/core/`, the pack's tests and
+      the offline job pass, and a book renders with an empty `text2audio.toml`.

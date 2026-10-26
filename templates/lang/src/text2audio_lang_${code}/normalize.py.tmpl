@@ -1,0 +1,22 @@
+"""${name} text normalization (§6.5, FR-11): numbers, dates, abbreviations and symbols
+written out as the backend should read them. Start from the Russian pack's rules
+(`plugins/lang-ru/src/text2audio_lang_ru/normalize.py`) and grow the test set.
+"""
+
+from __future__ import annotations
+
+from text2audio.core.contracts import NormResult
+
+
+class Normalizer:
+    """Entry point `text2audio.normalizers: ${code}`."""
+
+    def normalize(self, text: str, role: str = "narration") -> NormResult:
+        # uncertain: spans the rules could not read with confidence (report.json);
+        # resolved: foreign-script spans rewritten here, e.g. acronyms (FR-24).
+        return NormResult(text=text, uncertain=[], resolved=[])
+
+    def transliterate(self, span: str, script: str) -> str | None:
+        """FR-24 hook: a reading in ${script} for a foreign-script span, or None to leave
+        it to the foreign backend (or flag it)."""
+        return None

@@ -146,6 +146,9 @@ All notable changes to this project are documented here. The format follows
 - M2 step 4c+ — small embedded covers (< 800 px) are repainted with img2img from
   WD14-tagger tags (plugin `tagger-wd14`, ONNX, pinned in `models.lock`; group
   `taggers`); embedded placeholders under 64 px are replaced (SPEC 1.18-M2).
+- M2 step 4e — language-pack template `templates/lang/` and `scripts/new_lang.py`
+  (standard library, no cookiecutter); `docs/adding-a-language.md` updated
+  (SPEC 1.19-M2).
 
 ### Changed
 
