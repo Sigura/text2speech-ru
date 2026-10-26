@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 2.3-M3 |
+| Document version | 2.4-M3 |
 | Status | **M3 in progress** (open decisions in §13.1) |
 | Last updated | 2026-10-27 |
 | Primary language | Python 3.11+ |
@@ -49,6 +49,7 @@
 | 2.1-M3 | 2026-10-27 | M3 step 0 — **Decisions (owner):** M3 scope (dash dialogue only, hybrid for T1 dialogue, Qwen3-TTS as a spike, owner-alone listening test in §6.7, E2 deferred); Russian dialogue voice = narrator `xenia` (§6.6.5); RUAccent stays after the stress listening. Carry-overs: `envs sync` names (§6.6.3), report route counts and `foreign` span label (§6.6.6). |
 | 2.2-M3 | 2026-10-27 | M3 step 1 — pause types in the manifest (`pause`: sentence, paragraph, stanza, quote, heading, scene, chapter), profile overrides by type (§6.4.2, §6.4.1 pack manifest); the voice role and emotion enter the segment hash only when set (§6.4.2, §13.1). |
 | 2.3-M3 | 2026-10-27 | **Decision (owner):** every audio file starts with 1.5 s of silence (was 0.3 s) — book parts, M4B, previews, listening clips (§6.8, §13.1). |
+| 2.4-M3 | 2026-10-27 | M3 step 2 — dialogue split for the dash convention: `LanguageProfile.dialogue` / `remark_words`, roles `dialogue` / `remark`, `remark` pause type (§6.4.2, §6.6.5, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -355,7 +356,7 @@ caching. It is regenerated from `book.md`; manual edits belong in `book.md`.
 so any change invalidates exactly the affected segments. M2 adds `heading_level` (for
 the split plan), `text_stress` (normalized text with `+` stress marks, what the backend
 reads), `route` and `duration_ms`. M3 adds `pause`, the type of the boundary after the
-segment (E1, §6.7): `sentence` 300 ms, `paragraph` 700, `stanza` 900 (end of a poem
+segment (E1, §6.7): `remark` 200 ms (between a dialogue line and the author's remark), `sentence` 300, `paragraph` 700, `stanza` 900 (end of a poem
 stanza), `quote` 1000 (end of a blockquote or epigraph), `heading` 1000, `scene` 1500,
 `chapter` 3000 — core defaults the language profile overrides by type (`pauses_ms`,
 `ru`: paragraph 800; an unknown type is an error); `pause_after_ms` is the resulting
@@ -651,7 +652,16 @@ Text rules:
   (*А. С. Пушкин*) read as letters or skipped, per setting.
 - Dialogue: paragraphs opening with `—` are dialogue, and author's remarks after an
   inner dash (*— Привет, — сказал он.*) are split into the narrator voice; quotes
-  `«…»` and `„…“`.
+  `«…»` and `„…“`. As built (M3 step 2): the profile declares `dialogue = "dash"`
+  and the core splits (`text/dialogue.py`): a dash after speech starts a remark when
+  the speech ends with punctuation or the next word starts with one of the profile's
+  `remark_words` (verbs of speech: *сказа-, отвеча-, спроси-…*); a dash after a remark
+  returns to speech when the remark ends with punctuation or a quotation opens.
+  Segments get `role` `dialogue` (voice `dialogue`) or `remark` (voice `narrator`),
+  with a `remark` pause (200 ms) between the parts; the test table is
+  `plugins/lang-ru/tests/dialogue.tsv`. Paragraphs that open with a dash but are
+  narration (seen in lib.ru texts) are read as dialogue — with the `ru` voices both
+  are `xenia`, so only the pauses differ.
 - Prosody: slightly longer default paragraph pause (800 ms); `—` inside a sentence gets
   a short pause; `…` a longer one.
 - **Latin-script words inside Russian text** (FR-24). Silero drops every Latin-script
@@ -1423,6 +1433,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | **Russian dialogue voice = narrator `xenia`** (owner): samples of `baya`, `kseniya` and `xenia` on five dialogue lines, T0 and T1 (`spikes/dialogue-voice/`), owner's favourite `xenia` T0. The "contrasting dialogue voice" default becomes optional (§6.6.5). The owner also preferred plain Silero to the T1 hybrid on these lines, against the M2 benchmark (hybrid 6–3–1): the M3 listening test adds blind T0-vs-T1 narration pairs to decide the T1 default. | Decided (voice); T1 default re-tested in M3 |
 | 2026-10-27 | **Pause types** (M3 step 1): every segment records the type of the boundary after it, and its length comes from the core default for the type or the profile's override; new types `stanza` (900 ms, §6.6.5 poetry) and `quote` (1000 ms after a blockquote or epigraph). The voice role and emotion are added to the segment hash **only when set** instead of bumping `HASH_VERSION`, so books rendered in M2 are not re-rendered; a pause change re-assembles without re-synthesis (part fingerprints). | Decided |
 | 2026-10-27 | **1.5 s lead-in** (owner): every audio file — MP3 parts, the M4B, previews, samples and listening-test clips — starts with 1.5 s of silence instead of 0.3 s, because many players start playback late; subtitle and chapter times include it. Re-assembles existing books (part fingerprints) without re-synthesis. | Decided |
+| 2026-10-27 | **Dialogue split in the core, data in the profile** (M3 step 2): the dash convention is typographic, shared by several languages, so the splitter lives in the core and the pack supplies only `dialogue = "dash"` and its verbs of speech; dialogue parts keep their dash in `text` (subtitles show the book). Checked on the full «Капитанская дочка»: 138 dash paragraphs, 77 split; the lib.ru quoting style «— "…" — отвечал он — "…"» is handled by the quotation rule. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

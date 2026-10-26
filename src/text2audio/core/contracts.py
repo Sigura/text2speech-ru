@@ -195,6 +195,11 @@ class LanguageProfile(BaseModel):
     # Voice role → backend → backend voice id, e.g. {"narrator": {"silero": "xenia"}}.
     voices: dict[str, dict[str, str]] = {}
     pauses_ms: dict[str, int] = {}  # overrides of the core's structural pauses
+    # Dialogue convention (§6.7 E1): "dash" = paragraphs opening with a dash, with the
+    # author's remarks after inner dashes (text/dialogue.py); "none" = not detected.
+    dialogue: Literal["none", "dash"] = "none"
+    # Lowercase word starts that open a remark after a dash without punctuation.
+    remark_words: tuple[str, ...] = ()
     qa: QaProfile = QaProfile()
     lexicon: str | None = None  # path of the pack's lexicon TSV (FR-13)
     # Title of a long section split at paragraph boundaries (§6.8.1).

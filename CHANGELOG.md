@@ -179,6 +179,10 @@ All notable changes to this project are documented here. The format follows
   covers the voice role and emotion when they are set (SPEC 2.2-M3).
 - Every audio file starts with 1.5 s of silence instead of 0.3 s (owner: players
   start late) — book parts, M4B, previews and sample clips (SPEC 2.3-M3).
+- M3 step 2 — dialogue paragraphs (dash convention) are split into dialogue lines
+  and the author's remarks, read in the narrator voice with a 200 ms `remark` pause
+  between them; `LanguageProfile.dialogue` and `remark_words`; the `ru` pack turns it
+  on with its verbs of speech (SPEC 2.4-M3). Golden manifests regenerated.
 
 ### Changed
 

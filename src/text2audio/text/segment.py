@@ -20,10 +20,12 @@ from pathlib import Path
 from text2audio.core.contracts import LanguageProfile, Segment
 from text2audio.readers.document import Block, Document, Heading, Paragraph, Poem, Quote, plain
 from text2audio.readers.markdown import parse_markdown
+from text2audio.text.dialogue import split_dialogue
 from text2audio.text.sentences import pack, split_sentences
 
 DEFAULT_MAX_CHARS = 300
 PAUSE_MS = {
+    "remark": 200,  # between a dialogue line and the author's remark
     "sentence": 300,
     "paragraph": 700,
     "stanza": 900,
@@ -51,6 +53,8 @@ class _Builder:
     def __init__(self, lang: str, profile: LanguageProfile | None, max_chars: int, seed: int):
         self.lang = lang
         self.abbreviations = profile.abbreviations if profile else ()
+        self.dialogue = profile is not None and profile.dialogue == "dash"
+        self.remark_words = profile.remark_words if profile else ()
         overrides = profile.pauses_ms if profile else {}
         unknown = sorted(set(overrides) - set(PAUSE_MS))
         if unknown:
@@ -74,6 +78,7 @@ class _Builder:
                 text=text,
                 lang=self.lang,
                 role=role,
+                voice="dialogue" if role == "dialogue" else "narrator",
                 pause=pause,
                 pause_after_ms=self.pauses[pause],
                 seed=self.seed,
@@ -87,15 +92,22 @@ class _Builder:
             if PAUSE_MS[pause] > PAUSE_MS[last.pause]:
                 last.pause, last.pause_after_ms = pause, self.pauses[pause]
 
-    def prose(self, text: str, role: str) -> None:
+    def prose(self, text: str, role: str, end: str = "paragraph") -> None:
         chunks = pack(split_sentences(text, self.abbreviations), self.max_chars)
         for n, chunk in enumerate(chunks):
-            self.add(chunk, role, "paragraph" if n == len(chunks) - 1 else "sentence")
+            self.add(chunk, role, end if n == len(chunks) - 1 else "sentence")
+
+    def paragraph(self, text: str) -> None:
+        parts = split_dialogue(text, self.remark_words) if self.dialogue else [("narration", text)]
+        for n, (role, part) in enumerate(parts):
+            self.prose(part, role, "paragraph" if n == len(parts) - 1 else "remark")
 
     def block(self, block: Block, role: str = "narration") -> None:
         if isinstance(block, Heading):
             role = "title" if block.level == 1 else "heading"
             self.add(plain(block.inlines), role, "heading", block.level)
+        elif isinstance(block, Paragraph) and role == "narration":
+            self.paragraph(plain(block.inlines))
         elif isinstance(block, Paragraph):
             self.prose(plain(block.inlines), role)
         elif isinstance(block, Quote):

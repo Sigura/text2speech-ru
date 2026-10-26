@@ -56,7 +56,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     span label, «pour être»; dialogue voice samples (`spikes/dialogue-voice`);
   - [x] stress listening: RUAccent 2, Silero's own 1, no difference 4 → RUAccent stays;
   - [x] step 1 — pause types instead of milliseconds; voice/role in the segment hash;
-  - [ ] step 2 — dialogue split (dash paragraphs, author's remarks);
+  - [x] step 2 — dialogue split (dash paragraphs, author's remarks);
   - [ ] step 3 — `<!-- t2a: … -->` directives (E3);
   - [ ] step 4 — `voices` and `config show` (FR-22);
   - [ ] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
