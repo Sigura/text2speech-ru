@@ -40,7 +40,7 @@ MAX_GPU_WORKERS = 2  # GPUs are shared with other jobs (§9.1)
 MAX_CPU_WORKERS = 8
 SEGMENTS_PER_WORKER = 25
 # FR-24 readings the QA ASR may be unable to write (GigaAM: Cyrillic letters only, §13.1)
-UNVERIFIABLE = frozenset({"acronym", "transliterated"})
+UNVERIFIABLE = frozenset({"acronym", "transliterated", "foreign"})
 
 # Re-renders `segments` as attempt `n` into `<hash>.a<n>.wav`; replies by hash.
 Rerender = Callable[[list[Segment], int], dict[str, dict[str, Any]]]

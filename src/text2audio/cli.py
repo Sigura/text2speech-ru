@@ -242,11 +242,14 @@ def envs_sync(
     import subprocess
 
     from text2audio import api
-    from text2audio.core.envs import EnvMissing
+    from text2audio.core.envs import EnvMissing, UnknownEnv
 
     try:
         for env in api.envs_sync(names):
             typer.echo(f"{env.name}: {env.path}")
+    except UnknownEnv as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.USAGE) from exc
     except (EnvMissing, subprocess.CalledProcessError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(ExitCode.MISSING_ASSET) from exc

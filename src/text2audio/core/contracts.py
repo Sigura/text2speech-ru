@@ -102,7 +102,8 @@ class Span(BaseModel):
 
     text: str
     script: str  # ISO 15924
-    # lexicon | homoglyph | acronym | transliterated | unresolved
+    # lexicon | homoglyph | acronym | transliterated | unresolved | foreign (read in its
+    # own script by the foreign backend; `reading` is then the QA reference only)
     resolution: str = "unresolved"
     reading: str | None = None
 

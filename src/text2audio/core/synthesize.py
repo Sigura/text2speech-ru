@@ -342,6 +342,9 @@ def prepare(
         if plan.foreign is not None and seg.id in foreign_ids:
             seg.text_stress = seg.text_stress or text  # unlike text_norm, keeps the Latin
             seg.backend = seg.route = plan.foreign.name
+            for span in seg.spans:
+                if span.resolution in _FOREIGN:
+                    span.resolution = "foreign"
             seg.hash = segment_hash(seg, voice_key(seg, seg.backend), _model_id(seg.backend, lock))
             continue
         seg.backend = seg.route = backend
@@ -1292,6 +1295,7 @@ def _report(
             "duplicate": stats.get("duplicate", 0),
             "failed": sum(1 for s in segments if s.status == "failed"),
             "failures": stats.get("failures", []),
+            "routes": dict(Counter(s.route for s in segments)),
         },
         "duration_ms": audio_ms,
         "speech_ms": synth_ms,
@@ -1309,6 +1313,10 @@ def _report(
             "workers": polish_stats.get("workers", 0),
             "device": polish_stats.get("device"),
             "segments": len(gpu),
+            "polished": sum(1 for s in segments if s.hash in sources),
+            "foreign": sum(
+                1 for s in segments if plan.foreign is not None and s.route == plan.foreign.name
+            ),
             "elapsed_ms": gpu_elapsed,
             "rtf": round(gpu_elapsed / gpu_ms, 4) if gpu_ms else None,
             "wall_s_this_run": polish_stats.get("wall_s", 0.0),

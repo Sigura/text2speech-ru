@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from text2audio.core.envs import EnvMissing, PluginEnv, plugin_env, python_for
+from text2audio.core.envs import EnvMissing, PluginEnv, UnknownEnv, plugin_env, python_for
 from text2audio.workers.backend import RUNTIME_DIR
 
 
@@ -46,6 +46,25 @@ def test_installed_plugins_declare_locked_envs() -> None:
     for env in envs:
         assert (env.project / "pyproject.toml").is_file()
         assert (env.project / "uv.lock").is_file()
+
+
+def test_envs_by_plugin_or_env_name() -> None:
+    from text2audio import api
+
+    assert [e.name for e in api.plugin_envs(["silero", "backend-silero"])] == ["backend-silero"]
+
+
+def test_envs_sync_unknown_name_is_an_error() -> None:
+    from typer.testing import CliRunner
+
+    from text2audio import api
+    from text2audio.cli import ExitCode, app
+
+    with pytest.raises(UnknownEnv, match=r"nosuch.*known: .*backend-silero"):
+        api.envs_sync(["nosuch"])
+    result = CliRunner().invoke(app, ["envs", "sync", "nosuch"])
+    assert result.exit_code == ExitCode.USAGE
+    assert "unknown environment(s) nosuch" in result.output
 
 
 GUARDED = """

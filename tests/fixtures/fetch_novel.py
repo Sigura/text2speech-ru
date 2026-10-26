@@ -37,6 +37,8 @@ def chapter_title(text: str) -> str:
 
 
 def clean(text: str) -> str:
+    # The koi8-r original has one Latin-1 byte: «ê» (0xEA), which koi8-r reads as «Й».
+    text = text.replace("pour Йtre", "pour être")
     text = re.sub(r"\(\d+\)", "", text)  # editors' note markers
     text = re.sub(r"(^|\s)-(?=\s)", r"\1—", text)
     return re.sub(r"\s+", " ", text).strip()

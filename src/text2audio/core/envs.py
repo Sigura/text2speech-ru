@@ -27,6 +27,10 @@ class EnvMissing(Exception):
     pass
 
 
+class UnknownEnv(ValueError):
+    pass
+
+
 def env_home() -> Path:
     env = os.environ.get("T2A_ENV_HOME")
     if env:

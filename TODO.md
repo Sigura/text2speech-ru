@@ -50,17 +50,22 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 4f — benchmark ([findings](spikes/ru-bench/FINDINGS.md)): T0 Silero, T1 hybrid;
       Qwen3-TTS → M3 candidate for dialogue/expressive segments;
   - [x] step 5 — M4B of the whole book next to the MP3s, on by default (FR-09);
-- [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
-  voice, `<!-- t2a: … -->` directives, emotion classifier. Carried over from M2:
-  - [ ] stress listening: Silero's own stress vs RUAccent marks (`spikes/ru-smoke/out/listen/`);
-  - [ ] `voices` and `config show` (FR-22);
-  - [ ] Qwen3-TTS for dialogue/expressive segments (stress marks, Latin routing, speed);
-  - [ ] `ru` text gaps from the benchmark: number agreement («21 страницу», «1000»,
-    dates), ё in proper names, 7 homograph misses, «небо» → «нёбо»;
-  - [ ] report: count Chatterbox-routed segments in `segments` and label their spans
-    by the route, not «transliterated»;
-  - [ ] `envs sync <unknown name>` silently does nothing;
-  - [ ] novel fixture «pour Йtre» (should read «pour être»; cause not checked yet).
+- [ ] **M3 — Expression:** pauses, dialogue (narrator voice `xenia`, owner), author's
+  remarks, `<!-- t2a: … -->` directives; E2 deferred (owner, SPEC §13.1).
+  - [x] step 0 — carry-overs: `envs sync` names, report route counts and `foreign`
+    span label, «pour être»; dialogue voice samples (`spikes/dialogue-voice`);
+  - [x] stress listening: RUAccent 2, Silero's own 1, no difference 4 → RUAccent stays;
+  - [ ] step 1 — pause types instead of milliseconds; voice/role in the segment hash;
+  - [ ] step 2 — dialogue split (dash paragraphs, author's remarks);
+  - [ ] step 3 — `<!-- t2a: … -->` directives (E3);
+  - [ ] step 4 — `voices` and `config show` (FR-22);
+  - [ ] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
+    pairs (owner preferred plain Silero on the dialogue samples);
+  - [ ] step 6 — E2 deferral documented in §6.7;
+  - [ ] step 7 — Qwen3-TTS dialogue spike (stress marks, Latin routing, speed; ≤ 100
+    segments);
+  - [ ] step 8 — `ru` text gaps from the benchmark: number agreement («21 страницу»,
+    «1000», dates), ё in proper names, 7 homograph misses, «небо» → «нёбо».
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and

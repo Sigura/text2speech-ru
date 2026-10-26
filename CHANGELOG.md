@@ -164,6 +164,14 @@ All notable changes to this project are documented here. The format follows
   turns it off; re-encoded only when it changes (FR-09, SPEC 1.22-M2).
 - M2 closed against every SPEC §11 exit criterion; README status, TODO carry-overs
   for M3; `voices` now planned for M3 (SPEC 2.0-M3).
+- M3 step 0 — `envs sync` accepts plugin names (`silero`) as well as environment
+  names and rejects unknown ones with exit code 1 instead of doing nothing;
+  `report.json` counts segments per route (`segments.routes`) and splits the GPU
+  stage into `polish.polished` (VC) and `polish.foreign`; spans read in their own
+  script by the foreign backend are labelled `foreign`, not `transliterated`; the
+  full-novel fixture reads «pour être» (a Latin-1 byte in lib.ru's KOI8-R text).
+  Owner's decisions: M3 scope, dialogue voice = narrator `xenia`, RUAccent stays
+  after the stress listening (SPEC 2.1-M3). `spikes/dialogue-voice`: voice samples.
 
 ### Changed
 

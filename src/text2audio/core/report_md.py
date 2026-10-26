@@ -29,6 +29,10 @@ def _polish_line(polish: dict[str, Any] | None) -> str:
     if not polish:
         return ""
     line = f", then `{polish['backend']}` on {polish['segments']} segment(s)"
+    if polish.get("polished") and polish.get("foreign"):
+        line += f" ({polish['polished']} re-voiced, {polish['foreign']} read with foreign words)"
+    elif polish.get("foreign"):
+        line += " (read with foreign words)"
     if polish.get("workers"):
         line += f" ({polish['workers']} worker(s) on {polish['device']}, RTF {polish['rtf']})"
     return line

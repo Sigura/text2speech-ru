@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 2.0-M3 |
-| Status | **M2 done, M3 next** (open decisions in §13.1) |
-| Last updated | 2026-10-26 |
+| Document version | 2.1-M3 |
+| Status | **M3 in progress** (open decisions in §13.1) |
+| Last updated | 2026-10-27 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
@@ -46,6 +46,7 @@
 | 1.21-M2 | 2026-10-26 | M2 step 4f — **Decision (owner):** benchmark winners after the blind listening test: T0 Silero `xenia`, T1 the hybrid; ESpeech and XTTS-v2 dropped; Qwen3-TTS is an M3 candidate for expressive and dialogue segments (§13.1). |
 | 1.22-M2 | 2026-10-26 | M2 step 5 — **Decision (owner):** an M4B of the whole book is written by default next to the MP3s (FR-09, §5.2, §6.8, §13.1). |
 | 2.0-M3 | 2026-10-26 | **M2 closed**: every §11 exit criterion met (§13.1); open items carried to M3 in `TODO.md`. |
+| 2.1-M3 | 2026-10-27 | M3 step 0 — **Decisions (owner):** M3 scope (dash dialogue only, hybrid for T1 dialogue, Qwen3-TTS as a spike, owner-alone listening test in §6.7, E2 deferred); Russian dialogue voice = narrator `xenia` (§6.6.5); RUAccent stays after the stress listening. Carry-overs: `envs sync` names (§6.6.3), report route counts and `foreign` span label (§6.6.6). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -516,8 +517,9 @@ restarted once per request; a missing environment is reported with the fix.
 
 Environments (ADR-0010): a plugin ships its uv project next to its descriptor
 (`env/pyproject.toml` + `uv.lock`); `text2audio envs sync` creates it under
-`<data dir>/text2audio/envs/<name>` (Python 3.12) at install time. Components that need
-heavy libraries — stress/G2P (RUAccent), QA ASR (GigaAM), polishers — run as workers
+`<data dir>/text2audio/envs/<name>` (Python 3.12) at install time; it takes environment
+names (`backend-silero`) or plugin names (`silero`) and rejects unknown ones (exit 1).
+Components that need heavy libraries — stress/G2P (RUAccent), QA ASR (GigaAM), polishers — run as workers
 the same way, with additive operations (`process`, `transcribe`, `polish`). Workers
 import a standard-library runtime (`t2a_worker`) that blocks non-loopback sockets
 (`T2A_NO_NETWORK=1`) before any ML library loads, and cap their thread pools to the slot.
@@ -575,7 +577,7 @@ its source (`# from profile:ru`), so users can see exactly what to change.
 | Language | Document metadata (FB2 `<lang>`, EPUB `dc:language`) → detection on the first ~20 kB of text (lingua-py) → `en` with a warning. |
 | Tier | `expressive` if a supported GPU with enough VRAM is present (§9), otherwise `fast`. |
 | Backend | First **installed** backend in the language profile's ranked list for that tier; otherwise any installed multilingual backend that declares the language; otherwise a clear error naming the pack/backend to install. |
-| Voices | The profile's narrator voice plus a **contrasting** dialogue voice (different pitch/gender), both pre-tested by the pack. |
+| Voices | The profile's narrator voice and its dialogue voice, both pre-tested by the pack. The dialogue voice may be the narrator's own (`ru`: `xenia` for both, owner's choice by listening, §13.1); dialogue then differs by E1 pauses only. |
 | Expression | E1. E2 only when the profile ships a validated emotion classifier and the tier is `expressive`. |
 | Normalization, lexicon, stress | From the language profile (below). |
 | Pauses, speaking rate | From the language profile, then adjusted by the content profile. |
@@ -763,7 +765,8 @@ As built (M2 step 3b):
 - Per segment: `silero>chatterbox` (polish) or `chatterbox` (foreign) when FR-24 left a
   span `transliterated` or `unresolved`. The foreign backend reads the text with the
   Latin words kept (`text_stress`), while `text_norm` keeps the transliteration as the
-  QA reference.
+  QA reference; `report.json` labels such spans `foreign`, and the QA gate treats them
+  as unverifiable like transliterations (§6.9).
 - Hashes: the source of a polished segment is the segment as the backend alone would
   render it, with the **same hash as on the fast tier**, so fast-tier audio is reused
   as VC source; the polished hash covers the source hash, polisher, its model and the
@@ -775,8 +778,9 @@ As built (M2 step 3b):
 - QA retries: a polished segment is polished again with a new seed on attempt 2; its
   attempt 3 is the unpolished source, marked `final` and counted as `qa.unpolished`.
   Foreign-route segments get a new seed per attempt.
-- `report.json` `polish` (backend, workers, device, segments, RTF) and
-  `timings_s.polish`; `report.md` names the GPU stage.
+- `report.json` `polish` (backend, workers, device, segments — split into `polished`
+  (VC) and `foreign` (read with foreign words) — and RTF), `segments.routes` (segments
+  per route) and `timings_s.polish`; `report.md` names the GPU stage and the split.
 
 ### 6.7 Expression Strategy
 
@@ -799,10 +803,12 @@ Mapping emotion to backend controls:
 | `prompt` | [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), [Parler-TTS](https://github.com/huggingface/parler-tts) | Generate a style instruction ("speaking softly, frightened"). |
 | `vector` | [IndexTTS-2](https://github.com/index-tts/index-tts) | Emotion → 8-dimensional emotion vector × intensity. |
 
-**Validation (M3):** E1 vs E0 and E2 vs E1 are compared with a blind A/B preference
-test (≥ 10 listeners, ≥ 30 paired clips); a level ships as default only if ≥ 60% of
-listeners prefer it, and automatic MOS prediction
-([UTMOSv2](https://github.com/sarulab-speech/UTMOSv2)) does not drop.
+**Validation (M3):** E1 vs E0 (and E2 vs E1, if E2 is built) are compared with a blind
+A/B preference test by the owner alone (personal use, ADR-0007; owner's decision,
+§13.1) on ≥ 30 paired clips; a level ships as default only if the owner prefers it in
+≥ 60 % of the pairs where a side was chosen. Automatic MOS prediction
+([UTMOSv2](https://github.com/sarulab-speech/UTMOSv2)) is reported for reference only:
+it is trained mostly on English.
 
 ### 6.8 Audio Output
 
@@ -1403,6 +1409,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | Benchmark protocol for a personal project (owner): each challenger synthesizes at most 100 segments of the set (benchmark and tests only, never real book runs); the blind listening test is the owner alone, one female voice (§6.6.5). | Decided |
 | 2026-10-26 | **"Quality" means TTS quality** (owner): in the component priority (ADR-0007) it is how natural the speech sounds — intonation, stress — judged by listening. ASR WER is an intelligibility floor, not a ranking, and speed (third priority) does not rule out a better-sounding GPU backend. | Decided |
 | 2026-10-26 | **M2 closed** against §11: full «Капитанская дочка» on T0 (4 cores / 8 GB, no GPU) and T1 (hybrid, one shared GPU): `rtf_wall` 0.128 / 0.130, 2 / 0 of 100 checked segments flagged (`tests/e2e/test_novel.py`, reports kept by the owner outside git); benchmark winners recorded below; M4B added (step 5). Carried to M3: stress listening (Silero vs RUAccent), `voices` and `config show`, `ru` text gaps found by the benchmark (number agreement, ё in names, homographs), report counts for Chatterbox-routed segments. | Decided |
+| 2026-10-26 | **M3 scope (owner's answers)**: dialogue = paragraphs opening with a dash, the author's remark after an inner dash in the narrator voice (quotes after a colon: later); T1 dialogue uses the hybrid route, Qwen3-TTS only through a separate spike of ≤ 100 segments; E1 validation is the owner's blind A/B test (≥ 30 pairs, ≥ 60 % of decided pairs; UTMOSv2 for reference, §6.7); **E2 deferred** — on the `ru` routes Silero has no emotion input and VC copies the reference clip's intonation, so a classifier has nothing to steer. | Decided |
+| 2026-10-26 | **Russian dialogue voice = narrator `xenia`** (owner): samples of `baya`, `kseniya` and `xenia` on five dialogue lines, T0 and T1 (`spikes/dialogue-voice/`), owner's favourite `xenia` T0. The "contrasting dialogue voice" default becomes optional (§6.6.5). The owner also preferred plain Silero to the T1 hybrid on these lines, against the M2 benchmark (hybrid 6–3–1): the M3 listening test adds blind T0-vs-T1 narration pairs to decide the T1 default. | Decided (voice); T1 default re-tested in M3 |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |
@@ -1424,7 +1432,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-25 | Russian narrator voice is **Silero `xenia`** (owner listening). Chatterbox VC/TTS clone it from a reference clip rendered once by Silero, pinned in `models.lock` like any asset. Dialogue voice still open. | Decided |
 | 2026-10-25 | **Russian normalization is owned by the `ru` pack** (rules + num2words + pymorphy3); rutextnorm failed the audit (gender agreement, Roman numerals, ranges). Lexicon entries apply before normalization. | Decided |
 | 2026-10-25 | Plugin worker environments live under `<data dir>/text2audio/envs/` (Python 3.12), created by `envs sync`; workers share a stdlib runtime with a network guard; components (RUAccent, GigaAM) run as workers like backends ([ADR-0010](docs/adr/0010-plugin-worker-environments.md)). | Decided |
-| 2026-10-25 | RUAccent stress is fed to Silero as `+` marks (`put_accent` fills only unmarked words; Silero's own homograph stress off); `[lang.ru] g2p = "backend"` switches to Silero's own stress if the listening test prefers it. | Decided — listening pending |
+| 2026-10-25 | RUAccent stress is fed to Silero as `+` marks (`put_accent` fills only unmarked words; Silero's own homograph stress off); `[lang.ru] g2p = "backend"` switches to Silero's own stress if the listening test prefers it. | Decided — owner listening 2026-10-26 (`spikes/ru-smoke/out/listen/`, 7 pairs): RUAccent better 2, Silero's own 1, no difference 4 → RUAccent stays |
 | 2026-10-25 | Split plan: long sections split at lower headings are grouped into files near `target_part_minutes` instead of one file per subsection. | Decided |
 | 2026-10-25 | QA gate (§6.9) as built in M2 step 2: GigaAM-v3 `rnnt` runs as a component worker (pinned `modeling_gigaam.py` loaded from the store and built with hydra — no `trust_remote_code`, no pyannote, no ffmpeg; `weights_only=True`), on a GPU when one has free VRAM (≤ 2 workers), else on CPU slots. WER against `text_norm` plus signal checks (rate, clipping, > 2 s silence, silent); up to 3 attempts, best kept, rest flagged, exit code 4. Silero is deterministic, so its attempt 2 reads without RUAccent marks (own stress) and replies `final`. | Decided |
 | 2026-10-25 | QA text rule: a segment fails only when WER > threshold **and** CER > `cer_threshold` (0.10; spaces ignored). On Banks "Выбор оружия" WER alone flagged 209 / 4088 segments (5.1 %), almost all invented names (Дизиэт → «дизиет») or joined words; with the CER rule 44 / 4088 (1.1 %), mean WER 0.040, QA 8 m 10 s on 2 GPU workers. Best attempt ranked by signal checks, then CER, then WER. | Decided |

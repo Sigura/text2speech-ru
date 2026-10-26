@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,9 @@ def test_polish_route_reuses_fast_tier_audio_as_source(book: Path, tmp_path: Pat
     assert len(segs) >= len(every) - 1  # the fixture has one segment in Latin script
     assert report["segments"]["cached"] == len(segs)  # no source rendered again
     assert report["polish"]["segments"] == len(every)
+    assert report["polish"]["polished"] == len(segs)
+    assert report["polish"]["foreign"] == len(every) - len(segs)
+    assert report["segments"]["routes"] == dict(Counter(s["route"] for s in every))
     assert report["polish"]["backend"] == "sine-polish"
     journal = Journal(book / "_work/render.jsonl")
     for s in segs:
@@ -98,6 +102,12 @@ def test_foreign_words_go_to_the_foreign_backend(tmp_path: Path) -> None:
     lexicon_only = segs["Этот скрипт написан на Python, а фронтенд на React."]
     assert lexicon_only["route"] == "sine>sine-polish"
     assert report["qa"]["flagged"] == 0
+    how = {s["text"]: s["resolution"] for s in report["foreign_spans"]}
+    assert how["Docker"] == "foreign"  # not "transliterated": the foreign backend read it
+    assert how["Python"] == "lexicon"
+    foreign = report["segments"]["routes"]["sine-polish"]
+    assert report["polish"]["foreign"] == foreign > 0
+    assert f"{foreign} read with foreign words" in (book / "report.md").read_text("utf-8")
 
 
 def test_unpolished_source_kept_when_polish_keeps_failing(
