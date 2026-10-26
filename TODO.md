@@ -38,10 +38,11 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     transliteration on T0, `foreign_spans` in the report);
   - [x] step 3b — GPU hybrid (Silero → Chatterbox VC, Chatterbox TTS for Latin words);
   - [x] T1 full-novel run (`tests/e2e/test_novel.py::test_t1`);
-  - [ ] QA limit: at most 100 segments checked per run, polish/QA in batches of ≤ 100
+  - [x] QA limit: at most 100 segments checked per run, polish/QA in batches of ≤ 100
     (SPEC §6.9);
   - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template:
     - [x] 4a — PDF compound hyphens (`ru` normalization);
+    - [x] 4b — QA limit (100 per run) and polish/QA batches;
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

@@ -1,7 +1,8 @@
 """QA gate: ASR round-trip, sanity checks and retries for rendered segments (§6.9, FR-12).
 
-    rendered segments without a QA result → transcribe (ASR workers) → WER + checks
-        → failures re-rendered with `attempt` 2, 3 → best attempt kept, the rest flagged
+    the run's sample (≤ `[qa] max_segments`, by hash) → per batch: segments without a
+    QA result → transcribe (ASR workers) → WER + checks → failures re-rendered with
+    `attempt` 2, 3 → best attempt kept, the rest flagged
 
 The ASR component is the one the language profile names; it runs in its own worker
 environment like a backend, on a GPU when one has enough free VRAM, else on CPU slots.
@@ -14,6 +15,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,7 +27,7 @@ from text2audio.core.contracts import LanguageProfile, Segment
 from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.plugins import discover
-from text2audio.core.pool import parallel
+from text2audio.core.pool import Pool
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
 from text2audio.qa.checks import check_file
@@ -48,6 +50,27 @@ Progress = Callable[[str, int, int], None]
 def sampled(seg_hash: str, percent: int) -> bool:
     """Deterministic by hash, so reruns check the same segments."""
     return percent >= 100 or int(seg_hash[:8], 16) % 100 < percent
+
+
+def select(segments: list[Segment], percent: int, limit: int) -> set[str]:
+    """Hashes this run may check: sampled ones, then the first segments in hash order.
+
+    Hash order spreads the sample over the book and keeps it stable across reruns.
+    `limit` counts segments (a hash shared by several segments counts for each);
+    0 = no limit.
+    """
+    counts = Counter(s.hash for s in segments if s.hash and sampled(s.hash, percent))
+    if not limit:
+        return set(counts)
+    chosen: set[str] = set()
+    n = 0
+    for h in sorted(counts):
+        if n + counts[h] <= limit:
+            chosen.add(h)
+            n += counts[h]
+            if n == limit:
+                break
+    return chosen
 
 
 def wav_path(audio_dir: Path, seg_hash: str, attempt: int = 1) -> Path:
@@ -81,6 +104,8 @@ class QaStats:
     device: str | None = None
     threshold: float = 0.0
     cer_threshold: float = 0.0
+    max_segments: int = 0
+    sample: int = 0  # segments in this run's sample
     checked_now: int = 0
     retried_now: int = 0
     workers: int = 0
@@ -191,9 +216,7 @@ def _record(ctx: _Context, seg_hash: str, attempts: list[Attempt]) -> None:
 
 def _transcribe(
     ctx: _Context,
-    asr: Any,
-    store: ModelStore,
-    slots: list[res.WorkerSlot],
+    pool: Pool,
     jobs: list[tuple[str, Segment, Path, int]],
     on_result: Callable[[str, Attempt], None],
     progress: Progress | None,
@@ -201,7 +224,6 @@ def _transcribe(
 ) -> None:
     """Transcribe `(hash, segment, wav, attempt)` jobs in batches on a worker pool."""
     batches = [jobs[i : i + ASR_BATCH] for i in range(0, len(jobs), ASR_BATCH)]
-    payload = store.payload(assets_for(getattr(asr, "component", asr.name), load_lock()))
     done = [0]
 
     def work(worker: Worker, batch: list[tuple[str, Segment, Path, int]]) -> None:
@@ -213,100 +235,131 @@ def _transcribe(
             if progress:
                 progress(stage, done[0], len(jobs))
 
-    workers = [Worker(asr, store.root, slot) for slot in slots]
-    _detail(progress, stage, workers=len(workers), device=slots[0].device if slots else "cpu")
     if progress:
         progress(stage, 0, len(jobs))
-    parallel(workers, batches, work, load={"assets": payload})
+    pool.run(batches, work)
 
 
-def run_qa(
-    segments: list[Segment],
-    journal: Journal,
-    audio_dir: Path,
-    profile: LanguageProfile,
-    config: Config,
-    store: ModelStore,
-    rerender: Rerender,
-    progress: Progress | None = None,
-) -> QaStats:
-    """Check every rendered, sampled segment that has no QA result yet."""
-    percent = parse_qa_mode(config.qa.mode)
-    stats = QaStats(
-        mode=config.qa.mode,
-        threshold=threshold_for(config, profile),
-        cer_threshold=cer_threshold_for(config, profile),
-    )
-    if percent == 0:
-        return stats
-    asr = asr_component(profile.code, profile, config)
-    stats.asr = asr.name
-    unique: dict[str, Segment] = {}
-    for seg in segments:
-        h = seg.hash or ""
-        entry = journal.get(h)
-        if entry is None or h in unique or not sampled(h, percent):
-            continue
-        if "qa" not in entry and wav_path(audio_dir, h).is_file():
-            unique[h] = seg
-    if not unique:
-        return stats
-    started = time.monotonic()
-    ctx = _Context(profile, stats.threshold, stats.cer_threshold, audio_dir, journal)
-    slots = asr_slots(asr, config, len(unique))
-    stats.workers = len(slots)
-    stats.device = slots[0].device if slots else None
-    attempts: dict[str, list[Attempt]] = {}
-    failing: list[str] = []
+class Gate:
+    """The QA gate of one run: a fixed sample, checked batch by batch on one ASR pool."""
 
-    def first(h: str, a: Attempt) -> None:
-        attempts[h] = [a]
-        if a.passed():
-            _record(ctx, h, attempts[h])
-        else:
-            with ctx.lock:
-                failing.append(h)
+    def __init__(
+        self,
+        segments: list[Segment],
+        journal: Journal,
+        audio_dir: Path,
+        profile: LanguageProfile,
+        config: Config,
+        store: ModelStore,
+        rerender: Rerender,
+        progress: Progress | None = None,
+    ) -> None:
+        self.percent = parse_qa_mode(config.qa.mode)
+        self.config = config
+        self.store = store
+        self.rerender = rerender
+        self.progress = progress
+        self.stats = QaStats(
+            mode=config.qa.mode,
+            threshold=threshold_for(config, profile),
+            cer_threshold=cer_threshold_for(config, profile),
+            max_segments=config.qa.max_segments,
+        )
+        self.ctx = _Context(
+            profile, self.stats.threshold, self.stats.cer_threshold, audio_dir, journal
+        )
+        self.sample: set[str] = set()
+        self.asr: Any = None
+        self.pool: Pool | None = None
+        self.todo = 0
+        if self.percent == 0:
+            return
+        self.asr = asr_component(profile.code, profile, config)
+        self.stats.asr = self.asr.name
+        self.sample = select(segments, self.percent, config.qa.max_segments)
+        self.stats.sample = sum(1 for s in segments if s.hash in self.sample)
+        self.todo = sum(1 for h in self.sample if "qa" not in (journal.get(h) or {}))
 
-    jobs = [(h, seg, wav_path(audio_dir, h), 1) for h, seg in unique.items()]
-    _transcribe(ctx, asr, store, slots, jobs, first, progress, "qa")
-    stats.checked_now = len(unique)
-    stats.retried_now = len(failing)
-    final: set[str] = set()
-    for n in range(2, MAX_ATTEMPTS + 1):
-        retry = [h for h in failing if h not in final]
-        if not retry:
-            break
-        replies = rerender([unique[h] for h in retry], n)
-        jobs = []
-        for h in retry:
-            reply = replies.get(h)
-            if reply is None:  # the backend failed this attempt; keep what we have
-                final.add(h)
+    def _pool(self) -> Pool:
+        if self.pool is None:
+            slots = asr_slots(self.asr, self.config, self.todo)
+            self.stats.workers = len(slots)
+            self.stats.device = slots[0].device if slots else None
+            name = getattr(self.asr, "component", self.asr.name)
+            payload = self.store.payload(assets_for(name, load_lock()))
+            workers = [Worker(self.asr, self.store.root, slot) for slot in slots]
+            self.pool = Pool(workers, {"assets": payload})
+        _detail(self.progress, "qa", workers=self.stats.workers, device=self.stats.device)
+        return self.pool
+
+    def close(self) -> None:
+        if self.pool is not None:
+            self.pool.close()
+
+    def check(self, segments: list[Segment]) -> None:
+        """Check the rendered segments of this batch that are in the sample and unchecked."""
+        ctx, audio_dir, journal = self.ctx, self.ctx.audio_dir, self.ctx.journal
+        unique: dict[str, Segment] = {}
+        for seg in segments:
+            h = seg.hash or ""
+            entry = journal.get(h)
+            if entry is None or h in unique or h not in self.sample:
                 continue
-            if reply.get("final"):
-                final.add(h)
-            jobs.append((h, unique[h], wav_path(audio_dir, h, n), n))
-        still: list[str] = []
+            if "qa" not in entry and wav_path(audio_dir, h).is_file():
+                unique[h] = seg
+        if not unique:
+            return
+        started = time.monotonic()
+        pool = self._pool()
+        attempts: dict[str, list[Attempt]] = {}
+        failing: list[str] = []
 
-        def again(h: str, a: Attempt, replies: Any = replies, still: list[str] = still) -> None:
-            a.duration_ms = int(replies[h]["duration_ms"])
-            attempts[h].append(a)
+        def first(h: str, a: Attempt) -> None:
+            attempts[h] = [a]
             if a.passed():
                 _record(ctx, h, attempts[h])
             else:
                 with ctx.lock:
-                    still.append(h)
+                    failing.append(h)
 
-        if jobs:
-            slots = asr_slots(asr, config, len(jobs))
-            _transcribe(ctx, asr, store, slots, jobs, again, progress, f"qa retry {n}")
-        failing = still
-    for h in unique:  # attempts left unrecorded: no reply, or every attempt failed
-        entry = journal.get(h) or {}
-        if "qa" not in entry and h in attempts:
-            _record(ctx, h, attempts[h])
-    stats.wall_s = round(time.monotonic() - started, 2)
-    return stats
+        jobs = [(h, seg, wav_path(audio_dir, h), 1) for h, seg in unique.items()]
+        _transcribe(ctx, pool, jobs, first, self.progress, "qa")
+        self.stats.checked_now += len(unique)
+        self.stats.retried_now += len(failing)
+        final: set[str] = set()
+        for n in range(2, MAX_ATTEMPTS + 1):
+            retry = [h for h in failing if h not in final]
+            if not retry:
+                break
+            replies = self.rerender([unique[h] for h in retry], n)
+            jobs = []
+            for h in retry:
+                reply = replies.get(h)
+                if reply is None:  # the backend failed this attempt; keep what we have
+                    final.add(h)
+                    continue
+                if reply.get("final"):
+                    final.add(h)
+                jobs.append((h, unique[h], wav_path(audio_dir, h, n), n))
+            still: list[str] = []
+
+            def again(h: str, a: Attempt, replies: Any = replies, still: list[str] = still) -> None:
+                a.duration_ms = int(replies[h]["duration_ms"])
+                attempts[h].append(a)
+                if a.passed():
+                    _record(ctx, h, attempts[h])
+                else:
+                    with ctx.lock:
+                        still.append(h)
+
+            if jobs:
+                _transcribe(ctx, pool, jobs, again, self.progress, f"qa retry {n}")
+            failing = still
+        for h in unique:  # attempts left unrecorded: no reply, or every attempt failed
+            entry = journal.get(h) or {}
+            if "qa" not in entry and h in attempts:
+                _record(ctx, h, attempts[h])
+        self.stats.wall_s = round(self.stats.wall_s + time.monotonic() - started, 2)
 
 
 def summary(
@@ -320,6 +373,8 @@ def summary(
         "workers": stats.workers,
         "threshold": stats.threshold,
         "cer_threshold": stats.cer_threshold,
+        "max_segments": stats.max_segments,
+        "sample": stats.sample,
         "checked_now": stats.checked_now,
         "retried_now": stats.retried_now,
         "wall_s_this_run": stats.wall_s,

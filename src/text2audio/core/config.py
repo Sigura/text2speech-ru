@@ -67,6 +67,8 @@ class QaConfig(_Section):
     mode: str = "on"  # on | off | sample=N%
     wer_threshold: float | None = None  # None = from the language profile
     cer_threshold: float | None = None  # None = from the language profile
+    max_segments: int = Field(default=100, ge=0)  # checked per run, 0 = no limit
+    batch: int = Field(default=100, ge=1)  # polish and QA work in batches of this size
 
     @field_validator("mode")
     @classmethod

@@ -129,6 +129,11 @@ All notable changes to this project are documented here. The format follows
 - M2 step 4a — the `ru` pack restores compound hyphens lost at PDF line ends
   («понастоящему» → «по-настоящему», «ктото» → «кто-то») for words pymorphy3 does not
   know (SPEC 1.14-M2).
+- M2 step 4b — QA limit (§6.9): at most 100 segments checked per run (`[qa]
+  max_segments`, `--qa-max`), the first in hash order; polish and QA run in batches of
+  ≤ 100 (`[qa] batch`) on worker pools kept loaded across batches; `report.json`
+  `qa.sample` / `qa.max_segments`. The novel tests assert `checked == min(100, total)`
+  (SPEC 1.15-M2).
 
 ### Changed
 

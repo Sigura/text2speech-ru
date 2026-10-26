@@ -17,6 +17,7 @@ Test hooks (environment):
   `<hash> <id> <attempt>` per rendered segment (resume tests).
 - `T2A_SINE_FINAL=1`: retries reply `final`, like a deterministic backend.
 - `T2A_SINE_POLISH_FAULT=<mode>[:<n>]`: like `T2A_SINE_FAULT`, for `polish`.
+- `T2A_LOAD_LOG=<path>`: append `sine <pid>` per `load` (worker pool reuse tests).
 """
 
 from __future__ import annotations
@@ -101,12 +102,20 @@ def render(
     return duration_ms
 
 
+def log_load(name: str) -> None:
+    log = os.environ.get("T2A_LOAD_LOG")
+    if log:
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"{name} {os.getpid()}\n")
+
+
 def handle(msg: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     if msg.get("protocol") != PROTOCOL:
         return {"ok": False, "error": f"protocol mismatch: worker speaks {PROTOCOL}"}
     op = msg.get("op")
     if op == "load":
         state["loaded"] = True
+        log_load("sine")
         return {"ok": True, "sample_rate": state["sample_rate"]}
     if op == "synthesize":
         if not state.get("loaded"):

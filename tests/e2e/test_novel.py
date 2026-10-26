@@ -108,8 +108,8 @@ def _run(limits: list[str], env: dict[str, str], out: Path) -> dict[str, Any]:
     assert report["segments"]["failed"] == 0
     qa = report["qa"]
     assert qa["mode"] == "on"
-    assert qa["checked"] == report["segments"]["total"]
-    assert qa["flagged_share"] <= 0.05  # ≤ 5 % flagged (§11)
+    assert qa["checked"] == min(100, report["segments"]["total"])  # QA limit (§6.9)
+    assert qa["flagged_share"] <= 0.05  # ≤ 5 % of the checked sample flagged (§11)
     assert report["rtf_wall"] <= 0.5  # NFR-05, whole run
     return report
 

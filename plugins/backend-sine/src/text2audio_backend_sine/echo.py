@@ -2,7 +2,7 @@
 
 "Transcribes" a WAV by reading what the sine worker recorded for its content,
 so the QA gate can be tested without a speech model. `T2A_ECHO_DELAY_MS` sleeps per
-file (resume tests).
+file (resume tests); `T2A_LOAD_LOG` as in the sine worker (`echo <pid>`).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from text2audio_backend_sine.worker import heard_path
+from text2audio_backend_sine.worker import heard_path, log_load
 
 PROTOCOL = 1
 
@@ -32,6 +32,7 @@ def handle(msg: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": f"protocol mismatch: worker speaks {PROTOCOL}"}
     op = msg.get("op")
     if op == "load":
+        log_load("echo")
         return {"ok": True, "sample_rate": 16000}
     if op == "transcribe":
         return {"ok": True, "texts": [transcribe(p) for p in msg["paths"]]}

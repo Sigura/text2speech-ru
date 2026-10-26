@@ -262,6 +262,7 @@ def _synthesize_one(
     lang: str | None,
     ui: StageProgress,
     qa: str | None = None,
+    qa_max: int | None = None,
 ) -> int:
     """Synthesize one book folder; returns its exit code."""
     from text2audio import api
@@ -273,6 +274,8 @@ def _synthesize_one(
     overrides: dict[str, Any] = {"synthesis": {"language": lang}} if lang else {}
     if qa:
         overrides["qa"] = {"mode": qa}
+    if qa_max is not None:
+        overrides.setdefault("qa", {})["max_segments"] = qa_max
     try:
         config = load_config([user_config_path(), folder / "_work" / "text2audio.toml"], overrides)
     except ValueError as exc:  # pydantic's ValidationError is a ValueError
@@ -306,8 +309,9 @@ def _synthesize_one(
     )
     q = r.get("qa", {})
     if q.get("checked"):
+        of = f" of {seg['total']}" if q["checked"] < seg["total"] else ""
         ui.print(
-            f"  [dim]QA ({escape(str(q['asr']))}): {q['checked']} checked, "
+            f"  [dim]QA ({escape(str(q['asr']))}): {q['checked']}{of} checked, "
             f"mean WER {q['mean_wer']}, {q['flagged']} flagged "
             f"({q['flagged_share']:.1%})[/]"
         )
@@ -328,6 +332,10 @@ QaFlag = Annotated[
     str | None,
     typer.Option("--qa", help="QA gate: on | off | sample=N% (default: on, or the config)."),
 ]
+QaMaxFlag = Annotated[
+    int | None,
+    typer.Option("--qa-max", help="Segments the QA gate checks per run (default 100, 0 = all)."),
+]
 
 
 @app.command()
@@ -337,13 +345,14 @@ def synthesize(
     workers: WorkersFlag = None,
     lang: Annotated[str | None, typer.Option("--lang", help="Book language override.")] = None,
     qa: QaFlag = None,
+    qa_max: QaMaxFlag = None,
 ) -> None:
     """Render book folders to audio; only changed segments are synthesized again."""
     codes: list[int] = []
     with StageProgress() as ui:
         for n, folder in enumerate(folders, 1):
             ui.book(folder.name, folder, n, len(folders))
-            codes.append(_synthesize_one(folder, tier, workers, lang, ui, qa))
+            codes.append(_synthesize_one(folder, tier, workers, lang, ui, qa, qa_max))
     raise typer.Exit(max(codes, default=ExitCode.OK))
 
 
@@ -361,6 +370,7 @@ def run(
     tier: TierFlag = None,
     workers: WorkersFlag = None,
     qa: QaFlag = None,
+    qa_max: QaMaxFlag = None,
 ) -> None:
     """Convert and synthesize in one step, one folder per book."""
     from text2audio import api
@@ -394,7 +404,7 @@ def run(
             )
             for w in r.warnings:
                 ui.warn(w)
-            codes.append(_synthesize_one(r.folder, tier, workers, lang, ui, qa))
+            codes.append(_synthesize_one(r.folder, tier, workers, lang, ui, qa, qa_max))
     if len(results) > 1:
         ok = sum(c in (ExitCode.OK, ExitCode.QA_WARNINGS) for c in codes)
         typer.echo(f"{ok} of {len(results)} book(s) done")

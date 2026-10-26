@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.14-M2 |
+| Document version | 1.15-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -37,6 +37,7 @@
 | 1.12-M2 | 2026-10-26 | M2 step 3b: the Russian T1 hybrid as built (§6.6.6) — `chatterbox` backend + polisher plugin, per-segment routes, fast-tier audio reused as VC source, `polish` stage, unpolished fallback on the last QA attempt; reference clip in the `ru` pack; T1 reference limits (§9, §13.1). |
 | 1.13-M2 | 2026-10-26 | T1 `ru` measured on the full novel (§9, §13.1); owner's QA limit — at most 100 segments checked per run, polish/QA in batches of ≤ 100 — recorded as proposed (§6.9). |
 | 1.14-M2 | 2026-10-26 | M2 step 4a: compound hyphens lost at PDF line ends are restored by `ru` normalization — only words pymorphy3 does not know (§6.3, §6.6.5, §13.1). |
+| 1.15-M2 | 2026-10-26 | M2 step 4b — **Decision:** QA limit as built: at most 100 segments checked per run (`[qa] max_segments`, `--qa-max`), the first in hash order; polish and QA run in batches of ≤ 100 segments on worker pools kept loaded; the M2 flagged-share criterion is measured over the checked sample (§6.9, §11, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -936,11 +937,17 @@ mode`) for speed, and sampled (`--qa sample=10%`) on slow hardware; the sample i
 chosen by segment hash, so reruns check the same segments. The QA gate cannot hear a
 wrong stress (§6.6.6); that remains a listening task.
 
-**Limit of 100 segments** (owner, 2026-10-26; not built yet): the QA gate checks at
-most **100 segments per run**, a sample chosen by segment hash like `sample=N%`, and
-the polish and QA stages work in **batches of ≤ 100 segments**. Open: whether the cap
-is per run or per batch, and how the M2 "flagged ≤ 5 %" criterion (§11) is measured
-over a sample (§13.1).
+**Limit of 100 segments** (owner, 2026-10-26): the QA gate checks at most **100
+segments per run** (`[qa] max_segments`, `--qa-max N`; 0 = no limit). The sample is
+taken after `sample=N%`: the segments whose hashes sort first, counted per segment, so
+it is spread over the book and a rerun picks the same segments (they are already
+checked, so nothing is checked again); an edited segment gets a new hash and may enter
+the sample. `report.json` `qa.sample` / `qa.max_segments` say how many were chosen,
+`qa.checked` how many have a result, and `qa.flagged_share` is over the checked ones.
+After synthesis, polish and QA run in **batches of ≤ 100 segments** in book order
+(`[qa] batch`): polish the batch, then QA the batch's sampled segments with retries,
+then the next batch. The polish, retry and ASR worker pools are loaded once and kept
+across batches; one progress bar covers all batches.
 
 ### 6.10 Offline Operation Contract
 
@@ -1048,6 +1055,8 @@ max_parts        = 150
 mode          = "on"          # on | off | sample=10%
 wer_threshold = 0.15
 cer_threshold = 0.10
+max_segments  = 100           # checked per run, chosen by hash; 0 = all
+batch         = 100           # polish and QA work in batches of this size
 
 [resources]                   # all optional; automatic plan otherwise (§9.1)
 devices            = ["cuda:0", "cuda:3"]   # or ["cpu"]
@@ -1260,7 +1269,7 @@ The model store defaults to `~/.local/share/text2audio/models` (overridable with
 |---|---|---|
 | **M0 — Scaffold** | Repo, CI, CLI skeleton, plugin discovery, model store + `models.lock`, `doctor`, worker protocol stub. | `doctor` passes; offline CI job green; a dummy backend synthesizes a sine-wave "segment" through a worker. |
 | **M1 — Conversion** | TXT, FB2, EPUB, PDF → Markdown + metadata; segmentation; manifest; PDF reader benchmark (Docling / pymupdf4llm / Marker). Russian fixtures first (cp1251 FB2, `.fb2.zip`, "Глава" TXT headings). | Golden-file tests pass for all formats on the fixture corpus, including a Russian fixture per format. |
-| **M2 — Russian TTS** | Russian language pack `ru`: stress + ё (RUAccent), number agreement, dialogue dashes, Latin-script spans (FR-24), GigaAM-v3 QA; backends per tier as decided (T0 Silero `xenia`; T1 hybrid Silero → Chatterbox VC + Chatterbox Multilingual for Latin-script segments, §6.6.6), confirmed by the M2 benchmark against Qwen3-TTS, ESpeech and XTTS-v2; audio assembly, MP3 output with split plan, optional M4B, QA gate, resume; language-pack template extracted from `ru`. | Full public-domain Russian novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% segments flagged; benchmark winners recorded in §13.1. |
+| **M2 — Russian TTS** | Russian language pack `ru`: stress + ё (RUAccent), number agreement, dialogue dashes, Latin-script spans (FR-24), GigaAM-v3 QA; backends per tier as decided (T0 Silero `xenia`; T1 hybrid Silero → Chatterbox VC + Chatterbox Multilingual for Latin-script segments, §6.6.6), confirmed by the M2 benchmark against Qwen3-TTS, ESpeech and XTTS-v2; audio assembly, MP3 output with split plan, optional M4B, QA gate, resume; language-pack template extracted from `ru`. | Full public-domain Russian novel rendered on T0 and T1; RTF and QA metrics recorded in `report.json`; ≤ 5% of the QA-checked segments flagged (at most 100 checked per run, §6.9); benchmark winners recorded in §13.1. |
 | **M3 — Expression** | E1 structural rules, multi-voice dialogue (Russian dialogue dashes and author's remarks), E3 directives, E2 classifier plugin. | A/B listening test meets the §6.7 threshold for E1; E2 result documented (ship or defer). |
 | **M4 — English** | English language pack `en` generated from the template: misaki/espeak-ng G2P, English normalization, faster-whisper QA; Kokoro + Chatterbox backends (IndexTTS-2 benchmarked as expressive alternative). | Zero diff in `core/`; pack built in ≤ 3 developer-days; its golden tests and QA gate pass. |
 | **M5 — Hardening & v1.0** | Air-gapped bundle, security tests, docs, performance tuning. | Definition of Done (§14) complete; v1.0.0 tagged. |
@@ -1338,7 +1347,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | The Chatterbox narrator reference (15 s Silero `xenia` clip, 1.8 MB) is committed to the `ru` pack (`voices/ref-xenia.wav`), not listed in `models.lock`, which lists downloadable assets only; segment hashes count reference clips by content. | Decided |
 | 2026-10-26 | T1 reference limits for measurements: one GPU (the one with most free memory), 8 CPU cores near it, 16 GB RAM (`tests/e2e/test_novel.py::test_t1`). | Decided |
 | 2026-10-26 | T1 confirmed for `ru` (M2 exit criterion, §9): full «Капитанская дочка» on one shared RTX 3090 Ti / 8 cores / 16 GB, hybrid route, `rtf_wall` 0.21 (target ≤ 0.5), 0.5 % flagged (target ≤ 5 %), 5 segments kept unpolished. Chatterbox VC is the largest stage (~63 %). | Decided |
-| 2026-10-26 | **QA limit of 100 segments** (owner): the QA gate (GigaAM) checks at most 100 segments per run, a hash-chosen sample; polish and QA process work in batches of ≤ 100 segments (§6.9). Per-run vs per-batch cap and the effect on the M2 flagged-share criterion are still to be settled. | Proposed |
+| 2026-10-26 | **QA limit of 100 segments** (owner): the QA gate (GigaAM) checks at most 100 segments per run, a hash-chosen sample; polish and QA process work in batches of ≤ 100 segments (§6.9). As built (owner's answer): the cap is **per run** (`[qa] max_segments`, the first segments in hash order, after `sample=N%`) **and** polish/QA run in batches of ≤ 100 (`[qa] batch`) on worker pools kept loaded; the M2 "flagged ≤ 5 %" criterion is measured over the checked sample, and the novel tests assert `checked == min(100, total)`. | Decided |
 | 2026-10-26 | Compound hyphens lost at PDF line ends are restored by `ru` normalization, not by the PDF reader: a word pymorphy3 does not know gets its hyphen back when the hyphenated form is a dictionary word («ктото» → «кто-то», «вопервых» → «во-первых») or, for a lowercase word, its parts fit `по-` + adverb in -ому/-ему/-ски/-ьи, `пол-` + a known genitive starting with a vowel or «л», or a known word + particle (-то, -либо, -нибудь, -таки, -де; -ка after an imperative). Dictionary words («потому», «полгода») and capitalized unknown words (names) are never changed. | Decided |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
 | 2026-10-25 | **PDF default reader: pymupdf4llm 1.28.2 with its layout model** (benchmark `spikes/pdf-readers`: no header/page-number leaks, 0.4 s/page CPU, models inside the wheel). Pinned below PyMuPDF 2.0, which absorbed it. Docling: possible plugin; Marker 2.x excluded (vLLM Docker server). The layout model's `onnxruntime` runs in the core process: a reader, CPU-only, no downloads. | Decided |

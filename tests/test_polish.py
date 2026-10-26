@@ -20,7 +20,7 @@ TARGET = "ch01-s0004"  # a long narration segment
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
 
 
-def config(tier: str) -> Any:
+def config(tier: str, **qa: int) -> Any:
     lang = {
         "backend": {"fast": "sine", "expressive": "sine"},
         "polish": {"expressive": "sine-polish"},
@@ -28,7 +28,7 @@ def config(tier: str) -> Any:
         "g2p": "backend",
         "asr": "sine-echo",
     }
-    return load_config([], {"lang": {"ru": lang}, "synthesis": {"tier": tier}})
+    return load_config([], {"lang": {"ru": lang}, "synthesis": {"tier": tier}, "qa": qa})
 
 
 def convert(tmp_path: Path, name: str) -> Path:
@@ -37,8 +37,8 @@ def convert(tmp_path: Path, name: str) -> Path:
     return result.folder
 
 
-def run(book: Path, tmp_path: Path, tier: str = "expressive") -> dict[str, Any]:
-    return api.synthesize(book, config=config(tier), store=tmp_path / "store").report
+def run(book: Path, tmp_path: Path, tier: str = "expressive", **qa: int) -> dict[str, Any]:
+    return api.synthesize(book, config=config(tier, **qa), store=tmp_path / "store").report
 
 
 def manifest(book: Path) -> list[dict[str, Any]]:
@@ -122,3 +122,21 @@ def test_polish_retry_with_new_seed_fixes_segment(
     assert report["qa"]["flagged"] == report["qa"]["unpolished"] == 0
     target = next(s for s in manifest(book) if s["id"] == TARGET)
     assert target["attempts"] == 2
+
+
+def test_polish_batches_reuse_one_worker_pool(
+    book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loads = tmp_path / "loads.log"
+    monkeypatch.setenv("T2A_LOAD_LOG", str(loads))
+    monkeypatch.setenv("T2A_SINE_POLISH_FAULT", "garbage:2")
+    monkeypatch.setenv("T2A_SINE_FAULT_IDS", TARGET)
+    report = run(book, tmp_path, batch=4, max_segments=0)
+    segments = report["segments"]["total"]
+    assert segments > 3 * 4  # several batches
+    assert report["polish"]["segments"] == segments
+    assert report["qa"]["checked"] == segments and report["qa"]["flagged"] == 0
+    assert report["qa"]["retried"] == 1  # the retry is polished on the same pool
+    # One sine pool for the source audio and one sine-polish pool for every batch.
+    sine = [x for x in loads.read_text("utf-8").splitlines() if x.startswith("sine")]
+    assert len(sine) == report["synthesis"]["workers"] + report["polish"]["workers"]

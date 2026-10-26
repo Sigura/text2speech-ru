@@ -48,7 +48,7 @@ from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.languages import profile as language_profile
 from text2audio.core.plugins import discover
-from text2audio.core.pool import cpu_slots, parallel
+from text2audio.core.pool import Pool, cpu_slots, parallel
 from text2audio.core.workspace import BookFolder, sanitize_name, write_json
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
@@ -462,6 +462,58 @@ def _gpu_groups(
     return groups
 
 
+def _slots(
+    backend: BackendDescriptor,
+    tier: Tier,
+    pending: int,
+    config: Config,
+    max_workers: int | None,
+) -> list[res.WorkerSlot]:
+    rc = config.resources
+    slots = res.plan(
+        res.probe(),
+        backend.capabilities,
+        tier=tier,
+        devices=rc.devices,
+        max_workers=rc.max_workers,
+        threads_per_worker=rc.threads_per_worker,
+    ).slots
+    if not slots:
+        raise SynthesisError(f"no device to run {backend.name!r} on")
+    cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
+    n = max(1, min(len(slots), cap, math.ceil(pending / SEGMENTS_PER_WORKER)))
+    return slots[:n]
+
+
+class Pools:
+    """Backend worker pools kept loaded across polish and QA batches (§6.9).
+
+    One pool per backend and tier, sized by the first batch that needs it; closed at
+    the end of the run.
+    """
+
+    def __init__(self, config: Config, store: ModelStore, max_workers: int | None) -> None:
+        self.config = config
+        self.store = store
+        self.max_workers = max_workers
+        self.pools: dict[tuple[str, Tier], tuple[Pool, list[res.WorkerSlot]]] = {}
+
+    def get(
+        self, backend: BackendDescriptor, tier: Tier, pending: int
+    ) -> tuple[Pool, list[res.WorkerSlot]]:
+        key = (backend.name, tier)
+        if key not in self.pools:
+            slots = _slots(backend, tier, pending, self.config, self.max_workers)
+            payload = self.store.payload(assets_for(backend.name, load_lock()))
+            workers = [WorkerBackend(backend, self.store.root, slot) for slot in slots]
+            self.pools[key] = (Pool(workers, {"assets": payload}), slots)
+        return self.pools[key]
+
+    def close(self) -> None:
+        for pool, _ in self.pools.values():
+            pool.close()
+
+
 def _render_pool(
     backend: BackendDescriptor,
     tier: Tier,
@@ -474,33 +526,27 @@ def _render_pool(
     max_workers: int | None = None,
     attempt: int = 1,
     on_start: Callable[[list[res.WorkerSlot]], None] | None = None,
+    pools: Pools | None = None,
 ) -> list[res.WorkerSlot]:
-    """Run `job` for `segments` on a pool of `backend` workers; returns their slots."""
-    caps = backend.capabilities
-    rc = config.resources
-    slots = res.plan(
-        res.probe(),
-        caps,
-        tier=tier,
-        devices=rc.devices,
-        max_workers=rc.max_workers,
-        threads_per_worker=rc.threads_per_worker,
-    ).slots
-    if not slots:
-        raise SynthesisError(f"no device to run {backend.name!r} on")
-    cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
-    n = max(1, min(len(slots), cap, math.ceil(len(segments) / SEGMENTS_PER_WORKER)))
-    payload = store.payload(assets_for(backend.name, load_lock()))
+    """Run `job` for `segments` on `backend` workers (from `pools` if given); their slots."""
 
     def work(worker: WorkerBackend, seg: Segment) -> None:
         op, fields = job(seg, attempt)
         on_done(seg, worker.call(op, **fields))
 
-    workers = [WorkerBackend(backend, store.root, slot) for slot in slots[:n]]
+    if pools is not None:
+        pool, slots = pools.get(backend, tier, len(segments))
+        if on_start:
+            on_start(slots)
+        pool.run(segments, work, on_error=on_fail)
+        return slots
+    slots = _slots(backend, tier, len(segments), config, max_workers)
+    payload = store.payload(assets_for(backend.name, load_lock()))
+    workers = [WorkerBackend(backend, store.root, slot) for slot in slots]
     if on_start:
-        on_start(slots[:n])
+        on_start(slots)
     parallel(workers, segments, work, load={"assets": payload}, on_error=on_fail)
-    return slots[:n]
+    return slots
 
 
 def render(
@@ -516,6 +562,7 @@ def render(
     max_workers: int | None = None,
     stage: str = "synthesize",
     sources: dict[str, Segment] | None = None,
+    pools: Pools | None = None,
 ) -> dict[str, Any]:
     """Render every segment whose hash is not in the journal yet on `backend` workers."""
     audio_dir = folder.work / "audio" / "segments"
@@ -595,6 +642,7 @@ def render(
         failed,
         max_workers,
         on_start=start,
+        pools=pools,
     )
     stats["workers"] = len(slots)
     stats["device"] = slots[0].device
@@ -609,7 +657,7 @@ def rerenderer(
     config: Config,
     store: ModelStore,
     journal: Journal,
-    max_workers: int | None,
+    pools: Pools,
     warnings: list[dict[str, str]],
 ) -> gate.Rerender:
     """`gate.Rerender` for this book: attempt `n` of a segment goes to `<hash>.a<n>.wav`.
@@ -655,12 +703,58 @@ def rerenderer(
                 store,
                 done,
                 failed,
-                max_workers,
-                attempt,
+                attempt=attempt,
+                pools=pools,
             )
         return replies
 
     return rerender
+
+
+def _ready(segments: list[Segment], sources: dict[str, Segment], journal: Journal) -> list[Segment]:
+    """Segments whose source audio exists: a segment whose source failed stays failed."""
+    return [s for s in segments if s.hash not in sources or (sources[s.hash].hash or "") in journal]
+
+
+def _add_stats(total: dict[str, Any], part: dict[str, Any]) -> None:
+    for key in ("rendered", "cached", "duplicate", "elapsed_ms", "wall_s"):
+        total[key] = total.get(key, 0) + part[key]
+    total["wall_s"] = round(total["wall_s"], 2)
+    total["workers"] = max(total.get("workers", 0), part["workers"])
+    total["device"] = total.get("device") or part["device"]
+
+
+class _Batches:
+    """Progress for stages that run batch by batch: one bar over all batches.
+
+    `totals` is each stage's expected count for the run; `finish` closes a bar that
+    ended short (failed segments, sample hashes that were never rendered).
+    """
+
+    def __init__(self, progress: Progress | None, totals: dict[str, int]) -> None:
+        self.progress = progress
+        self.totals = totals
+        self.base = dict.fromkeys(totals, 0)
+
+    def __call__(self, stage: str, done: int, total: int) -> None:
+        if self.progress is None:
+            return
+        if stage not in self.totals:
+            self.progress(stage, done, total)
+            return
+        overall = self.base[stage] + done
+        self.totals[stage] = max(self.totals[stage], overall)
+        self.progress(stage, overall, self.totals[stage])
+        if done >= total:
+            self.base[stage] = overall
+
+    def detail(self, stage: str, **fields: Any) -> None:
+        _detail(self.progress, stage, **fields)
+
+    def finish(self) -> None:
+        for stage, done in self.base.items():
+            if self.progress is not None and 0 < done < self.totals[stage]:
+                self.progress(stage, done, done)
 
 
 # --------------------------------------------------------------------------- assembly
@@ -901,42 +995,57 @@ def synthesize(
             progress,
             max_workers,
         )
-    polish_stats: dict[str, Any] = {}
-    # A polish job needs its source audio; a segment whose source failed stays failed.
-    ready = [
-        s for s in segments if s.hash not in sources or (sources[s.hash].hash or "") in journal
-    ]
-    groups = _gpu_groups(plan, ready, sources)
-    if groups:
-        with timings.stage("polish"):
-            for backend, segs in groups.values():
-                polish_stats = render(
-                    folder,
-                    backend,
-                    "expressive",
-                    segs,
-                    _job(plan, backend.name, sources, audio_dir),
-                    config,
-                    store,
-                    journal,
-                    progress,
-                    max_workers,
-                    stage="polish",
-                    sources=sources,
-                )
-                stats.setdefault("failures", []).extend(polish_stats.get("failures", []))
     retry_warnings: list[dict[str, str]] = []
-    with timings.stage("qa"):
-        qa = gate.run_qa(
-            segments,
-            journal,
-            audio_dir,
-            plan.profile,
-            config,
-            store,
-            rerenderer(folder, plan, sources, config, store, journal, max_workers, retry_warnings),
-            progress,
-        )
+    pools = Pools(config, store, max_workers)
+    qa = gate.Gate(
+        segments,
+        journal,
+        audio_dir,
+        plan.profile,
+        config,
+        store,
+        rerenderer(folder, plan, sources, config, store, journal, pools, retry_warnings),
+    )
+    polishing = {
+        s.hash or ""
+        for _, segs in _gpu_groups(plan, _ready(segments, sources, journal), sources).values()
+        for s in segs
+        if not ((s.hash or "") in journal and gate.wav_path(audio_dir, s.hash or "").is_file())
+    }
+    batched = _Batches(progress, {"polish": len(polishing), "qa": qa.todo})
+    qa.progress = batched
+    polish_stats: dict[str, Any] = {}
+    try:
+        # Polish, then QA, a batch at a time (§6.9); the worker pools stay loaded.
+        for i in range(0, len(segments), config.qa.batch):
+            batch = segments[i : i + config.qa.batch]
+            groups = _gpu_groups(plan, _ready(batch, sources, journal), sources)
+            if groups:
+                with timings.stage("polish"):
+                    for backend, segs in groups.values():
+                        part = render(
+                            folder,
+                            backend,
+                            "expressive",
+                            segs,
+                            _job(plan, backend.name, sources, audio_dir),
+                            config,
+                            store,
+                            journal,
+                            batched,
+                            max_workers,
+                            stage="polish",
+                            sources=sources,
+                            pools=pools,
+                        )
+                        _add_stats(polish_stats, part)
+                        stats.setdefault("failures", []).extend(part.get("failures", []))
+            with timings.stage("qa"):
+                qa.check(batch)
+    finally:
+        qa.close()
+        pools.close()
+    batched.finish()
     for seg in segments:
         entry = journal.get(seg.hash or "")
         seg.status = "done" if entry else "failed"
@@ -952,7 +1061,7 @@ def synthesize(
     report = _report(
         folder, plan, segments, sources, journal, stats, polish_stats, split, files, uncertain, meta
     )
-    report["qa"] = gate.summary(segments, journal, qa, qa_percent)
+    report["qa"] = gate.summary(segments, journal, qa.stats, qa_percent)
     if sources:
         # Polished segments whose kept attempt is the unpolished source (§6.6.6 fallback).
         report["qa"]["unpolished"] = sum(

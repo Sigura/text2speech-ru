@@ -18,8 +18,10 @@ from typer.testing import CliRunner
 from text2audio import api
 from text2audio.cli import app
 from text2audio.core.config import load_config, parse_qa_mode
+from text2audio.core.contracts import Segment
 from text2audio.core.journal import Journal
-from text2audio.qa.gate import sampled
+from text2audio.core.synthesize import _Batches
+from text2audio.qa.gate import sampled, select
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
 TARGET = "ch01-s0004"  # a long narration segment
@@ -27,8 +29,10 @@ pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ff
 LANG = {"ru": {"backend": {"fast": "sine"}, "g2p": "backend", "asr": "sine-echo"}}
 
 
-def config(qa: str = "on") -> Any:
-    return load_config([], {"lang": LANG, "synthesis": {"tier": "fast"}, "qa": {"mode": qa}})
+def config(qa: str = "on", **limits: int) -> Any:
+    return load_config(
+        [], {"lang": LANG, "synthesis": {"tier": "fast"}, "qa": {"mode": qa, **limits}}
+    )
 
 
 @pytest.fixture
@@ -38,8 +42,12 @@ def book(tmp_path: Path) -> Path:
     return result.folder
 
 
-def run(book: Path, tmp_path: Path, qa: str = "on") -> api.SynthesisReport:
-    return api.synthesize(book, config=config(qa), store=tmp_path / "store")
+def run(book: Path, tmp_path: Path, qa: str = "on", **limits: int) -> api.SynthesisReport:
+    return api.synthesize(book, config=config(qa, **limits), store=tmp_path / "store")
+
+
+def manifest(book: Path) -> list[dict[str, Any]]:
+    return [json.loads(x) for x in (book / "_work/segments.jsonl").read_text("utf-8").splitlines()]
 
 
 def fault(monkeypatch: pytest.MonkeyPatch, spec: str, ids: str = TARGET) -> None:
@@ -127,6 +135,46 @@ def test_sample_checks_a_stable_subset(book: Path, tmp_path: Path) -> None:
     assert 0 < len(expected) < len(segs)
 
 
+def test_limit_checks_the_first_segments_in_hash_order(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path, max_segments=5, batch=4)
+    qa = result.report["qa"]
+    segs = manifest(book)
+    checked = {r["segment"] for r in qa["segments"]}
+    assert qa["checked"] == qa["sample"] == len(checked) == min(5, len(segs))
+    chosen = {s["hash"] for s in segs if s["id"] in checked}
+    assert max(chosen) < min(s["hash"] for s in segs if s["id"] not in checked)
+    assert len({s["chapter"] for s in segs if s["id"] in checked}) > 1  # spread, not a prefix
+    again = run(book, tmp_path, max_segments=5, batch=4)
+    assert again.report["qa"]["checked_now"] == 0
+    assert {r["segment"] for r in again.report["qa"]["segments"]} == checked
+
+
+def test_select_counts_segments_not_hashes() -> None:
+    def seg(n: int, h: str) -> Segment:
+        return Segment(id=f"s{n}", text="x", lang="ru", hash=h)
+
+    segs = [seg(1, "a" * 64), seg(2, "a" * 64), seg(3, "b" * 64), seg(4, "c" * 64)]
+    assert select(segs, 100, 2) == {"a" * 64}
+    assert select(segs, 100, 3) == {"a" * 64, "b" * 64}
+    assert select(segs, 100, 0) == {"a" * 64, "b" * 64, "c" * 64}
+
+
+def test_batches_check_everything_and_retry_across_boundaries(
+    book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fault(monkeypatch, "garbage")
+    loads = tmp_path / "loads.log"
+    monkeypatch.setenv("T2A_LOAD_LOG", str(loads))
+    result = run(book, tmp_path, max_segments=0, batch=4)
+    qa = result.report["qa"]
+    assert qa["checked"] == result.report["segments"]["total"]
+    assert list(flagged(result.report)) == [TARGET]
+    assert flagged(result.report)[TARGET]["attempts"] == 3
+    # One ASR pool for every batch and retry, not one per batch.
+    echo = [x for x in loads.read_text("utf-8").splitlines() if x.startswith("echo")]
+    assert len(echo) == qa["workers"]
+
+
 def test_qa_mode_values() -> None:
     assert [parse_qa_mode(v) for v in ("on", "off", "sample=10%", "SAMPLE=100%")] == [
         100,
@@ -159,3 +207,17 @@ def test_cli_exit_code_4_when_flags_remain(
     assert clean.exit_code == 0, clean.output  # flags are not reported with QA off
     bad = CliRunner().invoke(app, ["synthesize", str(book), "--qa", "maybe"])
     assert bad.exit_code == 1
+
+
+def test_batched_progress_is_one_bar_per_stage() -> None:
+    calls: list[tuple[str, int, int]] = []
+    batched = _Batches(lambda *a: calls.append(a), {"qa": 7})
+    for n in (3, 2):  # two batches; 2 expected segments never got rendered
+        for done in range(n + 1):
+            batched("qa", done, n)
+    batched("qa retry 2", 1, 1)
+    batched.finish()
+    qa = [(d, t) for s, d, t in calls if s == "qa"]
+    assert [d for d, _ in qa] == [0, 1, 2, 3, 3, 4, 5, 5]
+    assert all(t == 7 for _, t in qa[:-1]) and qa[-1] == (5, 5)
+    assert ("qa retry 2", 1, 1) in calls
