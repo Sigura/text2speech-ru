@@ -37,6 +37,11 @@ def analyzer() -> Any:
     return pymorphy3.MorphAnalyzer(lang="ru")
 
 
+@lru_cache(maxsize=65536)
+def known(word: str) -> bool:
+    return bool(analyzer().word_is_known(word.lower()))
+
+
 @dataclass(frozen=True)
 class Form:
     pos: str | None
@@ -68,6 +73,11 @@ def forms(word: str) -> tuple[Form, ...]:
             )
         )
     return tuple(out)
+
+
+@lru_cache(maxsize=16384)
+def imperative(word: str) -> bool:
+    return any(p.tag.mood == "impr" for p in analyzer().parse(word.lower()))
 
 
 def nominal(word: str) -> tuple[Form, ...]:

@@ -21,7 +21,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   Russian fixture per format. Follow-ups:
   - [ ] `--reader` and a reader plugin group once a second PDF reader exists (Docling);
   - [ ] PDF per-file time limit (§6.12); OCR for scanned PDFs (v2);
-  - [ ] restore compound hyphens lost at PDF line ends (`где-нибудь`) — `ru` normalization, M2;
+  - [x] restore compound hyphens lost at PDF line ends (`где-нибудь`) — `ru` normalization, M2;
   - [ ] English TXT headings ("Chapter 1") — with the `en` pack, M4.
 - [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
   dashes, English words — FR-24), Silero worker (CPU) and Chatterbox worker (VC + TTS,
@@ -40,7 +40,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] T1 full-novel run (`tests/e2e/test_novel.py::test_t1`);
   - [ ] QA limit: at most 100 segments checked per run, polish/QA in batches of ≤ 100
     (SPEC §6.9);
-  - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template.
+  - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template:
+    - [x] 4a — PDF compound hyphens (`ru` normalization);
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

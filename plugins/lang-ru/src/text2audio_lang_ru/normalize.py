@@ -9,8 +9,9 @@ the gender from that noun (*с 5 книгами* → «с пятью книга�
 rutextnorm was audited against the pack's test set first (§13.1) and rejected: it gets
 gender agreement wrong («два книги»), turns *Пётр I* into «Пётр и» and drops ranges.
 
-Order: Latin look-alike letters → fixed multi-word abbreviations → dates and times
-(rewritten into words the token pass understands) → one token pass for numbers, Roman
+Order: Latin look-alike letters → compound hyphens lost in PDFs → fixed multi-word
+abbreviations → dates and times (rewritten into words the token pass understands) →
+one token pass for numbers, Roman
 numerals, units and abbreviations → initials, acronyms (Cyrillic, then Latin) and
 symbols. Other Latin words are left for the core's foreign-span stage, which calls
 `transliterate` (FR-24, `latin.py`).
@@ -857,6 +858,52 @@ def _acronyms(text: str) -> str:
     return _ACRONYM.sub(repl, text)
 
 
+_COMPOUND_PREFIXES = ("кое", "кой", "пол", "из", "во", "по", "в")
+_PARTICLES = ("нибудь", "либо", "таки", "то", "ка", "де")
+_ADVERB_ENDINGS = ("ому", "ему", "ски", "цки", "ьи")
+_JOINED = re.compile(r"(?<![\w\-́+])[А-Яа-яЁё]{4,}(?![\w\-́+])")
+
+
+def _parts_known(head: str, tail: str) -> bool:
+    if head == "по":
+        return tail.endswith(_ADVERB_ENDINGS) and morph.known(tail)
+    if head == "пол":
+        # «пол-» keeps its hyphen only before a vowel or «л» («пол-яблока», «полдома»).
+        return (
+            tail[0] in "аеёиоуыэюял"
+            and morph.known(tail)
+            and any(
+                f.pos == "NOUN" and f.case == "gent" and not f.plural for f in morph.forms(tail)
+            )
+        )
+    if tail in _PARTICLES and len(head) > 1 and morph.known(head):
+        return morph.imperative(head) if tail == "ка" else True
+    return False
+
+
+def _compound(m: re.Match[str]) -> str:
+    """A compound whose hyphen the PDF reader dropped at a line break.
+
+    Only words pymorphy3 does not know are touched, so «потому» stays. The hyphenated
+    form must be a dictionary word («ктото» → «кто-то»), or, for a lowercase word, its
+    parts must fit a compound pattern («покрасному» → «по-красному») — a capitalized
+    unknown word is more likely a name than a joined compound.
+    """
+    word = m[0]
+    low = word.lower()
+    if morph.known(low):
+        return word
+    cuts = [len(p) for p in _COMPOUND_PREFIXES if low.startswith(p)]
+    cuts += [len(low) - len(s) for s in _PARTICLES if low.endswith(s)]
+    for k in cuts:
+        head, tail = low[:k], low[k:]
+        if not head or not tail:
+            continue
+        if morph.known(f"{head}-{tail}") or (word == low and _parts_known(head, tail)):
+            return f"{word[:k]}-{word[k:]}"
+    return word
+
+
 def _initials(text: str) -> str:
     return _INITIALS.sub(lambda m: LETTERS[m[1]].capitalize() + " ", text)
 
@@ -866,6 +913,7 @@ class RussianNormalizer:
 
     def normalize(self, text: str, role: str = "narration") -> NormResult:
         text, resolved = latin.fix_homoglyphs(text)
+        text = _JOINED.sub(_compound, text)
         for pattern, repl in _FIXED:
             text = pattern.sub(repl, text)
         text = _DATE.sub(_date, text)

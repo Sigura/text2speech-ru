@@ -126,6 +126,9 @@ All notable changes to this project are documented here. The format follows
 - SPEC 1.13-M2: T1 `ru` measured on the full novel (`rtf_wall` 0.21, 0.5 % flagged,
   §9); the owner's QA limit of 100 segments per run and batches of ≤ 100 is recorded
   as proposed (§6.9).
+- M2 step 4a — the `ru` pack restores compound hyphens lost at PDF line ends
+  («понастоящему» → «по-настоящему», «ктото» → «кто-то») for words pymorphy3 does not
+  know (SPEC 1.14-M2).
 
 ### Changed
 
