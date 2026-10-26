@@ -7,12 +7,14 @@ editable Markdown text and then into an audiobook: MP3 files, one per book secti
 with tags and a cover. It uses local neural text-to-speech (TTS) and needs no network
 after installation. It is for personal use only (ADR-0007).
 
-> **Status:** M0 (scaffold) and **M1 (conversion) are done**: `text2audio convert`
-> turns FB2, EPUB, TXT, PDF and Markdown into an editable `<book>.md`, metadata, cover
-> and the segment list for synthesis. Spikes chose the Russian voices and models
-> ([ru-smoke](spikes/ru-smoke/FINDINGS.md), [ru-polish](spikes/ru-polish/FINDINGS.md))
-> and the PDF reader ([pdf-readers](spikes/pdf-readers/FINDINGS.md)). Next: Russian
-> speech (M2). Plans and ideas: [TODO.md](TODO.md); full specification: [SPEC.md](SPEC.md).
+> **Status:** M0 (scaffold), M1 (conversion) and **M2 (Russian speech) are done**:
+> `text2audio run` turns FB2, EPUB, TXT, PDF and Markdown into a Russian audiobook —
+> MP3 per section with subtitles, an M4B of the whole book, cover, `report.json` — on
+> the CPU (Silero `xenia`) or the GPU hybrid (Silero → Chatterbox), with an ASR quality
+> check. A full novel renders in about 0.13× real time on either tier, with ≤ 2 % of
+> the checked segments flagged. The voices were chosen by a benchmark and blind listening
+> ([ru-bench](spikes/ru-bench/FINDINGS.md)). Next: expression — pauses, a dialogue voice,
+> directives (M3). Plans and ideas: [TODO.md](TODO.md); full specification: [SPEC.md](SPEC.md).
 
 ## Solution overview
 
@@ -40,10 +42,10 @@ book.fb2 ─► detect & parse ─► <book>.md ─► normalize ─► stress/�
 | Stage | Choice | Why |
 |---|---|---|
 | Stress + ё | RUAccent (silero-stress fallback) | Context homographs (*зáмок / замóк*), *все / всё*. |
-| Normalization | rutextnorm after audit, else own rules + num2words | Numbers must agree in case and gender (*с 5 книгами* → «с пятью книгами»). |
+| Normalization | Own rules + num2words + pymorphy3 (rutextnorm failed the audit) | Numbers must agree in case and gender (*с 5 книгами* → «с пятью книгами»). |
 | Narrator voice | **Silero `xenia`** (female), chosen by listening | Used directly on CPU and as the cloning reference on GPU, so both tiers sound like one narrator. |
 | TTS, CPU tier | **Silero v5.6 `xenia`** | Russian-trained, built-in stress/ё; 12× real time on 4 CPU cores, no word errors once numbers are spelled out ([findings](spikes/ru-smoke/FINDINGS.md)). |
-| TTS, GPU tier | **Hybrid**: Silero → Chatterbox VC; Chatterbox Multilingual for sentences with English words | Same naturalness as Chatterbox TTS alone (UTMOS 3.80 vs 3.81) at RTF 0.20 vs 1.32 on an RTX 4090, and no word errors ([findings](spikes/ru-polish/FINDINGS.md)). Qwen3-TTS, ESpeech and XTTS-v2 are benchmarked against it in M2. |
+| TTS, GPU tier | **Hybrid**: Silero → Chatterbox VC; Chatterbox Multilingual for sentences with English words | Same naturalness as Chatterbox TTS alone (UTMOS 3.80 vs 3.81) at RTF 0.20 vs 1.32 on an RTX 4090, and no word errors ([findings](spikes/ru-polish/FINDINGS.md)). Preferred to Silero, XTTS-v2 and ESpeech in blind listening, tied with Qwen3-TTS ([benchmark](spikes/ru-bench/FINDINGS.md)). |
 | English terms | Lexicon → acronym spelling → Chatterbox (GPU) or transliteration (CPU) | Silero silently drops Latin-script words; Chatterbox reads them well. |
 | QA ASR | GigaAM-v3 `rnnt` (Sber, open weights) | Best open Russian ASR; the `rnnt` branch writes numbers as words, so correctly read numbers are not flagged. |
 
@@ -91,7 +93,7 @@ CI fails when they are stale.
 
 ### Usage examples
 
-Available now (M0, M1, M2 steps 1–2):
+Available now (M0–M2):
 
 ```bash
 CUDA_VISIBLE_DEVICES="2,3" text2audio run "./inputs/Бэнкс. Выбор Оружия.fb2" --workers 4        # convert + synthesize → MP3s, playlist, report.json
@@ -149,9 +151,8 @@ only what changed:
 output/Бэнкс. Выбор Оружия: 18 file(s), 8.97 h, 4014 of 4088 segments rendered, RTF 0.1422; split: 18 files at heading level 2
 ```
 
-The commands below are **planned** (rest of M2 and later); they follow the CLI in
-SPEC §6.11. `preview`, the QA gate (`--qa`), the GPU hybrid, generated covers,
-`config show` and `bundle` are not there yet.
+The examples below follow the CLI in SPEC §6.11; everything works except `voices`,
+`config show` (M3) and `bundle` (M5).
 
 **Many books at once:**
 
@@ -251,13 +252,13 @@ output/Война и мир/
 
 | # | Question | Decided by |
 |---|---|---|
-| 1 | Does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`; WER cannot tell. | Owner listening, then the M2 benchmark |
-| 2 | Does a Russian-trained model (ESpeech / F5-TTS, XTTS-v2) or Qwen3-TTS beat the GPU hybrid? | M2 benchmark + listening |
+| 1 | Does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`; WER cannot tell. | Owner listening, M3 |
+| 2 | ~~Does a Russian-trained model (ESpeech / F5-TTS, XTTS-v2) or Qwen3-TTS beat the GPU hybrid?~~ **Decided:** no; Qwen3-TTS ties and is an M3 candidate for dialogue (SPEC §13.1). | M2 benchmark |
 | 3 | ~~Does rutextnorm pass the code audit?~~ **Decided:** no (gender agreement, Roman numerals, ranges); the `ru` pack owns its rules (SPEC §13.1). | M2 step 1 |
-| 4 | Cover prompts for Russian books: FB2 genre mapping only, or offline ru→en translation (e.g. Opus-MT) of title and annotation? | M2 |
+| 4 | ~~Cover prompts for Russian books?~~ **Decided:** genre keywords plus title and description translated offline by Opus-MT `ru-en` (SPEC §13.1). | M2 |
 | 5 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
-| 6 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M2 |
-| 7 | Can Chatterbox be made faster than real time (fp16, `torch.compile`)? Only matters for sentences with English words. | M2 |
+| 6 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M3 |
+| 7 | Can Chatterbox be made faster than real time (fp16, `torch.compile`)? Only matters for sentences with English words. | M3 |
 
 ## Documentation
 

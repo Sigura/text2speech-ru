@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| Document version | 1.22-M2 |
-| Status | **Approved for M0** (open decisions in §13.1) |
+| Document version | 2.0-M3 |
+| Status | **M2 done, M3 next** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
@@ -45,6 +45,7 @@
 | 1.20-M2 | 2026-10-26 | M2 step 4f — benchmark metrics (`spikes/ru-bench/`). **Decision (owner):** each challenger synthesizes at most 100 segments, and the listening test is the owner alone with one female voice (§6.6.5 steps 1 and 3). **Decision (owner):** "quality" in the component priority means TTS quality judged by listening; ASR WER is a floor (§8, §13.1, ADR-0007). Benchmark winners are recorded as proposed until the listening test (§13.1). |
 | 1.21-M2 | 2026-10-26 | M2 step 4f — **Decision (owner):** benchmark winners after the blind listening test: T0 Silero `xenia`, T1 the hybrid; ESpeech and XTTS-v2 dropped; Qwen3-TTS is an M3 candidate for expressive and dialogue segments (§13.1). |
 | 1.22-M2 | 2026-10-26 | M2 step 5 — **Decision (owner):** an M4B of the whole book is written by default next to the MP3s (FR-09, §5.2, §6.8, §13.1). |
+| 2.0-M3 | 2026-10-26 | **M2 closed**: every §11 exit criterion met (§13.1); open items carried to M3 in `TODO.md`. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1401,6 +1402,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | Language-pack template: a plain `templates/lang/` directory filled by `scripts/new_lang.py` with `string.Template` — no cookiecutter (no new dependency, nothing to download); content extracted from the `ru` pack. | Decided |
 | 2026-10-26 | Benchmark protocol for a personal project (owner): each challenger synthesizes at most 100 segments of the set (benchmark and tests only, never real book runs); the blind listening test is the owner alone, one female voice (§6.6.5). | Decided |
 | 2026-10-26 | **"Quality" means TTS quality** (owner): in the component priority (ADR-0007) it is how natural the speech sounds — intonation, stress — judged by listening. ASR WER is an intelligibility floor, not a ranking, and speed (third priority) does not rule out a better-sounding GPU backend. | Decided |
+| 2026-10-26 | **M2 closed** against §11: full «Капитанская дочка» on T0 (4 cores / 8 GB, no GPU) and T1 (hybrid, one shared GPU): `rtf_wall` 0.128 / 0.130, 2 / 0 of 100 checked segments flagged (`tests/e2e/test_novel.py`, reports kept by the owner outside git); benchmark winners recorded below; M4B added (step 5). Carried to M3: stress listening (Silero vs RUAccent), `voices` and `config show`, `ru` text gaps found by the benchmark (number agreement, ё in names, homographs), report counts for Chatterbox-routed segments. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

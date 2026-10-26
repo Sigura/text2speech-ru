@@ -457,7 +457,7 @@ def preview(
 
 
 _PLANNED = {
-    "voices": "M2",
+    "voices": "M3",
     "bundle": "M5",
 }
 

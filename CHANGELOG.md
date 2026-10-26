@@ -162,6 +162,8 @@ All notable changes to this project are documented here. The format follows
 - M2 step 5 — an M4B of the whole book next to the MP3s, on by default: AAC-LC
   64 kbps mono, one chapter per MP3, cover and tags; `[output] formats = ["mp3"]`
   turns it off; re-encoded only when it changes (FR-09, SPEC 1.22-M2).
+- M2 closed against every SPEC §11 exit criterion; README status, TODO carry-overs
+  for M3; `voices` now planned for M3 (SPEC 2.0-M3).
 
 ### Changed
 

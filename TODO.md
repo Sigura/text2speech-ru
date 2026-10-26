@@ -14,7 +14,6 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
 - [x] **Spike `ru-polish`:** two-stage speech and English words in Russian text
   ([findings](spikes/ru-polish/FINDINGS.md)) → GPU hybrid Silero → Chatterbox VC,
   Chatterbox Multilingual for sentences with English words; narrator `xenia`; FR-24.
-- [ ] Stress listening: Silero's own stress vs RUAccent marks (`spikes/ru-smoke/out/listen/`).
 - [x] **M1 — Conversion:** FB2 (cp1251, `.fb2.zip`), EPUB 2/3, TXT ("Глава 1"), PDF
   (pymupdf4llm + layout, [benchmark](spikes/pdf-readers/FINDINGS.md)), MD → `<book>.md`;
   metadata; embedded cover; segment manifest; `convert --reconvert`; golden tests with a
@@ -23,7 +22,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] PDF per-file time limit (§6.12); OCR for scanned PDFs (v2);
   - [x] restore compound hyphens lost at PDF line ends (`где-нибудь`) — `ru` normalization, M2;
   - [ ] English TXT headings ("Chapter 1") — with the `en` pack, M4.
-- [ ] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
+- [x] **M2 — Russian speech:** `lang-ru` pack (stress, ё, number agreement, dialogue
   dashes, English words — FR-24), Silero worker (CPU) and Chatterbox worker (VC + TTS,
   GPU) with the hybrid route, benchmark against Qwen3-TTS / ESpeech / XTTS-v2,
   per-backend environments, MP3 + split plan, QA gate, resume, covers (SD WebUI +
@@ -52,7 +51,16 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
       Qwen3-TTS → M3 candidate for dialogue/expressive segments;
   - [x] step 5 — M4B of the whole book next to the MP3s, on by default (FR-09);
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
-  voice, `<!-- t2a: … -->` directives, emotion classifier.
+  voice, `<!-- t2a: … -->` directives, emotion classifier. Carried over from M2:
+  - [ ] stress listening: Silero's own stress vs RUAccent marks (`spikes/ru-smoke/out/listen/`);
+  - [ ] `voices` and `config show` (FR-22);
+  - [ ] Qwen3-TTS for dialogue/expressive segments (stress marks, Latin routing, speed);
+  - [ ] `ru` text gaps from the benchmark: number agreement («21 страницу», «1000»,
+    dates), ё in proper names, 7 homograph misses, «небо» → «нёбо»;
+  - [ ] report: count Chatterbox-routed segments in `segments` and label their spans
+    by the route, not «transliterated»;
+  - [ ] `envs sync <unknown name>` silently does nothing;
+  - [ ] novel fixture «pour Йtre» (should read «pour être»; cause not checked yet).
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and
