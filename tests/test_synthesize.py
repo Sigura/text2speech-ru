@@ -3,6 +3,7 @@ resume (FR-08, FR-09, FR-10, FR-17, FR-20). Real Russian models: test_ru_models.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -15,7 +16,13 @@ from text2audio import api
 from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment
 from text2audio.core.journal import Journal
-from text2audio.core.synthesize import PREVIEW_CHARS_PER_SEC, SynthesisError, preview_segments
+from text2audio.core.synthesize import (
+    HASH_VERSION,
+    PREVIEW_CHARS_PER_SEC,
+    SynthesisError,
+    preview_segments,
+    segment_hash,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
@@ -323,3 +330,18 @@ def test_preview_cli(book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert str(book / "_work" / "preview" / "chapter-01.mp3") in result.output
     bad = CliRunner().invoke(app, ["preview", str(book), "--chapter", "99"])
     assert bad.exit_code == 2, bad.output
+
+
+def test_segment_hash_covers_voice_role_and_emotion() -> None:
+    seg = Segment(id="s", text="Привет.", lang="ru", backend="sine", route="sine")
+    plain = {"v": HASH_VERSION, "text": "Привет.", "voice": "x", "route": "sine"}
+    plain |= {"backend": "sine", "model": "m", "seed": 1234}
+    # unchanged for narrator segments without emotion: no re-render of existing books
+    expected = hashlib.sha256(
+        json.dumps(plain, ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
+    assert segment_hash(seg, "x", "m") == expected
+    dialogue = seg.model_copy(update={"voice": "dialogue"})
+    angry = seg.model_copy(update={"emotion": "anger", "intensity": 0.5})
+    hashes = {segment_hash(s, "x", "m") for s in (seg, dialogue, angry)}
+    assert len(hashes) == 3

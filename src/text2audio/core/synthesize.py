@@ -54,7 +54,7 @@ from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
 from text2audio.qa import gate
 from text2audio.text.lexicon import Lexicon, user_lexicon
-from text2audio.text.segment import PAUSE_MS, segment_markdown, write_manifest
+from text2audio.text.segment import segment_markdown, write_manifest
 from text2audio.text.spans import foreign_spans, replace_spans
 from text2audio.text.stress import acute_to_plus, merge_marks, strip_marks
 from text2audio.workers.backend import Worker, WorkerBackend
@@ -218,6 +218,11 @@ def segment_hash(seg: Segment, voice_id: str, model: str) -> str:
         "model": model,
         "seed": seg.seed,
     }
+    # Only when set, so the hashes of segments rendered before E1/E3 stay valid.
+    if seg.voice != "narrator":
+        data["role_voice"] = seg.voice
+    if seg.emotion:
+        data |= {"emotion": seg.emotion, "intensity": seg.intensity}
     return hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
@@ -242,10 +247,6 @@ def _voice(prof: LanguageProfile, seg: Segment, backend: str) -> str:
 
 
 # --------------------------------------------------------------------------- text
-
-
-def _pause_map(prof: LanguageProfile) -> dict[int, int]:
-    return {PAUSE_MS[k]: v for k, v in prof.pauses_ms.items() if k in PAUSE_MS}
 
 
 def prepare(
@@ -281,7 +282,6 @@ def prepare(
         user_lexicon(plan.lang),
         folder.work / "lexicon.tsv",
     )
-    pauses = _pause_map(prof)
     uncertain: list[dict[str, str]] = []
     marked: dict[str, str] = {}
     foreign_ids: set[str] = set()
@@ -314,7 +314,6 @@ def prepare(
             if plan.foreign is not None and any(s.resolution in _FOREIGN for s in spans):
                 foreign_ids.add(seg.id)
                 marked[seg.id] = kept
-            seg.pause_after_ms = pauses.get(seg.pause_after_ms, seg.pause_after_ms)
             if progress:
                 progress("normalize", i, len(segments))
     _detail(progress, "normalize", segments=len(segments), uncertain=len(uncertain))
@@ -777,7 +776,7 @@ def _items(segments: list[Segment], journal: Journal) -> list[splitting.Item]:
                 duration_ms=ms + seg.pause_after_ms,
                 heading_level=seg.heading_level,
                 title=seg.text if seg.heading_level else None,
-                paragraph_end=seg.pause_after_ms >= PAUSE_MS["paragraph"],
+                paragraph_end=seg.pause != "sentence",
             )
         )
     return items

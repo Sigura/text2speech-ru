@@ -7,7 +7,9 @@ quotes and poem stanzas (one stanza per segment), and — with the default
 paragraph. Paragraphs are split into sentences and packed into chunks of at most
 `max_chars`; a sentence is cut only when it is longer than that.
 
-Pauses are structural defaults until the expression pass (M3) refines them.
+Each segment records the type of the boundary after it (`pause`, E1 in §6.7) and its
+length: the core default for that type unless the language profile overrides it. When
+two boundaries meet (a scene break after a paragraph), the longer type wins.
 """
 
 from __future__ import annotations
@@ -21,7 +23,15 @@ from text2audio.readers.markdown import parse_markdown
 from text2audio.text.sentences import pack, split_sentences
 
 DEFAULT_MAX_CHARS = 300
-PAUSE_MS = {"sentence": 300, "paragraph": 700, "heading": 1000, "scene": 1500, "chapter": 3000}
+PAUSE_MS = {
+    "sentence": 300,
+    "paragraph": 700,
+    "stanza": 900,
+    "quote": 1000,
+    "heading": 1000,
+    "scene": 1500,
+    "chapter": 3000,
+}
 
 
 def _notes_in(block: Block) -> list[str]:
@@ -41,6 +51,11 @@ class _Builder:
     def __init__(self, lang: str, profile: LanguageProfile | None, max_chars: int, seed: int):
         self.lang = lang
         self.abbreviations = profile.abbreviations if profile else ()
+        overrides = profile.pauses_ms if profile else {}
+        unknown = sorted(set(overrides) - set(PAUSE_MS))
+        if unknown:
+            raise ValueError(f"unknown pause type(s) in the {lang!r} profile: {unknown}")
+        self.pauses = PAUSE_MS | overrides
         self.max_chars = max_chars
         self.seed = seed
         self.segments: list[Segment] = []
@@ -59,7 +74,8 @@ class _Builder:
                 text=text,
                 lang=self.lang,
                 role=role,
-                pause_after_ms=PAUSE_MS[pause],
+                pause=pause,
+                pause_after_ms=self.pauses[pause],
                 seed=self.seed,
                 heading_level=level,
             )
@@ -68,7 +84,8 @@ class _Builder:
     def pause_last(self, pause: str) -> None:
         if self.segments:
             last = self.segments[-1]
-            last.pause_after_ms = max(last.pause_after_ms, PAUSE_MS[pause])
+            if PAUSE_MS[pause] > PAUSE_MS[last.pause]:
+                last.pause, last.pause_after_ms = pause, self.pauses[pause]
 
     def prose(self, text: str, role: str) -> None:
         chunks = pack(split_sentences(text, self.abbreviations), self.max_chars)
@@ -86,15 +103,17 @@ class _Builder:
                 self.block(inner, "quote")
             if block.author:
                 self.prose(plain(block.author), "quote")
+            self.pause_last("quote")
         elif isinstance(block, Poem):
             for stanza in block.stanzas:
                 lines = [plain(line).strip() for line in stanza]
                 text = "\n".join(x for x in lines if x)
                 if len(text) <= self.max_chars:
-                    self.add(text, "poem", "paragraph")
+                    self.add(text, "poem", "stanza")
                 else:
-                    for chunk in pack(lines, self.max_chars):
-                        self.add(chunk, "poem", "paragraph")
+                    chunks = pack(lines, self.max_chars)
+                    for n, chunk in enumerate(chunks):
+                        self.add(chunk, "poem", "stanza" if n == len(chunks) - 1 else "sentence")
         else:  # SceneBreak
             self.pause_last("scene")
 

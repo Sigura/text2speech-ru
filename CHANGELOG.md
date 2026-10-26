@@ -172,6 +172,11 @@ All notable changes to this project are documented here. The format follows
   full-novel fixture reads «pour être» (a Latin-1 byte in lib.ru's KOI8-R text).
   Owner's decisions: M3 scope, dialogue voice = narrator `xenia`, RUAccent stays
   after the stress listening (SPEC 2.1-M3). `spikes/dialogue-voice`: voice samples.
+- M3 step 1 — `segments.jsonl` records each boundary's pause type (`pause`); the
+  language profile overrides pause lengths by type, and an unknown type is an error;
+  new pauses after a poem stanza (900 ms) and after a blockquote or epigraph
+  (1000 ms); the split plan reads paragraph ends from the type. The segment hash
+  covers the voice role and emotion when they are set (SPEC 2.2-M3).
 
 ### Changed
 

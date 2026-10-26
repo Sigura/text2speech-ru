@@ -55,7 +55,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 0 — carry-overs: `envs sync` names, report route counts and `foreign`
     span label, «pour être»; dialogue voice samples (`spikes/dialogue-voice`);
   - [x] stress listening: RUAccent 2, Silero's own 1, no difference 4 → RUAccent stays;
-  - [ ] step 1 — pause types instead of milliseconds; voice/role in the segment hash;
+  - [x] step 1 — pause types instead of milliseconds; voice/role in the segment hash;
   - [ ] step 2 — dialogue split (dash paragraphs, author's remarks);
   - [ ] step 3 — `<!-- t2a: … -->` directives (E3);
   - [ ] step 4 — `voices` and `config show` (FR-22);

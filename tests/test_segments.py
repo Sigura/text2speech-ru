@@ -106,3 +106,75 @@ def test_manifest_follows_the_edited_markdown(tmp_path: Path) -> None:
     assert result.status == "kept-edits"
     texts = [s.text for s in read_manifest(folder / "_work/segments.jsonl")]
     assert "Глава II. Вожатый и буран" in texts
+
+
+PAUSES_MD = """# Книга
+
+## Глава 1
+
+> Береги честь смолоду.
+>
+> — Пословица
+
+Первое предложение здесь. Второе предложение здесь.
+
+Мороз и солнце,\\
+день чудесный!
+
+Ещё ты дремлешь,\\
+друг прелестный.
+
+* * *
+
+Последний абзац главы.
+
+## Глава 2
+
+Начало.
+"""
+
+
+def test_each_boundary_records_its_pause_type() -> None:
+    segments = segment_markdown(PAUSES_MD, "ru", None, max_chars=40)
+    got = [(s.text, s.pause, s.pause_after_ms) for s in segments]
+    assert got == [
+        ("Книга", "chapter", 3000),  # the chapter break follows the title
+        ("Глава 1", "heading", 1000),
+        ("Береги честь смолоду.", "paragraph", 700),
+        ("Пословица", "quote", 1000),  # end of the epigraph
+        ("Первое предложение здесь.", "sentence", 300),
+        ("Второе предложение здесь.", "paragraph", 700),
+        ("Мороз и солнце,\nдень чудесный!", "stanza", 900),
+        ("Ещё ты дремлешь,\nдруг прелестный.", "scene", 1500),
+        ("Последний абзац главы.", "chapter", 3000),
+        ("Глава 2", "heading", 1000),
+        ("Начало.", "paragraph", 700),
+    ]
+
+
+def test_profile_overrides_pause_lengths_by_type() -> None:
+    assert RU is not None and RU.pauses_ms["paragraph"] == 800
+    segments = segment_markdown(PAUSES_MD, "ru", RU, max_chars=40)
+    by_type = {s.pause: s.pause_after_ms for s in segments}
+    assert by_type == {
+        "heading": 1000,
+        "paragraph": 800,
+        "quote": 1000,
+        "sentence": 300,
+        "stanza": 900,
+        "scene": 1500,
+        "chapter": 3000,
+    }
+
+
+def test_a_long_stanza_pauses_as_a_stanza_only_at_its_end() -> None:
+    stanza = "Мороз и солнце; день чудесный!  \nЕщё ты дремлешь, друг прелестный.\n"
+    segments = segment_markdown(stanza, "ru", RU, max_chars=40)
+    assert [s.pause for s in segments] == ["sentence", "stanza"]
+
+
+def test_unknown_pause_type_in_a_profile_is_an_error() -> None:
+    assert RU is not None
+    bad = RU.model_copy(update={"pauses_ms": {"paragrah": 800}})
+    with pytest.raises(ValueError, match="paragrah"):
+        segment_markdown(PAUSES_MD, "ru", bad)
