@@ -1,4 +1,5 @@
-"""Part WAV → MP3 with FFmpeg (SPEC §6.8): loudness, encoding, ID3 tags, cover, chapters.
+"""Part WAV → MP3, whole book → M4B, with FFmpeg (SPEC §6.8): loudness, encoding, tags,
+cover, chapters.
 
 Loudness is two-pass `loudnorm` in linear mode (−19 LUFS integrated, true peak ≤ −3
 dBTP): the first pass measures, the second applies one gain, so speech dynamics are
@@ -19,6 +20,7 @@ TARGET_LUFS = -19.0
 TRUE_PEAK = -3.0
 LRA = 11.0
 MP3_BITRATE = "64k"
+M4B_BITRATE = "64k"  # AAC-LC, mono (§6.8)
 OUTPUT_RATE = 44100
 
 
@@ -105,11 +107,41 @@ def encode_mp3(
     bitrate: str = MP3_BITRATE,
 ) -> None:
     """Normalize loudness and write `out` atomically."""
+    codec = ["-c:a", "libmp3lame", "-b:a", bitrate, "-id3v2_version", "3", "-write_id3v1", "1"]
+    _encode(ffmpeg, wav, out, tags, cover, chapters or [], [*codec, "-f", "mp3"])
+
+
+def encode_m4b(
+    ffmpeg: str,
+    wav: Path,
+    out: Path,
+    *,
+    tags: dict[str, str],
+    cover: Path | None = None,
+    chapters: list[Chapter] | None = None,
+) -> None:
+    """AAC-LC audiobook with chapter marks and cover (FR-09), written atomically."""
+    # MP4 keeps only its standard tags (`use_metadata_tags` drops the cover in FFmpeg 4.3);
+    # audiobook players read the narrator from the composer tag.
+    tags = {("composer" if k == "narrator" else k): v for k, v in tags.items()}
+    codec = ["-c:a", "aac", "-b:a", M4B_BITRATE, "-movflags", "+faststart"]
+    _encode(ffmpeg, wav, out, tags, cover, chapters or [], [*codec, "-f", "ipod"])
+
+
+def _encode(
+    ffmpeg: str,
+    wav: Path,
+    out: Path,
+    tags: dict[str, str],
+    cover: Path | None,
+    chapters: list[Chapter],
+    codec: list[str],
+) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     filt = _loudnorm(measure(ffmpeg, wav))
-    tmp = out.with_name(f".{out.stem}.partial.mp3")
+    tmp = out.with_name(f".{out.stem}.partial{out.suffix}")
     with tempfile.NamedTemporaryFile("w", suffix=".txt", encoding="utf-8", delete=False) as meta:
-        meta.write(_metadata_file(tags, chapters or []))
+        meta.write(_metadata_file(tags, chapters))
     try:
         cmd = [ffmpeg, "-hide_banner", "-nostats", "-y", "-i", str(wav), "-i", meta.name]
         if cover is not None:
@@ -128,25 +160,7 @@ def encode_mp3(
                 "-metadata:s:v",
                 "comment=Cover (front)",
             ]
-        cmd += [
-            "-af",
-            filt,
-            "-ar",
-            str(OUTPUT_RATE),
-            "-ac",
-            "1",
-            "-c:a",
-            "libmp3lame",
-            "-b:a",
-            bitrate,
-            "-id3v2_version",
-            "3",
-            "-write_id3v1",
-            "1",
-            "-f",
-            "mp3",
-            str(tmp),
-        ]
+        cmd += ["-af", filt, "-ar", str(OUTPUT_RATE), "-ac", "1", *codec, str(tmp)]
         _run(cmd)
         tmp.replace(out)
     finally:

@@ -92,6 +92,39 @@ def test_one_file_per_chapter_with_playlist(book: Path, tmp_path: Path) -> None:
     assert probe(result.files[1])["format"]["tags"]["track"] == "2/2"
 
 
+def test_m4b_next_to_the_mp3s_with_a_chapter_per_file(book: Path, tmp_path: Path) -> None:
+    result = run(book, tmp_path / "store", min_part_minutes=0.2)
+    assert result.m4b == book / f"{book.name}.m4b"
+    assert result.report["m4b"] == result.m4b.name
+    info = probe(result.m4b)
+    audio = next(s for s in info["streams"] if s["codec_type"] == "audio")
+    assert (audio["codec_name"], audio["profile"]) == ("aac", "LC")
+    assert (audio["sample_rate"], audio["channels"]) == ("44100", 1)
+    cover = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert cover["disposition"]["attached_pic"] == 1
+    tags = info["format"]["tags"]
+    assert tags["album"] == tags["title"] == "Капитанская дочка"
+    assert tags["artist"] == "Александр Сергеевич Пушкин"
+    assert tags["composer"] == probe(result.files[0])["format"]["tags"]["narrator"]
+    assert [c["tags"]["title"] for c in info["chapters"]] == [
+        "Глава I. Сержант гвардии",
+        "Глава II. Вожатый",
+    ]
+    mp3_s = sum(float(probe(f)["format"]["duration"]) for f in result.files)
+    # one 300 ms lead-in instead of one per MP3
+    assert abs(float(info["format"]["duration"]) - (mp3_s - 0.3)) < 0.5
+
+
+def test_m4b_kept_on_rerun_and_removed_when_not_wanted(book: Path, tmp_path: Path) -> None:
+    first = run(book, tmp_path / "store")
+    assert first.m4b is not None
+    mtime = first.m4b.stat().st_mtime_ns
+    assert run(book, tmp_path / "store").m4b == first.m4b
+    assert first.m4b.stat().st_mtime_ns == mtime  # not re-encoded
+    third = run(book, tmp_path / "store", formats=["mp3"])
+    assert third.m4b is None and not first.m4b.exists()
+
+
 def test_report(book: Path, tmp_path: Path) -> None:
     result = run(book, tmp_path / "store")
     report = json.loads((book / "report.json").read_text("utf-8"))

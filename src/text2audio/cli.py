@@ -301,7 +301,7 @@ def _synthesize_one(
     seg = r["segments"]
     rtf = r["synthesis"]["rtf"]
     ui.result(
-        f"{result.folder}: {len(result.files)} file(s), "
+        f"{result.folder}: {len(result.files)} file(s){' + M4B' if result.m4b else ''}, "
         f"{duration(r['duration_ms'] / 1000)} of audio, {seg['total']} segments "
         f"({seg['rendered_now']} rendered now), "
         + (f"RTF {rtf}, " if rtf is not None else "")

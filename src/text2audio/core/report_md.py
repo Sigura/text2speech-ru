@@ -58,6 +58,8 @@ def render(report: dict[str, Any]) -> str:
             f"| {n} | {_cell(p['file'])} | {_cell(p['title'])} | {_hms(p['duration_ms'])} |"
             for n, p in enumerate(report["parts"], 1)
         ]
+    if report.get("m4b"):
+        out += ["", f"Whole book with chapter marks: {_cell(report['m4b'])}"]
     out += ["", "## Quality check", ""]
     if not qa.get("checked"):
         out.append(f"QA mode `{qa.get('mode', 'off')}`: no segments checked.")

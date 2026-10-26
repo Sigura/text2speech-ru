@@ -159,6 +159,9 @@ All notable changes to this project are documented here. The format follows
   hybrid (preferred to Silero, XTTS-v2 and ESpeech, tied with Qwen3-TTS); ESpeech and
   XTTS-v2 dropped; Qwen3-TTS kept as an M3 candidate for dialogue and expressive
   segments (SPEC 1.21-M2).
+- M2 step 5 — an M4B of the whole book next to the MP3s, on by default: AAC-LC
+  64 kbps mono, one chapter per MP3, cover and tags; `[output] formats = ["mp3"]`
+  turns it off; re-encoded only when it changes (FR-09, SPEC 1.22-M2).
 
 ### Changed
 

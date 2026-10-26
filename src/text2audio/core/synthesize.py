@@ -28,7 +28,7 @@ from typing import Any
 
 from text2audio import __version__
 from text2audio.audio import split as splitting
-from text2audio.audio.encode import Chapter, encode_mp3, find_ffmpeg, write_m3u
+from text2audio.audio.encode import Chapter, encode_m4b, encode_mp3, find_ffmpeg, write_m3u
 from text2audio.audio.srt import Cue, split_cue, write_srt
 from text2audio.audio.wav import ASSEMBLY_RATE, LEAD_IN_MS, PartWriter, speech
 from text2audio.core import report_md
@@ -110,8 +110,9 @@ class Plan:
 @dataclass
 class SynthesisReport:
     folder: Path
-    files: list[Path]
+    files: list[Path]  # the MP3 parts
     report: dict[str, Any]
+    m4b: Path | None = None
 
     @property
     def failed(self) -> int:
@@ -813,7 +814,7 @@ def assemble(
     narrator: str,
     plan: Plan,
     progress: Progress | None = None,
-) -> tuple[list[Path], splitting.SplitPlan]:
+) -> tuple[list[Path], splitting.SplitPlan, Path | None]:
     title = str(meta.get("title") or folder.path.name)
     items = _items(segments, journal)
     split = splitting.plan_split(
@@ -894,17 +895,66 @@ def assemble(
         if subtitles:
             write_srt(out.with_suffix(".srt"), cues)
 
+    m4b: Path | None = None
+    m4b_job: tuple[Path, dict[str, str], list[Chapter]] | None = None
+    if "m4b" in config.output.formats:
+        m4b = folder.path / f"{folder.path.name}.m4b"
+        book_tags = {
+            "title": title,
+            "album": title,
+            "artist": authors or title,
+            "album_artist": authors or title,
+            "genre": "Audiobook",
+            "narrator": narrator,
+            "encoded_by": f"text2audio {__version__}",
+        }
+        if year:
+            book_tags["date"] = year
+        # One chapter per file of the split plan, or the single file's chapter marks.
+        marks = split.chapters if split.single else split.parts
+        book_chapters = [
+            Chapter(c.title, _offset(items, c.start), _offset(items, c.end)) for c in marks
+        ]
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                [
+                    [(s.hash, s.pause_after_ms) for s in segments],
+                    book_tags,
+                    [(c.title, c.start_ms, c.end_ms) for c in book_chapters],
+                    cover_digest,
+                    config.output.loudness,
+                ],
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest()
+        state[m4b.name] = fingerprint
+        if previous.get(m4b.name) != fingerprint or not m4b.is_file():
+            m4b_job = (m4b, book_tags, book_chapters)
+
+    def encode_book(job: tuple[Path, dict[str, str], list[Chapter]]) -> None:
+        out, tags, chapters = job
+        wav = parts_dir / "book.wav"
+        with PartWriter(wav, ASSEMBLY_RATE) as writer:
+            _part_audio(segments, audio_dir, writer)
+        encode_m4b(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
+        wav.unlink(missing_ok=True)
+
     # Parts are independent and FFmpeg's loudnorm is single-threaded: encode in parallel.
-    threads = max(1, min(len(jobs), res.probe().usable_cpus, DEFAULT_MAX_WORKERS))
+    threads = max(
+        1, min(len(jobs) + (m4b_job is not None), res.probe().usable_cpus, DEFAULT_MAX_WORKERS)
+    )
     unchanged = len(split.parts) - len(jobs)
     _detail(progress, "assemble", parts=len(split.parts), reason=split.reason, threads=threads)
     if progress:
         progress("assemble", unchanged, len(split.parts))
     with ThreadPoolExecutor(max_workers=threads) as pool:
+        book = pool.submit(encode_book, m4b_job) if m4b_job is not None else None
         for encoded, _ in enumerate(pool.map(encode, jobs), 1):
             _detail(progress, "assemble", encoded=encoded)
             if progress:
                 progress("assemble", unchanged + encoded, len(split.parts))
+        if book is not None:
+            book.result()
     for stale in set(previous) - set(state):
         (folder.path / stale).unlink(missing_ok=True)
         (folder.path / stale).with_suffix(".srt").unlink(missing_ok=True)
@@ -916,7 +966,7 @@ def assemble(
         write_m3u(folder.path / f"{folder.path.name}.m3u", playlist)
     else:
         (folder.path / f"{folder.path.name}.m3u").unlink(missing_ok=True)
-    return files, split
+    return files, split, m4b
 
 
 def _part_audio(segments: list[Segment], audio_dir: Path, writer: PartWriter | None) -> list[Cue]:
@@ -1060,10 +1110,13 @@ def synthesize(
             seg.status = "flagged" if entry.get("flagged") else "done"
     write_manifest(folder.work / "segments.jsonl", segments)
     with timings.stage("assemble"):
-        files, split = assemble(folder, segments, journal, config, meta, narrator, plan, progress)
+        files, split, m4b = assemble(
+            folder, segments, journal, config, meta, narrator, plan, progress
+        )
     report = _report(
         folder, plan, segments, sources, journal, stats, polish_stats, split, files, uncertain, meta
     )
+    report["m4b"] = m4b.name if m4b else None
     report["qa"] = gate.summary(segments, journal, qa.stats, qa_percent)
     if sources:
         # Polished segments whose kept attempt is the unpolished source (§6.6.6 fallback).
@@ -1081,7 +1134,7 @@ def synthesize(
     report["timings_s"] = dict(timings)
     write_json(folder.path / "report.json", report)
     (folder.path / "report.md").write_text(report_md.render(report), encoding="utf-8")
-    return SynthesisReport(folder.path, files, report)
+    return SynthesisReport(folder.path, files, report, m4b)
 
 
 PREVIEW_CHARS_PER_SEC = 14  # rough narration speed, to pick segments before rendering

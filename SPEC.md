@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.21-M2 |
+| Document version | 1.22-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -44,6 +44,7 @@
 | 1.19-M2 | 2026-10-26 | M2 step 4e — language-pack template as built: `templates/lang/` + `scripts/new_lang.py` (standard-library `string.Template`) instead of cookiecutter (§6.6.4, §10, §13.1). |
 | 1.20-M2 | 2026-10-26 | M2 step 4f — benchmark metrics (`spikes/ru-bench/`). **Decision (owner):** each challenger synthesizes at most 100 segments, and the listening test is the owner alone with one female voice (§6.6.5 steps 1 and 3). **Decision (owner):** "quality" in the component priority means TTS quality judged by listening; ASR WER is a floor (§8, §13.1, ADR-0007). Benchmark winners are recorded as proposed until the listening test (§13.1). |
 | 1.21-M2 | 2026-10-26 | M2 step 4f — **Decision (owner):** benchmark winners after the blind listening test: T0 Silero `xenia`, T1 the hybrid; ESpeech and XTTS-v2 dropped; Qwen3-TTS is an M3 candidate for expressive and dialogue segments (§13.1). |
+| 1.22-M2 | 2026-10-26 | M2 step 5 — **Decision (owner):** an M4B of the whole book is written by default next to the MP3s (FR-09, §5.2, §6.8, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -105,8 +106,8 @@ Design pillars:
    where that gives better results.
 5. Provide **layered expression** support (structural → inferred → manual).
 6. Produce audiobook output as **MP3 by default**, split into **one file per book
-   section** when the structure is reliable, otherwise a single file; **M4B**, Opus and
-   WAV are optional.
+   section** when the structure is reliable, otherwise a single file, plus one **M4B** of
+   the whole book with chapter marks; Opus and WAV are optional.
 7. One-command bootstrap that installs dependencies and downloads all weights, leaving
    the project fully offline-capable.
 8. **Best possible result with zero configuration**: with an empty `text2audio.toml`,
@@ -155,7 +156,7 @@ flowchart LR
     TTS --> QA{ASR quality gate}
     QA -- fail --> TTS
     QA -- pass --> POST[Assemble, pauses,<br/>loudness, split plan]
-    POST --> OUT["MP3 per section<br/>or single MP3<br/>(M4B optional)"]
+    POST --> OUT["MP3 per section<br/>or single MP3<br/>+ M4B of the book"]
 ```
 
 | Stage | Responsibility | Artifact |
@@ -168,7 +169,7 @@ flowchart LR
 | **TTS backend worker** | Synthesize each segment in an isolated process. | `audio/segments/*.wav` |
 | **Polish** *(optional)* | Improve the synthesized audio without changing its words: voice conversion to a more natural target voice, or enhancement / super-resolution (§6.6.6). | `audio/polished/*.wav` |
 | **ASR quality gate** | Transcribe each segment (after polish, if any), compare to source, retry failures. | `report.json` |
-| **Assemble** | Insert pauses, concatenate, normalize loudness, decide the split plan (§6.8.1), encode, write tags. | `<output root>/<book>/*.mp3` (+ optional `.m4b`) |
+| **Assemble** | Insert pauses, concatenate, normalize loudness, decide the split plan (§6.8.1), encode, write tags. | `<output root>/<book>/*.mp3` + `<book>.m4b` |
 
 ### 5.2 Output layout (one folder per book)
 
@@ -185,7 +186,7 @@ output/                                  # output root
 │   ├── 02 - Book One, Chapter 2.mp3
 │   ├── …
 │   ├── War and Peace.m3u                # playlist in reading order
-│   ├── War and Peace.m4b                # optional, only if enabled
+│   ├── War and Peace.m4b                # whole book, one chapter per MP3 (default on)
 │   ├── War and Peace.md                 # editable Markdown text — edit, then re-run
 │   ├── report.json                      # QA results, timings, split decision, warnings
 │   ├── report.md                        # the same, readable: files, QA flags, timings
@@ -264,7 +265,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-06 | Support **Russian** (M2) and **English** (M4) end-to-end in v1, on both hardware tiers (§9). | Must | A Russian and an English audiobook are produced from each input format on T0 and T1 hardware. |
 | FR-07 | Discover languages, TTS backends and per-stage components (normalizer, G2P/stress, ASR, emotion) as **plugins via Python entry points** (§6.6.1); each language may use a different implementation for every stage; adding one requires no core change. | Must | English is added in M4 (after Russian) with zero diff under `src/text2audio/core/`. |
 | FR-08 | Persist the editable `<book>.md` next to the audio, `segments.jsonl` and a copy of the original input, so users can edit before or after synthesis and re-convert later (§5.2); re-running picks up edits. | Must | Editing one paragraph re-synthesizes only the affected segments; `convert --reconvert` never overwrites an edited `<book>.md`. |
-| FR-09 | Output **MP3** by default (ID3v2 tags, embedded cover). **M4B** (AAC, chapter markers, cover), **Opus** and **WAV** are optional and can be produced alongside MP3. | Must | Default run produces MP3 only; `--format m4b` adds an M4B whose chapter list `ffprobe` shows; output plays in at least two common players. |
+| FR-09 | Output **MP3** (ID3v2 tags, embedded cover) and, next to it by default, one **M4B** of the whole book (AAC, chapter markers, cover). **Opus** and **WAV** are optional and can be produced alongside MP3. | Must | Default run produces the MP3s and an M4B whose chapter list `ffprobe` shows; `[output] formats = ["mp3"]` leaves the M4B out; output plays in at least two common players. |
 | FR-10 | **Resume / incremental rendering**: segments are cached by content hash; interrupted jobs continue where they stopped. | Must | Killing a job mid-chapter and restarting loses at most one segment of work. |
 | FR-11 | **Text normalization** per language (numbers, ordinals, dates, currency, units, common abbreviations, Roman numerals in headings). | Must | Language-pack normalization test set passes (≥ 95% exact match). |
 | FR-12 | **ASR quality gate**: transcribe each segment, compute word error rate (WER) against the normalized text, retry failing segments, report the rest. | Must | Injected faulty segments in tests are detected and retried. |
@@ -806,10 +807,10 @@ listeners prefer it, and automatic MOS prediction
 
 | Item | Default | Notes |
 |---|---|---|
-| Container / codec | **MP3** (LAME, 64 kbps CBR, mono, 44.1 kHz) | Optional: **M4B** (AAC-LC 64 kbps mono, with chapters), Opus (32–48 kbps), WAV (PCM 24-bit). The `acx` profile switches MP3 to 192 kbps CBR as ACX requires. |
+| Container / codec | **MP3** (LAME, 64 kbps CBR, mono, 44.1 kHz) and **M4B** (AAC-LC 64 kbps mono, with chapters and cover) | M4B is one file for the whole book, next to the MP3s (`formats`, default `["mp3", "m4b"]`), loudness-normalized as one piece; tags as for MP3, the narrator in the `composer` tag that audiobook players read. Optional: Opus (32–48 kbps), WAV (PCM 24-bit) — not implemented yet. The `acx` profile switches MP3 to 192 kbps CBR as ACX requires. |
 | File layout | One MP3 per section, or a single MP3 | Decided by the split plan (§6.8.1). Files are named `NN - <Section title>.mp3` (zero-padded, filesystem-safe), with an `.m3u` playlist in reading order. |
 | Subtitles | A SubRip `.srt` next to every MP3 (`output.subtitles`, default on) | One cue per segment with the **book's text** (not the normalized reading), timed from the assembly itself (lead-in, trimmed speech, generated pauses); long segments are cut at word boundaries into cues of ≤ 2 lines × 42 characters, timed by their share of characters. Written whenever the MP3 is, and on its own when only the `.srt` is missing. |
-| Chapters | M4B: one chapter per section of the split plan. Single-file MP3: ID3v2 `CHAP`/`CTOC` chapter frames | Written via [FFmpeg metadata](https://ffmpeg.org/ffmpeg-formats.html#Metadata-1); not all MP3 players show ID3 chapters, which is why split files are preferred. |
+| Chapters | M4B: one chapter per MP3 file of the split plan (the single file's chapter marks when there is one MP3). Single-file MP3: ID3v2 `CHAP`/`CTOC` chapter frames | Written via [FFmpeg metadata](https://ffmpeg.org/ffmpeg-formats.html#Metadata-1); not all MP3 players show ID3 chapters, which is why split files are preferred. |
 | Tags | Album = book title, title = section title, artist = author, narrator (= voice name), track N/total, year, cover | Taken from `metadata.json`; identical album tags keep split files grouped as one book in players. |
 | Pauses | Sentence 300 ms · paragraph 700 ms · section 1500 ms · chapter 3000 ms | Configurable; silence is generated, not trimmed from model output. |
 | Edge trimming | Remove leading/trailing silence and breaths from each segment | Prevents uneven gaps. |
@@ -1091,7 +1092,7 @@ dialogue = "anna"
 
 [output]
 root     = "./output"         # one sub-folder per book, named after the input file
-formats  = ["mp3"]            # any of: mp3 (default) | m4b | opus | wav
+formats  = ["mp3", "m4b"]     # mp3 is always written; m4b (default on) | opus | wav
 loudness = "default"          # default | acx
 split    = "auto"             # auto | section | none   (see §6.8.1)
 min_part_minutes = 3
@@ -1400,6 +1401,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | Language-pack template: a plain `templates/lang/` directory filled by `scripts/new_lang.py` with `string.Template` — no cookiecutter (no new dependency, nothing to download); content extracted from the `ru` pack. | Decided |
 | 2026-10-26 | Benchmark protocol for a personal project (owner): each challenger synthesizes at most 100 segments of the set (benchmark and tests only, never real book runs); the blind listening test is the owner alone, one female voice (§6.6.5). | Decided |
 | 2026-10-26 | **"Quality" means TTS quality** (owner): in the component priority (ADR-0007) it is how natural the speech sounds — intonation, stress — judged by listening. ASR WER is an intelligibility floor, not a ranking, and speed (third priority) does not rule out a better-sounding GPU backend. | Decided |
+| 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |

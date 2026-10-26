@@ -31,7 +31,7 @@ class SynthesisConfig(_Section):
 
 class OutputConfig(_Section):
     root: Path = Path("output")
-    formats: list[Literal["mp3", "m4b", "opus", "wav"]] = ["mp3"]
+    formats: list[Literal["mp3", "m4b", "opus", "wav"]] = ["mp3", "m4b"]
     loudness: Literal["default", "acx"] = "default"
     split: Literal["auto", "section", "none"] = "auto"
     min_part_minutes: float = 3

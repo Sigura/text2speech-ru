@@ -50,6 +50,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 4e — language-pack template (`scripts/new_lang.py`);
     - [x] 4f — benchmark ([findings](spikes/ru-bench/FINDINGS.md)): T0 Silero, T1 hybrid;
       Qwen3-TTS → M3 candidate for dialogue/expressive segments;
+  - [x] step 5 — M4B of the whole book next to the MP3s, on by default (FR-09);
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

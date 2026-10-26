@@ -219,7 +219,7 @@ tier       = "expressive"            # fast (Silero only) | expressive (GPU hybr
 expression = "E1"                    # E0 neutral … E3 manual directions
 
 [output]
-formats = ["mp3", "m4b"]             # MP3 per section by default; add an M4B
+formats = ["mp3", "m4b"]             # default: MP3 per section + one M4B of the book
 split   = "auto"                     # auto | section | none
 
 [resources]
