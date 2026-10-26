@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from text2audio import api
+from text2audio.audio.wav import LEAD_IN_MS
 from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment
 from text2audio.core.journal import Journal
@@ -118,8 +119,9 @@ def test_m4b_next_to_the_mp3s_with_a_chapter_per_file(book: Path, tmp_path: Path
         "Глава II. Вожатый",
     ]
     mp3_s = sum(float(probe(f)["format"]["duration"]) for f in result.files)
-    # one 300 ms lead-in instead of one per MP3
-    assert abs(float(info["format"]["duration"]) - (mp3_s - 0.3)) < 0.5
+    # one lead-in instead of one per MP3
+    lead_s = LEAD_IN_MS / 1000 * (len(result.files) - 1)
+    assert abs(float(info["format"]["duration"]) - (mp3_s - lead_s)) < 0.5
 
 
 def test_m4b_kept_on_rerun_and_removed_when_not_wanted(book: Path, tmp_path: Path) -> None:
@@ -174,7 +176,7 @@ def test_subtitles_next_to_each_mp3(book: Path, tmp_path: Path) -> None:
         srt = mp3.with_suffix(".srt").read_text("utf-8")
         blocks = srt.strip().split("\n\n")
         first = blocks[0].splitlines()
-        assert first[0] == "1" and first[1].startswith("00:00:00,300 --> ")
+        assert first[0] == "1" and first[1].startswith("00:00:01,500 --> ")  # after the lead-in
         last_end = blocks[-1].splitlines()[1].split(" --> ")[1]
         h, m, rest = last_end.split(":")
         end_s = int(h) * 3600 + int(m) * 60 + float(rest.replace(",", "."))

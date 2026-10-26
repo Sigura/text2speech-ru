@@ -16,7 +16,7 @@ import soxr
 ASSEMBLY_RATE = 44100  # the final encode rate (§6.8)
 TRIM_DB = -45.0  # edge trimming threshold relative to full scale
 KEEP_MS = 40  # kept around speech when trimming
-LEAD_IN_MS = 300  # silence at the start of every file: players clip the first syllable
+LEAD_IN_MS = 1500  # silence at the start of every file: players start late and clip the speech
 
 
 def read_mono(path: Path) -> tuple[np.ndarray, int]:

@@ -248,6 +248,9 @@ output/Война и мир/
 └── _work/                              # source copy, metadata, cover, segments, cache
 ```
 
+Every audio file — MP3 parts, the M4B, previews and listening clips — starts with 1.5 s
+of silence, because many players start playback late and clip the first words.
+
 ## Open questions
 
 | # | Question | Decided by |

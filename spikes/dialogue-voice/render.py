@@ -7,7 +7,8 @@ remark (dialogue / narrator xenia / dialogue) for each Silero voice in VOICES, t
 the installed plugin workers: Silero on CPU (T0), then Chatterbox VC into a 15 s
 reference clip of the same voice (T1, the hybrid route). The reference clip is the
 three sentences of `ref-xenia.wav` read by that voice. Writes one file per voice and
-tier to out/<voice>-<tier>.wav (lines 0.8 s apart) and the references to out/ref-*.wav.
+tier to out/<voice>-<tier>.wav (lines 0.8 s apart, after the 1.5 s lead-in) and the
+references to out/ref-*.wav.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import wave
 from pathlib import Path
 
+from text2audio.audio.wav import LEAD_IN_MS
 from text2audio.core import resources as res
 from text2audio.core.plugins import discover
 from text2audio.models.lock import assets_for, load_lock
@@ -56,7 +58,7 @@ def read_wav(path: Path) -> tuple[bytes, int]:
         return w.readframes(w.getnframes()), w.getframerate()
 
 
-def write_wav(path: Path, parts: list[Path], gap_s: float) -> None:
+def write_wav(path: Path, parts: list[Path], gap_s: float, lead_ms: int = 0) -> None:
     frames, rate = [], 0
     for p in parts:
         data, r = read_wav(p)
@@ -69,7 +71,7 @@ def write_wav(path: Path, parts: list[Path], gap_s: float) -> None:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(rate)
-        w.writeframes(silence.join(frames))
+        w.writeframes(b"\0\0" * (rate * lead_ms // 1000) + silence.join(frames))
     print(f"wrote {path}")
 
 
@@ -115,7 +117,7 @@ def main() -> None:
         lines = [OUT / "parts" / f"{voice}-{n}-t0.wav" for n in range(len(LINES))]
         for n, line in enumerate(LINES):
             write_wav(lines[n], [raw[voice, n, k] for k in range(len(line))], 0.25)
-        write_wav(OUT / f"{voice}-t0.wav", lines, 0.8)
+        write_wav(OUT / f"{voice}-t0.wav", lines, 0.8, LEAD_IN_MS)
 
     print("2/3 Chatterbox VC on a GPU")
     found_res = res.probe()
@@ -144,7 +146,7 @@ def main() -> None:
                     parts.append(out)
                 lines.append(OUT / "parts" / f"{voice}-{n}-t1.wav")
                 write_wav(lines[-1], parts, 0.25)
-            write_wav(OUT / f"{voice}-t1.wav", lines, 0.8)
+            write_wav(OUT / f"{voice}-t1.wav", lines, 0.8, LEAD_IN_MS)
 
     print(f"3/3 done: {count} segments rendered")
     if count > 100:

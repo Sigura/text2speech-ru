@@ -177,6 +177,8 @@ All notable changes to this project are documented here. The format follows
   new pauses after a poem stanza (900 ms) and after a blockquote or epigraph
   (1000 ms); the split plan reads paragraph ends from the type. The segment hash
   covers the voice role and emotion when they are set (SPEC 2.2-M3).
+- Every audio file starts with 1.5 s of silence instead of 0.3 s (owner: players
+  start late) — book parts, M4B, previews and sample clips (SPEC 2.3-M3).
 
 ### Changed
 

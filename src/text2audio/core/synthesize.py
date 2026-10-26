@@ -865,6 +865,7 @@ def assemble(
                     [(c.title, c.start_ms, c.end_ms) for c in chapters],
                     cover_digest,
                     config.output.loudness,
+                    LEAD_IN_MS,
                 ],
                 ensure_ascii=False,
             ).encode()
@@ -925,6 +926,7 @@ def assemble(
                     [(c.title, c.start_ms, c.end_ms) for c in book_chapters],
                     cover_digest,
                     config.output.loudness,
+                    LEAD_IN_MS,
                 ],
                 ensure_ascii=False,
             ).encode()
