@@ -20,6 +20,8 @@ dependencies = [
     "numpy>=2.0",
     "soundfile>=0.12",
     "soxr>=0.5",
+    # Covers (§6.8.2): validation of embedded images, typographic covers.
+    "pillow>=11",
 ]
 
 [project.scripts]
@@ -33,7 +35,10 @@ langs = [
     "text2audio-backend-silero",
     "text2audio-asr-gigaam",
     "text2audio-backend-chatterbox",
+    "text2audio-mt-opus",
 ]
+# Optional generators; covers fall back to typographic without them (§6.8.2).
+covers = ["text2audio-cover-sd-webui"]
 dev = [
     "text2audio-backend-sine",
     "pytest>=8",
@@ -46,7 +51,7 @@ dev = [
 ]
 
 [tool.uv]
-default-groups = ["dev", "langs"]
+default-groups = ["dev", "langs", "covers"]
 
 [tool.uv.workspace]
 members = ["plugins/*"]
@@ -59,6 +64,8 @@ text2audio-g2p-ruaccent = { workspace = true }
 text2audio-backend-silero = { workspace = true }
 text2audio-asr-gigaam = { workspace = true }
 text2audio-backend-chatterbox = { workspace = true }
+text2audio-mt-opus = { workspace = true }
+text2audio-cover-sd-webui = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

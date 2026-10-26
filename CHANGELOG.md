@@ -134,6 +134,12 @@ All notable changes to this project are documented here. The format follows
   ≤ 100 (`[qa] batch`) on worker pools kept loaded across batches; `report.json`
   `qa.sample` / `qa.max_segments`. The novel tests assert `checked == min(100, total)`
   (SPEC 1.15-M2).
+- M2 step 4c — covers (§6.8.2): typographic covers (Pillow, bundled DejaVu Serif);
+  plugin `cover-sd-webui` starts its own Stable Diffusion WebUI on 127.0.0.1 with a
+  private data dir on the first GPU with enough free VRAM; plugin `mt-opus` (Opus-MT
+  ru→en, pinned in `models.lock`) translates title and description for the prompt;
+  title colour by contrast; covers cached by key; `[cover]` / `[cover.sd]` config;
+  `doctor` reports the cover route; new plugin group `translators` (SPEC 1.16-M2).
 
 ### Changed
 

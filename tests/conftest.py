@@ -99,3 +99,11 @@ def gpu(index: int, free_mb: int, affinity: str | None = None) -> Gpu:
 
 def resources(cpus: int = 128, ram_gb: int = 300, gpus: tuple[Gpu, ...] = ()) -> Resources:
     return Resources(frozenset(range(cpus)), None, ram_gb * 1024, ram_gb * 1024, gpus)
+
+
+@pytest.fixture(autouse=True)
+def _no_user_config(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tests never read the owner's ~/.config/text2audio/config.toml (e.g. [cover.sd] dir)."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("config")))

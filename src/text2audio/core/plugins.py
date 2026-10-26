@@ -20,6 +20,7 @@ GROUPS = (
     "emotion",
     "polishers",
     "covers",
+    "translators",
 )
 
 

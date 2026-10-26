@@ -131,3 +131,21 @@ files = [
 "grapheme_mtl_merged_expanded_v1.json" = "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf"
 "conds.pt" = "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e"
 "Cangjie5_TC.json" = "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c"
+
+# Opus-MT ru→en (Marian): translates title and annotation into English for generated
+# cover prompts (§6.8.2). Small, CPU only; the weights are read with weights_only.
+[[asset]]
+repo = "Helsinki-NLP/opus-mt-ru-en"
+revision = "fbd6dc73284f95536648512cc21d57f19191961a"
+license = "CC-BY-4.0"
+component = "mt:opus-mt-ru-en"
+langs = ["ru"]
+files = ["config.json", "generation_config.json", "pytorch_model.bin", "source.spm", "target.spm", "tokenizer_config.json", "vocab.json"]
+[asset.sha256]
+"config.json" = "5ea76c78596bce8fe005ef89e00de0924bf83e5f532ce08784ff1fcefb699f5f"
+"generation_config.json" = "31cff5e74efc263ff53efac09e3e350cd462d5c8198b1136b455d63a02d8cad5"
+"pytorch_model.bin" = "535450eb5613f3cc912f9ca3e54cfef6c14d201b319c24a88faf776a65538b5d"
+"source.spm" = "745998e51ba5b058e38b7ac7765c25c43ed5c1c39cc92b27163b9b2e323c9d7c"
+"target.spm" = "16bebef1389a0b8ab452772c4e35b9e605e5713f8ac7baa71ca701394eaa086d"
+"tokenizer_config.json" = "8d826099b8c67179c83ab4ff94aff7ca7bf24ca14319cb0287b9a0b4c40b2a96"
+"vocab.json" = "33e95da3be3fa3b50169c4c46693ba2f29fbf4cb29d99044bd07d72d181fa1e9"

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from text2audio import __version__, readers
+from text2audio.core.config import Config, CoverConfig
 from text2audio.core.languages import profile
 from text2audio.core.workspace import (
     WORK,
@@ -21,6 +22,8 @@ from text2audio.core.workspace import (
     write_json,
     write_markdown,
 )
+from text2audio.covers.make import make_covers
+from text2audio.models.store import ModelStore
 from text2audio.readers.detect import detect
 from text2audio.readers.document import Document, Heading, Inline
 from text2audio.readers.markdown import to_markdown
@@ -88,6 +91,7 @@ def convert_one(
     overwrite: bool = False,
     reconvert: bool = False,
     lang: str | None = None,
+    cover_mode: str = "auto",
 ) -> ConvertResult:
     """Convert one input file, or with `reconvert` the stored source of a book folder.
 
@@ -123,13 +127,19 @@ def convert_one(
             stale.unlink()
         if not resumed or not target.exists():
             target.write_bytes(data)
+        previous = (folder.metadata() or {}).get("cover") or {} if resumed else {}
         meta = _metadata(doc, fmt, reader, src_name, data)
-        for old in folder.work.glob("cover.*"):
-            old.unlink()
-        if doc.cover is not None:
+        if doc.cover is not None and cover_mode in ("auto", "embedded-only"):
+            for old in folder.work.glob("cover.*"):
+                old.unlink()
             cover = folder.work / f"cover.{doc.cover.extension}"
             cover.write_bytes(doc.cover.data)
             meta["cover"] = {"file": cover.name, "origin": "embedded", "type": doc.cover.media_type}
+        elif previous.get("origin") in ("generated", "typographic"):
+            meta["cover"] = previous  # make_covers keeps or replaces it
+        else:
+            for old in folder.work.glob("cover.*"):
+                old.unlink()
         if overwrite and not resumed and folder.markdown.exists():
             folder.markdown.unlink()
             folder.converted.unlink(missing_ok=True)
@@ -169,11 +179,25 @@ def convert(
     overwrite: bool = False,
     reconvert: bool = False,
     lang: str | None = None,
+    config: Config | None = None,
+    store: ModelStore | None = None,
 ) -> list[ConvertResult]:
     paths = inputs if reconvert else expand_inputs(inputs)
     if name is not None and len(paths) != 1:
         raise ValueError("--name needs exactly one input file")
-    return [
-        convert_one(p, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang)
+    mode = (config.cover if config else CoverConfig()).mode
+    results = [
+        convert_one(
+            p, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang, cover_mode=mode
+        )
         for p in paths
     ]
+    done = [r for r in results if r.folder is not None and r.status != "failed"]
+    if config is not None and done:
+        # Generated covers are made for the whole batch at once (one service start).
+        found = make_covers(
+            [BookFolder(r.folder) for r in done if r.folder], config, store or ModelStore()
+        )
+        for r in done:
+            r.warnings += found.get(str(r.folder), [])
+    return results

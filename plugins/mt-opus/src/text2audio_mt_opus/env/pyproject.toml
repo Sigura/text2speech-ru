@@ -1,0 +1,14 @@
+[project]
+name = "t2a-env-mt-opus"
+version = "0"
+description = "Worker environment of the Opus-MT translator component (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.14.1",
+    "transformers==4.57.6",
+    "sentencepiece==0.2.2",
+    "sacremoses==0.1.1",  # Marian's tokenizer warns and degrades without it
+]
+
+[tool.uv]
+package = false

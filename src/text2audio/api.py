@@ -69,7 +69,9 @@ def convert(
     config = config or load_config()
     root = output_root or config.output.root
     lang = lang or config.synthesis.language
-    return _convert(inputs, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang)
+    return _convert(
+        inputs, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang, config=config
+    )
 
 
 def models_list(
@@ -127,7 +129,7 @@ def _book_config_files(folder: Path) -> list[Path]:
 
 def plugin_envs(names: list[str] | None = None) -> list[PluginEnv]:
     """Environments declared by installed plugins (backends and components)."""
-    found = discover(("backends", "g2p", "asr", "polishers"))
+    found = discover(("backends", "g2p", "asr", "polishers", "translators"))
     envs: dict[str, PluginEnv] = {}
     for items in found.plugins.values():
         for plugin in items.values():

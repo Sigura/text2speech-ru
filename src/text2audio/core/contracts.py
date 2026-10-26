@@ -197,6 +197,9 @@ class LanguageProfile(BaseModel):
     lexicon: str | None = None  # path of the pack's lexicon TSV (FR-13)
     # Title of a long section split at paragraph boundaries (§6.8.1).
     part_title: str = "{title} (part {n} of {total})"
+    # Machine translation into English for cover prompts (§6.8.2); entry point in
+    # `text2audio.translators`.
+    translator: str | None = None
 
 
 class NormResult(BaseModel):
@@ -263,4 +266,35 @@ class BackendDescriptor(Protocol):
 
     def worker_command(self, python: str) -> list[str]:
         """Command that starts the worker with the given interpreter."""
+        ...
+
+
+class CoverRequest(BaseModel):
+    """One image a cover generator draws (§6.8.2); title and author are drawn later."""
+
+    key: str  # the book's cover key, echoed in the result
+    prompt: str
+    negative_prompt: str = ""
+    seed: int
+
+
+class CoverImage(BaseModel):
+    key: str
+    png: bytes
+    # What reproduces the image: checkpoint name and SHA-256, seed, size, steps, …
+    info: dict[str, object] = {}
+
+
+@runtime_checkable
+class CoverGenerator(Protocol):
+    """What a `text2audio.covers` entry point resolves to."""
+
+    name: str
+
+    def unavailable(self, settings: object) -> str | None:
+        """Why the generator cannot run with these settings now, or None."""
+        ...
+
+    def generate(self, requests: list[CoverRequest], settings: object) -> list[CoverImage]:
+        """Draw every request in one session (one service start); missing = failed."""
         ...

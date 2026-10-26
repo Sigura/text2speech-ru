@@ -43,6 +43,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] step 4 — covers, `preview`, PDF compound hyphens, benchmark, language-pack template:
     - [x] 4a — PDF compound hyphens (`ru` normalization);
     - [x] 4b — QA limit (100 per run) and polish/QA batches;
+    - [x] 4c — covers: typographic, SD WebUI plugin, Opus-MT prompt translation;
+    - [ ] 4c+ — repaint a poor embedded cover (img2img with a WD14-tagger prompt; rule to
+      be agreed with the owner);
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
@@ -54,6 +57,12 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [ ] female narrator + contrasting dialogue voice; listening test; record in
     SPEC §13.1.
+- [ ] **After M4 (owner, 2026-10-26):** review the components built so far and expose
+  the useful ones as standalone commands — `text2audio translate book.md --to en -o
+  book-en.md` (owner's form: `text2audio ru2en text-ru.md -o text-en.md`; paragraph by
+  paragraph, Markdown structure kept; benchmark a stronger offline MT than Opus-MT for
+  whole books, e.g. NLLB / MADLAD) and `text2audio cover <book> [--mode …]` to remake a
+  cover without re-conversion.
 - [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
 
 ## Housekeeping

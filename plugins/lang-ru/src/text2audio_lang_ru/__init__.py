@@ -45,6 +45,7 @@ PROFILE = LanguageProfile(
     },
     pauses_ms={"paragraph": 800},
     qa=QaProfile(asr="gigaam", wer_threshold=0.18, chars_per_sec=(6.0, 25.0), fold={"ё": "е"}),
+    translator="opus-mt-ru-en",  # English cover prompts (§6.8.2)
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (часть {n} из {total})",
     abbreviations=(

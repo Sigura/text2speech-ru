@@ -77,6 +77,25 @@ class QaConfig(_Section):
         return v.strip().lower()
 
 
+class CoverSdConfig(_Section):
+    """The `sd-webui` cover generator (§6.8.2, ADR-0009); off until `dir` is set."""
+
+    dir: Path | None = None  # an AUTOMATIC1111 WebUI checkout
+    python: Path | None = None  # None = <dir>/venv/bin/python
+    checkpoint: str | None = None  # None = the WebUI's configured default
+    steps: int = Field(default=30, ge=1)
+    size: int | None = Field(default=None, ge=256)  # None = by checkpoint family
+    timeout_s: float = Field(default=600, gt=0)  # start-up, including the model load
+
+
+class CoverConfig(_Section):
+    # auto: embedded → generated → typographic; generate: generated even when one is
+    # embedded; typographic: always drawn; embedded-only: no cover without one.
+    mode: Literal["auto", "embedded-only", "generate", "typographic"] = "auto"
+    generator: str = "sd-webui"  # entry point in `text2audio.covers`
+    sd: CoverSdConfig = CoverSdConfig()
+
+
 class ResourcesConfig(_Section):
     """Overrides for the resource planner (§9.1); `None` = automatic."""
 
@@ -91,6 +110,7 @@ class Config(_Section):
     qa: QaConfig = QaConfig()
     resources: ResourcesConfig = ResourcesConfig()
     tools: ToolsConfig = ToolsConfig()
+    cover: CoverConfig = CoverConfig()
     # Per-language overrides, e.g. [lang.ru] g2p = "silero-stress" (§6.6.1).
     lang: dict[str, dict[str, Any]] = {}
 

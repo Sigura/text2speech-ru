@@ -3,15 +3,21 @@
 -e .
     # via
     #   text2audio-asr-gigaam
+    #   text2audio-backend-chatterbox
     #   text2audio-backend-silero
     #   text2audio-backend-sine
+    #   text2audio-cover-sd-webui
     #   text2audio-g2p-ruaccent
     #   text2audio-lang-ru
+    #   text2audio-mt-opus
 -e ./plugins/asr-gigaam
+-e ./plugins/backend-chatterbox
 -e ./plugins/backend-silero
 -e ./plugins/backend-sine
+-e ./plugins/cover-sd-webui
 -e ./plugins/g2p-ruaccent
 -e ./plugins/lang-ru
+-e ./plugins/mt-opus
 annotated-doc==0.0.5
     # via typer
 annotated-types==0.8.0
@@ -118,6 +124,8 @@ packaging==26.3
     #   virtualenv
 pathspec==1.1.1
     # via mypy
+pillow==13.0.0
+    # via text2audio
 platformdirs==4.13.5
     # via
     #   text2audio

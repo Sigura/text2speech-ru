@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.15-M2 |
+| Document version | 1.16-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -38,6 +38,7 @@
 | 1.13-M2 | 2026-10-26 | T1 `ru` measured on the full novel (§9, §13.1); owner's QA limit — at most 100 segments checked per run, polish/QA in batches of ≤ 100 — recorded as proposed (§6.9). |
 | 1.14-M2 | 2026-10-26 | M2 step 4a: compound hyphens lost at PDF line ends are restored by `ru` normalization — only words pymorphy3 does not know (§6.3, §6.6.5, §13.1). |
 | 1.15-M2 | 2026-10-26 | M2 step 4b — **Decision:** QA limit as built: at most 100 segments checked per run (`[qa] max_segments`, `--qa-max`), the first in hash order; polish and QA run in batches of ≤ 100 segments on worker pools kept loaded; the M2 flagged-share criterion is measured over the checked sample (§6.9, §11, §13.1). |
+| 1.16-M2 | 2026-10-26 | M2 step 4c — covers as built (§6.8.2): typographic covers with bundled DejaVu Serif; `sd-webui` generator on a private WebUI instance (own data dir, the WebUI's default checkpoint); **Decision:** cover prompts of non-English books are translated offline by an Opus-MT `translators` component pinned in `models.lock` (closes the open §13.1 row); `[cover]` / `[cover.sd]` config; `doctor` covers line. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -865,31 +866,58 @@ not re-encoded (`_work/parts.json`).
 
 #### 6.8.2 Covers
 
-Every book gets a cover (FR-23, ADR-0009), chosen in this order:
+Every book gets a cover (FR-23, ADR-0009). `convert` chooses it once per batch and
+caches it in `_work/` with its origin in `metadata.json` (`cover`):
 
 1. **Embedded** — FB2 `<coverpage>` → `<binary>`; EPUB 3 manifest item with
    `properties="cover-image"`, else EPUB 2 `<meta name="cover">`, else the `guide`
-   cover reference. Images are validated (Pillow, size limit) and saved as
-   `_work/cover.jpg` (long side ≤ 1400 px).
+   cover reference; saved as `_work/cover.<ext>`.
 2. **Generated** by a cover plugin (`text2audio.covers` entry points), when one is
-   installed and enabled. The first plugin, `sd-webui`, drives a local
-   [AUTOMATIC1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui):
-   - it starts **its own** WebUI process (never reuses someone else's) with
-     `--nowebui --api --port <free port> --skip-prepare-environment --skip-install
-     --skip-version-check`, bound to 127.0.0.1, with the HF offline flags and
+   installed and can run now. The first plugin, `sd-webui`, drives a local
+   [AUTOMATIC1111 Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
+   (`[cover.sd] dir`; off until set):
+   - it starts **its own** WebUI process (never reuses someone else's) with its venv's
+     Python: `--nowebui --api --port <free port> --skip-prepare-environment
+     --skip-install --skip-version-check --skip-torch-cuda-test
+     --no-download-sd-model --disable-all-extensions --no-prompt-history`, bound to
+     127.0.0.1 (no `--listen`), with the HF offline flags and
      `CUDA_DEVICE_ORDER=PCI_BUS_ID`;
-   - on the **first GPU in nvidia-smi order with enough free VRAM** for the checkpoint
-     family (SDXL ≈ 10 GB, SD 1.5 ≈ 5 GB; `first_gpu_with`, §9.1); no GPU → skip;
-   - prompt from metadata: FB2 `<genre>` codes / EPUB subjects mapped to English style
-     keywords, plus annotation and era; no text is rendered in the image;
-   - the process is stopped when the batch's covers are done;
-   - the checkpoint name and SHA-256, seed and prompt go into `metadata.json`.
-3. **Typographic** — title and author drawn with Pillow on a plain background with a
-   bundled Cyrillic-capable font. Always available, deterministic.
+   - the WebUI checkout may be shared, so the instance never writes to it:
+     `--data-dir` is a private directory (`<data dir>/text2audio/sd-webui`, also its
+     working directory and hash cache via `SD_WEBUI_CACHE_DIR/FILE`) holding a copy of
+     the WebUI's `config.json`; checkpoints are read through `--models-dir`;
+   - checkpoint: the WebUI's configured default (`sd_model_checkpoint`), or
+     `[cover.sd] checkpoint`; its family is read from the safetensors header — SDXL
+     needs ≈ 10 GB and draws at 1024², SD 1.x ≈ 5 GB and draws at 512² with a ×2
+     hires pass;
+   - on the **first GPU in nvidia-smi order with enough free VRAM**
+     (`first_gpu_with`, §9.1); no GPU, no WebUI or no checkpoint → typographic, with
+     the reason in `metadata.json` (`cover.note`) and `doctor`;
+   - prompt: FB2 `<genre>` codes / EPUB subjects mapped to English style keywords,
+     the era for books dated before 1950, and the title plus a description — the
+     annotation's first sentences, else the first 20 words of the book — translated
+     into English by the language's `translator` component (Opus-MT `ru-en` for `ru`,
+     a worker in its own environment, pinned in `models.lock`, offline); without a
+     translator only the keywords are used. A negative prompt keeps text out of the
+     image;
+   - the process group is stopped when the batch's covers are done;
+   - prompt, negative prompt, seed (from the cover key), steps, size, GPU, checkpoint
+     name and SHA-256 go into `metadata.json`.
+3. **Typographic** — title and author drawn with Pillow and the bundled DejaVu Serif
+   (`src/text2audio/covers/fonts`, Bitstream Vera licence) on a frame over a
+   background colour chosen by a hash of title and author. Always available,
+   deterministic; 1400 × 1400 JPEG.
 
-Generated and typographic covers get title and author drawn on top. Settings:
-`[cover] mode = "auto" | "embedded-only" | "generate" | "typographic"`,
-`[cover.sd] dir`, `python`, `checkpoint`, `steps`, `size`.
+Generated covers get title and author drawn at the bottom in the colour (from light
+ink, dark ink, accent, white) with the most contrast against the picture there, with
+an outline in the opposite extreme. A cover is cached under a key of everything that
+shapes it (mode, generator settings, title, authors, genres, annotation or opening
+words, date, language); a typographic cover that stood in for a generated one is
+replaced as soon as the generator can run. Settings:
+`[cover] mode = "auto" | "embedded-only" | "generate" | "typographic"` (auto:
+embedded → generated → typographic; generate: generated even when one is embedded;
+typographic: always drawn), `generator`, `[cover.sd] dir`, `python`, `checkpoint`,
+`steps`, `size`, `timeout_s`.
 
 ### 6.9 Quality Assurance Gate
 
@@ -1065,6 +1093,12 @@ threads_per_worker = 4
 
 [cover]
 mode = "auto"                 # auto | embedded-only | generate | typographic
+generator = "sd-webui"
+
+[cover.sd]                    # off until dir is set
+dir        = "/path/to/stable-diffusion-webui"
+checkpoint = "…"              # default: the WebUI's configured one
+steps      = 30
 ```
 
 Exit codes: `0` success, `1` usage error, `2` input error, `3` missing asset /
@@ -1337,7 +1371,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Resource planning (§9.1): plan from free VRAM, cgroup/affinity limits and backend-declared needs; GPU workers pinned to their NUMA CPUs; `nvidia-smi` instead of torch in the core. | Decided |
 | 2026-10-24 | Covers: embedded → generated by a local SD WebUI that text2audio starts itself on the first GPU with enough free VRAM → typographic; loopback-only local-service exception to the offline contract ([ADR-0009](docs/adr/0009-covers-and-local-services.md)). | Decided |
 | 2026-10-24 | Optional two-stage synthesis: fast TTS, then a "polish" plugin (voice conversion or enhancement) before the QA gate (§6.6.6). Owner's idea. | Proposed — tried in the `ru-polish` spike (below), decided in M2 |
-| — | Prompt language for generated covers of Russian books: genre mapping only, or offline ru→en MT (e.g. Opus-MT) for titles/annotations. | Open — M2 |
+| 2026-10-26 | Prompt language for generated covers (owner): genre keywords **plus** the title and a description translated offline by a per-language `translators` component — Helsinki-NLP Opus-MT `ru-en` (Marian, CPU worker in its own environment, pinned in `models.lock`). The description is the annotation's first sentences, else the book's first 20 words. | Decided |
+| 2026-10-26 | Covers as built: typographic with bundled DejaVu Serif 2.37 (Pillow becomes a core dependency); the `sd-webui` instance uses a private `--data-dir`/working directory and hash cache so the shared WebUI checkout is never written; checkpoint = the WebUI's configured default unless `[cover.sd] checkpoint`; the title colour on generated covers is chosen by contrast. First real run: SD 1.x default checkpoint on a free RTX 4090, 87 s for start, model load, hashing and one 1024² cover. | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |
