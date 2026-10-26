@@ -1,4 +1,5 @@
-"""Entry points `text2audio.backends: sine` and `text2audio.asr: sine-echo` (test fixtures)."""
+"""Entry points `text2audio.backends: sine`, `sine-polish` (also a polisher) and
+`text2audio.asr: sine-echo` (test fixtures)."""
 
 from __future__ import annotations
 
@@ -22,6 +23,12 @@ class SineBackend:
 
     def worker_command(self, python: str) -> list[str]:
         return [python, "-m", "text2audio_backend_sine.worker"]
+
+
+class SinePolish(SineBackend):
+    """Polisher and foreign-word backend of the expressive-route tests (§6.6.6)."""
+
+    name = "sine-polish"
 
 
 class SineEcho:

@@ -32,6 +32,7 @@ langs = [
     "text2audio-g2p-ruaccent",
     "text2audio-backend-silero",
     "text2audio-asr-gigaam",
+    "text2audio-backend-chatterbox",
 ]
 dev = [
     "text2audio-backend-sine",
@@ -57,6 +58,7 @@ text2audio-lang-ru = { workspace = true }
 text2audio-g2p-ruaccent = { workspace = true }
 text2audio-backend-silero = { workspace = true }
 text2audio-asr-gigaam = { workspace = true }
+text2audio-backend-chatterbox = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

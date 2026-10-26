@@ -19,6 +19,8 @@ _ORDINAL = (
 )
 _NUMBER = rf"(?:[IVXLCDM]+|\d+|{_ORDINAL})"  # Roman, Arabic or an ordinal: «первая»
 _TITLE_TAIL = r"(?:\s*[.:—–-]?\s+\S.*)?"  # "Глава 1. Название", "Глава 1 — Название"
+# Chatterbox clones the narrator from a 15 s Silero `xenia` clip (owner-approved, §13.1).
+_VOICES = Path(__file__).parent / "voices"
 
 PROFILE = LanguageProfile(
     code="ru",
@@ -32,8 +34,15 @@ PROFILE = LanguageProfile(
     front_matter=(r"(?:содержание|оглавление)\.?",),
     normalizer="ru",
     g2p="ruaccent",
-    tiers={"fast": TierRoute(backend="silero")},
-    voices={"narrator": {"silero": "xenia"}, "dialogue": {"silero": "xenia"}},
+    tiers={
+        "fast": TierRoute(backend="silero"),
+        # §6.6.6: Silero → Chatterbox VC; segments with Latin words read by Chatterbox.
+        "expressive": TierRoute(backend="silero", polish="chatterbox", foreign="chatterbox"),
+    },
+    voices={
+        "narrator": {"silero": "xenia", "chatterbox": str(_VOICES / "ref-xenia.wav")},
+        "dialogue": {"silero": "xenia", "chatterbox": str(_VOICES / "ref-xenia.wav")},
+    },
     pauses_ms={"paragraph": 800},
     qa=QaProfile(asr="gigaam", wer_threshold=0.18, chars_per_sec=(6.0, 25.0), fold={"ё": "е"}),
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),

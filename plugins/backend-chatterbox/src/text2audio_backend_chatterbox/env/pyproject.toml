@@ -1,0 +1,14 @@
+[project]
+name = "t2a-env-backend-chatterbox"
+version = "0"
+description = "Worker environment of the Chatterbox backend (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+# chatterbox-tts pins torch/torchaudio 2.6.0, transformers and numpy < 2 itself.
+dependencies = [
+    "chatterbox-tts==0.1.7",
+    "soundfile==0.14.0",
+    "setuptools<81",  # resemble-perth imports pkg_resources
+]
+
+[tool.uv]
+package = false

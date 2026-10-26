@@ -25,6 +25,15 @@ def _more(rows: list[Any]) -> list[str]:
     return ["", f"… and {extra} more in `report.json`."] if extra > 0 else []
 
 
+def _polish_line(polish: dict[str, Any] | None) -> str:
+    if not polish:
+        return ""
+    line = f", then `{polish['backend']}` on {polish['segments']} segment(s)"
+    if polish.get("workers"):
+        line += f" ({polish['workers']} worker(s) on {polish['device']}, RTF {polish['rtf']})"
+    return line
+
+
 def render(report: dict[str, Any]) -> str:
     seg = report["segments"]
     syn = report["synthesis"]
@@ -35,7 +44,7 @@ def render(report: dict[str, Any]) -> str:
         f"- Audio: **{_hms(report['duration_ms'])}** in {len(report['files'])} file(s)"
         f" ({report['split']['mode']}: {report['split']['reason']})",
         f"- Language `{report['language']}`, tier `{report['tier']}`,"
-        f" backend `{report['route']['backend']}`",
+        f" backend `{report['route']['backend']}`" + _polish_line(report.get("polish")),
         f"- Segments: {seg['total']} — {seg['rendered_now']} rendered now,"
         f" {seg['cached']} cached, {seg['duplicate']} duplicate, {seg['failed']} failed",
         f"- Run time: {_hms(report['wall_s'] * 1000)}"
@@ -59,6 +68,11 @@ def render(report: dict[str, Any]) -> str:
             f" mean WER {qa['mean_wer']},"
             f" {qa['retried']} retried, **{qa['flagged']} flagged"
             f" ({qa['flagged_share']:.1%})**."
+            + (
+                f" {qa['unpolished']} kept unpolished (§6.6.6 fallback)."
+                if qa.get("unpolished")
+                else ""
+            )
         )
         flagged = qa.get("flagged_list", [])
         if flagged:

@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import shutil
 import threading
 import time
 from collections import Counter
@@ -64,6 +65,7 @@ HASH_VERSION = 1  # bump when the meaning of a segment hash changes
 DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
 SEGMENTS_PER_WORKER = 25  # don't start a worker for fewer pending segments than this
+_FOREIGN = ("transliterated", "unresolved")  # span resolutions that go to the foreign backend
 
 # (stage, done, total): `done == 0` when a stage starts, `done == total` when it ends.
 # The callable may also have a `detail(stage, **fields)` method for facts a UI can show
@@ -101,6 +103,8 @@ class Plan:
     normalizer: Normalizer | None
     g2p: Any | None
     notes: list[str] = field(default_factory=list)
+    polisher: BackendDescriptor | None = None  # re-voices the backend's audio (§6.6.6)
+    foreign: BackendDescriptor | None = None  # reads segments with foreign words (FR-24)
 
 
 @dataclass
@@ -138,33 +142,47 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
         raise SynthesisError(f"no language pack for {lang!r}; install text2audio-lang-{lang}")
     if not prof.tiers:
         raise SynthesisError(f"the {lang!r} pack defines no synthesis route")
-    found = discover(("backends", "normalizers", "g2p"))
+    found = discover(("backends", "normalizers", "g2p", "polishers"))
     overrides = config.lang.get(lang, {})
     notes: list[str] = []
     wanted = tier or config.synthesis.tier
     order: list[Tier] = [wanted] if wanted else ["expressive", "fast"]
-    chosen: tuple[Tier, TierRoute, Any] | None = None
+    chosen: tuple[Tier, TierRoute, Any, Any, Any] | None = None
     for t in order:
         route = prof.tiers.get(t)
         if route is None:
             notes.append(f"tier {t}: not defined by the {lang!r} pack")
             continue
-        backends = overrides.get("backend", {})  # [lang.ru] backend.fast = "…"
-        name = str(backends.get(t, route.backend) if isinstance(backends, dict) else route.backend)
-        backend = found.get("backends", name)
-        if backend is None:
-            notes.append(f"tier {t}: backend {name!r} is not installed")
+        # [lang.ru] backend.fast = "…", polish.expressive = "…", foreign.expressive = "…"
+        names = {
+            key: _override(overrides.get(key), t, getattr(route, key))
+            for key in ("backend", "polish", "foreign")
+        }
+        backend = found.get("backends", names["backend"] or "")
+        polisher = found.get("polishers", names["polish"]) if names["polish"] else None
+        foreign = found.get("backends", names["foreign"]) if names["foreign"] else None
+        missing = [
+            f"{key} {names[key]!r}"
+            for key, d in (("backend", backend), ("polish", polisher), ("foreign", foreign))
+            if (names[key] or key == "backend") and d is None
+        ]
+        if missing:
+            notes.append(f"tier {t}: {', '.join(missing)} not installed")
             continue
         if t == "expressive" and not wanted:
-            plan = res.plan(res.probe(), backend.capabilities)
-            if plan.tier != "expressive":
+            # The GPU stage decides: the polisher / foreign backend, else the backend.
+            gpu = next(
+                (d for d in (polisher, foreign) if d and "cuda" in d.capabilities.devices),
+                backend,
+            )
+            if res.plan(res.probe(), gpu.capabilities).tier != "expressive":
                 notes.append("tier expressive: no GPU with enough free VRAM")
                 continue
-        chosen = (t, route.model_copy(update={"backend": name}), backend)
+        chosen = (t, route.model_copy(update=names), backend, polisher, foreign)
         break
     if chosen is None:
         raise SynthesisError("no usable synthesis route: " + "; ".join(notes))
-    t, route, backend = chosen
+    t, route, backend, polisher, foreign = chosen
     normalizer = found.get("normalizers", prof.normalizer) if prof.normalizer else None
     if prof.normalizer and normalizer is None:
         raise SynthesisError(f"normalizer {prof.normalizer!r} of the {lang!r} pack is missing")
@@ -174,7 +192,13 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
         g2p = found.get("g2p", g2p_name)
         if g2p is None:
             raise SynthesisError(f"stress component {g2p_name!r} is not installed")
-    return Plan(lang, prof, t, route, backend, normalizer, g2p, notes)
+    return Plan(lang, prof, t, route, backend, normalizer, g2p, notes, polisher, foreign)
+
+
+def _override(value: Any, tier: Tier, default: str | None) -> str | None:
+    if isinstance(value, dict) and tier in value:
+        return str(value[tier]) or None
+    return default
 
 
 def _model_id(owner: str, lock: list[Any]) -> str:
@@ -196,6 +220,26 @@ def segment_hash(seg: Segment, voice_id: str, model: str) -> str:
     return hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
+def polish_hash(source_hash: str, polisher: str, voice: str, model: str, seed: int) -> str:
+    """Hash of a polished segment: its source audio plus what re-voiced it."""
+    data = {"v": HASH_VERSION, "source": source_hash, "polish": polisher}
+    data |= {"voice": voice, "model": model, "seed": str(seed)}
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def _voice_key(voice_id: str) -> str:
+    """A reference clip counts by its content, so the hash does not depend on its path."""
+    path = Path(voice_id)
+    if voice_id and path.is_file():
+        return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    return voice_id
+
+
+def _voice(prof: LanguageProfile, seg: Segment, backend: str) -> str:
+    voices = prof.voices
+    return voices.get(seg.voice, voices.get("narrator", {})).get(backend, "")
+
+
 # --------------------------------------------------------------------------- text
 
 
@@ -210,8 +254,15 @@ def prepare(
     store: ModelStore,
     progress: Progress | None = None,
     timings: Timings | None = None,
-) -> tuple[list[Segment], list[dict[str, str]]]:
-    """Segments with normalized, stressed text, route and hash; and uncertain spans."""
+) -> tuple[list[Segment], list[dict[str, str]], dict[str, Segment]]:
+    """Segments with normalized, stressed text, route and hash; uncertain spans; and the
+    backend-rendered source of every segment on a polish route, by the segment's hash.
+
+    Routes (§6.6.6): `<backend>`; `<backend>><polisher>` (the source is the segment as the
+    backend alone would render it, same hash, so fast-tier audio is reused); `<foreign>`
+    for segments with words the pack could only transliterate (FR-24) — that backend
+    reads them in their own script, while `text_norm` keeps the transliteration for QA.
+    """
     prof = plan.profile
     timings = Timings() if timings is None else timings
     with timings.stage("segment"):
@@ -229,6 +280,7 @@ def prepare(
     pauses = _pause_map(prof)
     uncertain: list[dict[str, str]] = []
     marked: dict[str, str] = {}
+    foreign_ids: set[str] = set()
     translit = plan.normalizer if isinstance(plan.normalizer, Transliterator) else None
     with timings.stage("normalize"):
         for i, seg in enumerate(segments, 1):
@@ -250,18 +302,32 @@ def prepare(
                 text = result.text
                 uncertain += [{"segment": seg.id, "span": s} for s in result.uncertain]
                 spans += result.resolved
+            kept = text
             text = _resolve_foreign(text, prof.script, translit, spans)
             seg.spans = spans
             seg.text_norm = strip_marks(text)
             marked[seg.id] = text
+            if plan.foreign is not None and any(s.resolution in _FOREIGN for s in spans):
+                foreign_ids.add(seg.id)
+                marked[seg.id] = kept
             seg.pause_after_ms = pauses.get(seg.pause_after_ms, seg.pause_after_ms)
             if progress:
                 progress("normalize", i, len(segments))
     _detail(progress, "normalize", segments=len(segments), uncertain=len(uncertain))
     with timings.stage("stress"):
         stressed = _stress(folder, plan, store, list(marked.values()), progress)
-    voices = prof.voices
-    model = _model_id(plan.route.backend, load_lock())
+    lock = load_lock()
+    backend = plan.route.backend
+    model = _model_id(backend, lock)
+    keys: dict[str, str] = {}
+
+    def voice_key(seg: Segment, name: str) -> str:
+        voice = _voice(prof, seg, name)
+        if voice not in keys:
+            keys[voice] = _voice_key(voice)
+        return keys[voice]
+
+    sources: dict[str, Segment] = {}
     for seg in segments:
         text = marked[seg.id]
         seg.text_stress = (
@@ -269,11 +335,22 @@ def prepare(
             if plan.g2p
             else (text if "+" in text else None)
         )
-        seg.backend = plan.route.backend
-        seg.route = plan.route.backend
-        voice_id = voices.get(seg.voice, voices.get("narrator", {})).get(seg.backend, "")
-        seg.hash = segment_hash(seg, voice_id, model)
-    return segments, uncertain
+        if plan.foreign is not None and seg.id in foreign_ids:
+            seg.text_stress = seg.text_stress or text  # unlike text_norm, keeps the Latin
+            seg.backend = seg.route = plan.foreign.name
+            seg.hash = segment_hash(seg, voice_key(seg, seg.backend), _model_id(seg.backend, lock))
+            continue
+        seg.backend = seg.route = backend
+        seg.hash = segment_hash(seg, _voice(prof, seg, backend), model)
+        if plan.polisher is not None:
+            source = seg.model_copy()
+            name = plan.polisher.name
+            seg.route = f"{backend}>{name}"
+            seg.hash = polish_hash(
+                source.hash or "", name, voice_key(seg, name), _model_id(name, lock), seg.seed
+            )
+            sources[seg.hash] = source
+    return segments, uncertain, sources
 
 
 def _resolve_foreign(
@@ -346,65 +423,103 @@ def _stress(
 
 # --------------------------------------------------------------------------- workers
 
+# A segment's request on a worker for one attempt: (op, fields).
+Job = Callable[[Segment, int], tuple[str, dict[str, Any]]]
+
+
+def _job(plan: Plan, backend: str, sources: dict[str, Segment], audio_dir: Path) -> Job:
+    """`synthesize` the segment, or `polish` its source audio if it has one."""
+
+    def job(seg: Segment, attempt: int) -> tuple[str, dict[str, Any]]:
+        fields: dict[str, Any] = {
+            "segment": seg.model_dump(mode="json"),
+            "out": str(gate.wav_path(audio_dir, seg.hash or "", attempt)),
+            "voice_id": _voice(plan.profile, seg, backend),
+            "attempt": attempt,
+        }
+        source = sources.get(seg.hash or "")
+        if source is None:
+            return "synthesize", fields
+        return "polish", fields | {"source": str(gate.wav_path(audio_dir, source.hash or ""))}
+
+    return job
+
+
+def _gpu_groups(
+    plan: Plan, segments: list[Segment], sources: dict[str, Segment]
+) -> dict[str, tuple[BackendDescriptor, list[Segment]]]:
+    """Segments of the polish and foreign routes, by the worker that renders them."""
+    groups: dict[str, tuple[BackendDescriptor, list[Segment]]] = {}
+    for seg in segments:
+        if seg.hash in sources:
+            d = plan.polisher
+        elif plan.foreign is not None and seg.route == plan.foreign.name:
+            d = plan.foreign
+        else:
+            continue
+        assert d is not None
+        groups.setdefault(d.name, (d, []))[1].append(seg)
+    return groups
+
 
 def _render_pool(
-    plan: Plan,
+    backend: BackendDescriptor,
+    tier: Tier,
     segments: list[Segment],
+    job: Job,
     config: Config,
     store: ModelStore,
-    out_for: Callable[[Segment], Path],
     on_done: Callable[[Segment, dict[str, Any]], None],
     on_fail: Callable[[Segment, Exception], None],
     max_workers: int | None = None,
     attempt: int = 1,
-    on_start: Callable[[int], None] | None = None,
-) -> int:
-    """Synthesize `segments` on a pool of TTS workers; returns the number of workers."""
-    caps = plan.backend.capabilities
+    on_start: Callable[[list[res.WorkerSlot]], None] | None = None,
+) -> list[res.WorkerSlot]:
+    """Run `job` for `segments` on a pool of `backend` workers; returns their slots."""
+    caps = backend.capabilities
     rc = config.resources
     slots = res.plan(
         res.probe(),
         caps,
-        tier=plan.tier,
+        tier=tier,
         devices=rc.devices,
         max_workers=rc.max_workers,
         threads_per_worker=rc.threads_per_worker,
     ).slots
+    if not slots:
+        raise SynthesisError(f"no device to run {backend.name!r} on")
     cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
     n = max(1, min(len(slots), cap, math.ceil(len(segments) / SEGMENTS_PER_WORKER)))
-    voices = plan.profile.voices
-    payload = store.payload(assets_for(plan.route.backend, load_lock()))
+    payload = store.payload(assets_for(backend.name, load_lock()))
 
     def work(worker: WorkerBackend, seg: Segment) -> None:
-        voice_id = voices.get(seg.voice, voices.get("narrator", {})).get(worker.name, "")
-        reply = worker.call(
-            "synthesize",
-            segment=seg.model_dump(mode="json"),
-            out=str(out_for(seg)),
-            voice_id=voice_id,
-            attempt=attempt,
-        )
-        on_done(seg, reply)
+        op, fields = job(seg, attempt)
+        on_done(seg, worker.call(op, **fields))
 
-    workers = [WorkerBackend(plan.backend, store.root, slot) for slot in slots[:n]]
+    workers = [WorkerBackend(backend, store.root, slot) for slot in slots[:n]]
     if on_start:
-        on_start(len(workers))
+        on_start(slots[:n])
     parallel(workers, segments, work, load={"assets": payload}, on_error=on_fail)
-    return len(workers)
+    return slots[:n]
 
 
 def render(
     folder: BookFolder,
-    plan: Plan,
+    backend: BackendDescriptor,
+    tier: Tier,
     segments: list[Segment],
+    job: Job,
     config: Config,
     store: ModelStore,
     journal: Journal,
     progress: Progress | None = None,
     max_workers: int | None = None,
+    stage: str = "synthesize",
+    sources: dict[str, Segment] | None = None,
 ) -> dict[str, Any]:
-    """Synthesize every segment whose hash is not in the journal yet."""
+    """Render every segment whose hash is not in the journal yet on `backend` workers."""
     audio_dir = folder.work / "audio" / "segments"
+    sources = sources or {}
     unique: dict[str, Segment] = {}
     cached = duplicate = 0
     for seg in segments:
@@ -423,9 +538,10 @@ def render(
         "duplicate": duplicate,
         "elapsed_ms": 0,
         "workers": 0,
+        "device": None,
         "wall_s": 0.0,
     }
-    _detail(progress, "synthesize", segments=len(segments), pending=len(pending))
+    _detail(progress, stage, segments=len(segments), pending=len(pending))
     if not pending:
         return stats
     lock = threading.Lock()
@@ -435,49 +551,53 @@ def render(
 
     def done(seg: Segment, reply: dict[str, Any]) -> None:
         assert seg.hash is not None
-        journal.add(
-            {
-                "hash": seg.hash,
-                "segment": seg.id,
-                "duration_ms": int(reply["duration_ms"]),
-                "elapsed_ms": int(reply.get("elapsed_ms", 0)),
-                "backend": plan.route.backend,
-                "warnings": reply.get("warnings", []),
-            }
-        )
+        entry: dict[str, Any] = {
+            "hash": seg.hash,
+            "segment": seg.id,
+            "duration_ms": int(reply["duration_ms"]),
+            "elapsed_ms": int(reply.get("elapsed_ms", 0)),
+            "backend": backend.name,
+            "warnings": reply.get("warnings", []),
+        }
+        if seg.hash in sources:
+            entry["source"] = sources[seg.hash].hash
+        journal.add(entry)
         with lock:
             stats["rendered"] += 1
             stats["elapsed_ms"] += int(reply.get("elapsed_ms", 0))
             processed[0] += 1
             audio_ms[0] += int(reply["duration_ms"])
-            _detail(progress, "synthesize", audio_ms=audio_ms[0])
+            _detail(progress, stage, audio_ms=audio_ms[0])
             if progress:
-                progress("synthesize", processed[0], len(pending))
+                progress(stage, processed[0], len(pending))
 
     def failed(seg: Segment, exc: Exception) -> None:
         with lock:
             stats.setdefault("failures", []).append({"segment": seg.id, "error": str(exc)})
             processed[0] += 1
-            _detail(progress, "synthesize", failed=seg.id, error=str(exc))
+            _detail(progress, stage, failed=seg.id, error=str(exc))
             if progress:
-                progress("synthesize", processed[0], len(pending))
+                progress(stage, processed[0], len(pending))
 
-    def start(n: int) -> None:
-        _detail(progress, "synthesize", workers=n, backend=plan.route.backend)
+    def start(slots: list[res.WorkerSlot]) -> None:
+        _detail(progress, stage, workers=len(slots), backend=backend.name)
         if progress:
-            progress("synthesize", 0, len(pending))
+            progress(stage, 0, len(pending))
 
-    stats["workers"] = _render_pool(
-        plan,
+    slots = _render_pool(
+        backend,
+        tier,
         pending,
+        job,
         config,
         store,
-        lambda seg: gate.wav_path(audio_dir, seg.hash or ""),
         done,
         failed,
         max_workers,
         on_start=start,
     )
+    stats["workers"] = len(slots)
+    stats["device"] = slots[0].device
     stats["wall_s"] = round(time.monotonic() - started, 2)
     return stats
 
@@ -485,12 +605,18 @@ def render(
 def rerenderer(
     folder: BookFolder,
     plan: Plan,
+    sources: dict[str, Segment],
     config: Config,
     store: ModelStore,
+    journal: Journal,
     max_workers: int | None,
     warnings: list[dict[str, str]],
 ) -> gate.Rerender:
-    """`gate.Rerender` for this book: attempt `n` of a segment goes to `<hash>.a<n>.wav`."""
+    """`gate.Rerender` for this book: attempt `n` of a segment goes to `<hash>.a<n>.wav`.
+
+    A polished segment is polished again with a new seed; its last attempt is the
+    unpolished source audio, marked `final` (§6.6.6 fallback).
+    """
     audio_dir = folder.work / "audio" / "segments"
 
     def rerender(segments: list[Segment], attempt: int) -> dict[str, dict[str, Any]]:
@@ -505,17 +631,33 @@ def rerenderer(
             with lock:
                 warnings.append({"segment": seg.id, "warning": f"attempt {attempt}: {exc}"})
 
-        _render_pool(
-            plan,
-            segments,
-            config,
-            store,
-            lambda seg: gate.wav_path(audio_dir, seg.hash or "", attempt),
-            done,
-            failed,
-            max_workers,
-            attempt,
-        )
+        last = attempt >= gate.MAX_ATTEMPTS
+        for seg in segments:
+            source = sources.get(seg.hash or "")
+            entry = journal.get(source.hash or "") if source else None
+            if last and source is not None and entry is not None:
+                src = gate.wav_path(audio_dir, source.hash or "")
+                shutil.copyfile(src, gate.wav_path(audio_dir, seg.hash or "", attempt))
+                replies[seg.hash or ""] = {"duration_ms": entry["duration_ms"], "final": True}
+        own = [s for s in segments if s.hash not in sources and s.route == plan.route.backend]
+        groups = _gpu_groups(plan, [s for s in segments if s.hash not in replies], sources)
+        runs: list[tuple[BackendDescriptor, Tier, list[Segment], dict[str, Segment]]] = []
+        if own:
+            runs.append((plan.backend, plan.tier, own, {}))
+        runs += [(d, "expressive", segs, sources) for d, segs in groups.values()]
+        for backend, tier, segs, srcs in runs:
+            _render_pool(
+                backend,
+                tier,
+                segs,
+                _job(plan, backend.name, srcs, audio_dir),
+                config,
+                store,
+                done,
+                failed,
+                max_workers,
+                attempt,
+            )
         return replies
 
     return rerender
@@ -732,24 +874,67 @@ def synthesize(
         lang=plan.lang,
         tier=plan.tier,
         backend=plan.route.backend,
+        polish=plan.route.polish,
+        foreign=plan.route.foreign,
         voice=narrator,
         notes=plan.notes,
     )
-    segments, uncertain = prepare(folder, plan, config, store, progress, timings)
+    segments, uncertain, sources = prepare(folder, plan, config, store, progress, timings)
     write_manifest(folder.work / "segments.jsonl", segments)
     journal = Journal(folder.work / "render.jsonl")
+    audio_dir = folder.work / "audio" / "segments"
     with timings.stage("synthesize"):
-        stats = render(folder, plan, segments, config, store, journal, progress, max_workers)
+        own = [
+            sources.get(s.hash or "", s)
+            for s in segments
+            if s.hash in sources or s.route == plan.route.backend
+        ]
+        stats = render(
+            folder,
+            plan.backend,
+            plan.tier,
+            own,
+            _job(plan, plan.backend.name, {}, audio_dir),
+            config,
+            store,
+            journal,
+            progress,
+            max_workers,
+        )
+    polish_stats: dict[str, Any] = {}
+    # A polish job needs its source audio; a segment whose source failed stays failed.
+    ready = [
+        s for s in segments if s.hash not in sources or (sources[s.hash].hash or "") in journal
+    ]
+    groups = _gpu_groups(plan, ready, sources)
+    if groups:
+        with timings.stage("polish"):
+            for backend, segs in groups.values():
+                polish_stats = render(
+                    folder,
+                    backend,
+                    "expressive",
+                    segs,
+                    _job(plan, backend.name, sources, audio_dir),
+                    config,
+                    store,
+                    journal,
+                    progress,
+                    max_workers,
+                    stage="polish",
+                    sources=sources,
+                )
+                stats.setdefault("failures", []).extend(polish_stats.get("failures", []))
     retry_warnings: list[dict[str, str]] = []
     with timings.stage("qa"):
         qa = gate.run_qa(
             segments,
             journal,
-            folder.work / "audio" / "segments",
+            audio_dir,
             plan.profile,
             config,
             store,
-            rerenderer(folder, plan, config, store, max_workers, retry_warnings),
+            rerenderer(folder, plan, sources, config, store, journal, max_workers, retry_warnings),
             progress,
         )
     for seg in segments:
@@ -764,8 +949,18 @@ def synthesize(
     write_manifest(folder.work / "segments.jsonl", segments)
     with timings.stage("assemble"):
         files, split = assemble(folder, segments, journal, config, meta, narrator, plan, progress)
-    report = _report(folder, plan, segments, journal, stats, split, files, uncertain, meta)
+    report = _report(
+        folder, plan, segments, sources, journal, stats, polish_stats, split, files, uncertain, meta
+    )
     report["qa"] = gate.summary(segments, journal, qa, qa_percent)
+    if sources:
+        # Polished segments whose kept attempt is the unpolished source (§6.6.6 fallback).
+        report["qa"]["unpolished"] = sum(
+            1
+            for s in segments
+            if s.hash in sources
+            and (journal.get(s.hash or "") or {}).get("qa", {}).get("attempt") == gate.MAX_ATTEMPTS
+        )
     report["warnings"] += retry_warnings
     report["wall_s"] = round(time.monotonic() - started, 2)
     if report["duration_ms"]:
@@ -781,8 +976,10 @@ def _report(
     folder: BookFolder,
     plan: Plan,
     segments: list[Segment],
+    sources: dict[str, Segment],
     journal: Journal,
     stats: dict[str, Any],
+    polish_stats: dict[str, Any],
     split: splitting.SplitPlan,
     files: list[Path],
     uncertain: list[dict[str, str]],
@@ -793,7 +990,17 @@ def _report(
         s.pause_after_ms for s in segments
     )
     synth_ms = sum(int(e["duration_ms"]) for e in entries if e)
-    elapsed = sum(int(e.get("elapsed_ms", 0)) for e in entries if e)
+    backend = plan.route.backend
+    own = [
+        journal.get(sources[s.hash].hash or "") if s.hash in sources else e
+        for s, e in zip(segments, entries, strict=True)
+        if s.hash in sources or s.route == backend
+    ]
+    own_ms = sum(int(e["duration_ms"]) for e in own if e)
+    elapsed = sum(int(e.get("elapsed_ms", 0)) for e in own if e)
+    gpu = [e for s, e in zip(segments, entries, strict=True) if e and s.route != backend]
+    gpu_ms = sum(int(e["duration_ms"]) for e in gpu)
+    gpu_elapsed = sum(int(e.get("elapsed_ms", 0)) for e in gpu)
     chapters: dict[int, int] = {}
     for seg, e in zip(segments, entries, strict=True):
         chapters[seg.chapter] = (
@@ -827,9 +1034,22 @@ def _report(
             "workers": stats.get("workers", 0),
             "elapsed_ms": elapsed,
             # RTF = synthesis time ÷ audio duration, per worker (NFR-05).
-            "rtf": round(elapsed / synth_ms, 4) if synth_ms else None,
+            "rtf": round(elapsed / own_ms, 4) if own_ms else None,
             "wall_s_this_run": stats.get("wall_s", 0.0),
         },
+        # The GPU stage of the expressive tier: VC of the backend's audio and foreign-word
+        # segments (§6.6.6); None on routes without one.
+        "polish": {
+            "backend": plan.route.polish or plan.route.foreign,
+            "workers": polish_stats.get("workers", 0),
+            "device": polish_stats.get("device"),
+            "segments": len(gpu),
+            "elapsed_ms": gpu_elapsed,
+            "rtf": round(gpu_elapsed / gpu_ms, 4) if gpu_ms else None,
+            "wall_s_this_run": polish_stats.get("wall_s", 0.0),
+        }
+        if plan.route.polish or plan.route.foreign
+        else None,
         # Whole-run wall time ÷ audio duration (stress, QA and encoding included); set by
         # `synthesize` once the run is over.
         "rtf_wall": None,

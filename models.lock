@@ -105,3 +105,29 @@ files = ["modeling_gigaam.py", "config.json", "pytorch_model.bin"]
 "modeling_gigaam.py" = "269be43b635b1e510115baa2a843c5cbaa052e8adf0be30dc133a2ba5b5f2d86"
 "config.json" = "ca2998f00f064648988111c426deaa4c8bc86872a8bbe443598f2b1511dc0947"
 "pytorch_model.bin" = "a89b662052ad2b8129b334ab45c171b04fc6699d69bd6917575013ff79172ec2"
+
+# Chatterbox Multilingual (expressive tier): TTS for segments with Latin words and VC
+# of Silero audio into the narrator reference (§6.6.6). Cangjie5_TC.json is read by the
+# tokenizer for Chinese only; the worker loads it from here instead of the Hub.
+[[asset]]
+repo = "ResembleAI/chatterbox"
+revision = "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+license = "MIT"
+backend = "chatterbox"
+langs = ["ru"]
+tiers = ["expressive"]
+files = [
+    "ve.pt",
+    "t3_mtl23ls_v2.safetensors",
+    "s3gen.pt",
+    "grapheme_mtl_merged_expanded_v1.json",
+    "conds.pt",
+    "Cangjie5_TC.json",
+]
+[asset.sha256]
+"ve.pt" = "4b16d836bc598509860f6fa068165a8bb5e9ac84f05582dfcf278a5a372879f1"
+"t3_mtl23ls_v2.safetensors" = "b1237586127ce98e7800a68e49938eb5092846862aabcb6e17b2fda7889a6c75"
+"s3gen.pt" = "9b9ff07e60b20c136e2b1b3d7563a24604e8d2c4c267888d1ee929dd0151d2a3"
+"grapheme_mtl_merged_expanded_v1.json" = "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf"
+"conds.pt" = "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e"
+"Cangjie5_TC.json" = "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c"

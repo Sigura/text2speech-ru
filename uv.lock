@@ -12,6 +12,7 @@ resolution-markers = [
 members = [
     "text2audio",
     "text2audio-asr-gigaam",
+    "text2audio-backend-chatterbox",
     "text2audio-backend-silero",
     "text2audio-backend-sine",
     "text2audio-g2p-ruaccent",
@@ -1747,6 +1748,7 @@ dev = [
 ]
 langs = [
     { name = "text2audio-asr-gigaam" },
+    { name = "text2audio-backend-chatterbox" },
     { name = "text2audio-backend-silero" },
     { name = "text2audio-g2p-ruaccent" },
     { name = "text2audio-lang-ru" },
@@ -1782,6 +1784,7 @@ dev = [
 ]
 langs = [
     { name = "text2audio-asr-gigaam", editable = "plugins/asr-gigaam" },
+    { name = "text2audio-backend-chatterbox", editable = "plugins/backend-chatterbox" },
     { name = "text2audio-backend-silero", editable = "plugins/backend-silero" },
     { name = "text2audio-g2p-ruaccent", editable = "plugins/g2p-ruaccent" },
     { name = "text2audio-lang-ru", editable = "plugins/lang-ru" },
@@ -1791,6 +1794,17 @@ langs = [
 name = "text2audio-asr-gigaam"
 version = "0.1.0"
 source = { editable = "plugins/asr-gigaam" }
+dependencies = [
+    { name = "text2audio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "text2audio", editable = "." }]
+
+[[package]]
+name = "text2audio-backend-chatterbox"
+version = "0.1.0"
+source = { editable = "plugins/backend-chatterbox" }
 dependencies = [
     { name = "text2audio" },
 ]

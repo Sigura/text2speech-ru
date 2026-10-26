@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.11-M2 |
+| Document version | 1.12-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-25 |
 | Primary language | Python 3.11+ |
@@ -34,6 +34,7 @@
 | 1.9-M2 | 2026-10-25 | Progress display for `run` / `synthesize` (FR-17, §6.11): `rich` stage lines + live bar on stderr, results on stdout; `Progress` callables may add `detail(stage, **fields)`; Ctrl-C exits 130. |
 | 1.10-M2 | 2026-10-25 | M2 step 2: QA gate as built (§6.9) — GigaAM-v3 worker, WER **and** CER rule, signal checks, up to 3 attempts, exit code 4; QA results in `render.jsonl` (§6.4.2); `.srt` per MP3 (§6.8) and `report.md` (§5.2); parallel part encoding and RUAccent workers; T0 numbers (§9). |
 | 1.11-M2 | 2026-10-25 | M2 step 3a: FR-24 Latin-script spans as built (§6.6.5) — acronyms spelled as one word («эйчтитипи́»), T0 transliteration through `espeak-ng` English IPA → Cyrillic; `report.json` `foreign_spans`. **Decision:** FR-24 acceptance is "no segment flagged by the QA gate and no unresolved span", not WER 0 — GigaAM-v3 cannot write English-sounding words; the QA gate lists such readings as `unverified` instead of scoring them (§6.9, §13.1). |
+| 1.12-M2 | 2026-10-26 | M2 step 3b: the Russian T1 hybrid as built (§6.6.6) — `chatterbox` backend + polisher plugin, per-segment routes, fast-tier audio reused as VC source, `polish` stage, unpolished fallback on the last QA attempt; reference clip in the `ru` pack; T1 reference limits (§9, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -738,6 +739,31 @@ Spike `ru-polish` results (details in `spikes/ru-polish/FINDINGS.md`):
   with Latin-script words, which Silero cannot read. Listening found no audible switch
   between the two. Voice-conversion targets follow the voice-cloning consent policy (§6.12).
 
+As built (M2 step 3b):
+
+- A tier route names `backend`, optional `polish` and optional `foreign`
+  (`TierRoute`; `[lang.<code>] polish.<tier>` / `foreign.<tier>` override them like
+  `backend.<tier>`). `ru` expressive = Silero, polish Chatterbox, foreign Chatterbox.
+  The expressive tier is chosen automatically when the GPU stage (polisher or foreign
+  backend) fits on a GPU, not the CPU-only backend.
+- Per segment: `silero>chatterbox` (polish) or `chatterbox` (foreign) when FR-24 left a
+  span `transliterated` or `unresolved`. The foreign backend reads the text with the
+  Latin words kept (`text_stress`), while `text_norm` keeps the transliteration as the
+  QA reference.
+- Hashes: the source of a polished segment is the segment as the backend alone would
+  render it, with the **same hash as on the fast tier**, so fast-tier audio is reused
+  as VC source; the polished hash covers the source hash, polisher, its model and the
+  reference clip's content. Editing a paragraph re-renders its source and polish only.
+- Stages: `synthesize` (sources on CPU slots) → `polish` (one GPU pool of the
+  polisher/foreign worker for VC and foreign TTS jobs, planned from free VRAM, ≤ 8
+  workers) → QA on the final audio. Chatterbox serves both ops from one model (VC on
+  the TTS model's S3Gen), 4.3 GB VRAM peak per worker.
+- QA retries: a polished segment is polished again with a new seed on attempt 2; its
+  attempt 3 is the unpolished source, marked `final` and counted as `qa.unpolished`.
+  Foreign-route segments get a new seed per attempt.
+- `report.json` `polish` (backend, workers, device, segments, RTF) and
+  `timings_s.polish`; `report.md` names the GPU stage.
+
 ### 6.7 Expression Strategy
 
 Expression is layered. Each level builds on the previous one, and every level degrades
@@ -1288,6 +1314,9 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |
 | 2026-10-25 | FR-24 on T0: unknown Latin words are transliterated with `espeak-ng` `en-us` IPA mapped to Cyrillic (a system binary already required for M4, offline, no weights); acronyms of ≤ 5 capitals are spelled as one stressed word («эйчтитипи́»). | Decided |
 | 2026-10-25 | **FR-24 acceptance = no QA-flagged segment and no unresolved span, not WER 0** (owner). GigaAM-v3 has a 33-letter Cyrillic vocabulary and leaves English-sounding words blank inside a sentence even when Silero says them, so WER against the transliterated text cannot reach 0; the CER rule (§6.9) keeps such segments unflagged. Exception found: «Протокол HTTP работает поверх TCP» — Silero says «эйчтитипи́ … тисипи́» clearly (owner listening), GigaAM hears neither acronym in any spelling tried, and two missing words out of five fail both WER and CER. **Decision (owner):** the QA gate does not score acronym / transliterated readings that ASR did not write at all and lists them as `unverified` (§6.9). | Decided |
+| 2026-10-26 | Russian T1 hybrid as built (§6.6.6): one `chatterbox` plugin is both the foreign backend and the polisher, one worker per GPU slot (VC on the TTS model's S3Gen, 4.3 GB VRAM peak); a polished segment's source has its fast-tier hash, so T0 audio is reused; attempt 3 of a polished segment is its unpolished source. | Decided |
+| 2026-10-26 | The Chatterbox narrator reference (15 s Silero `xenia` clip, 1.8 MB) is committed to the `ru` pack (`voices/ref-xenia.wav`), not listed in `models.lock`, which lists downloadable assets only; segment hashes count reference clips by content. | Decided |
+| 2026-10-26 | T1 reference limits for measurements: one GPU (the one with most free memory), 8 CPU cores near it, 16 GB RAM (`tests/e2e/test_novel.py::test_t1`). | Decided |
 | 2026-10-24 | Russian narrator voice is **female** by owner preference; the contrasting dialogue voice may be male. Spike candidate: Silero v5 `xenia` (fast), Piper `ru_RU-irina` baseline. | Decided (voice gender) |
 | 2026-10-25 | **PDF default reader: pymupdf4llm 1.28.2 with its layout model** (benchmark `spikes/pdf-readers`: no header/page-number leaks, 0.4 s/page CPU, models inside the wheel). Pinned below PyMuPDF 2.0, which absorbed it. Docling: possible plugin; Marker 2.x excluded (vLLM Docker server). The layout model's `onnxruntime` runs in the core process: a reader, CPU-only, no downloads. | Decided |
 | 2026-10-25 | Readers parse XML with defusedxml over the stdlib parser and an HTML-entity pass for XHTML; lxml is not used. EPUB chapters come from the table of contents. FB2 elements outside the schema are dropped and reported. | Decided |

@@ -115,6 +115,14 @@ All notable changes to this project are documented here. The format follows
   (`foreign_spans`) and `report.md`; segments carry `spans` in `segments.jsonl`
   (golden manifests regenerated). The QA gate does not score acronym or transliterated
   readings that GigaAM did not write at all and lists them as `unverified`.
+- M2 step 3b — Russian T1 hybrid (§6.6.6): plugin `backend-chatterbox` (Chatterbox
+  Multilingual TTS and VC in one worker, own environment, weights in `models.lock`);
+  `ru` expressive route Silero → Chatterbox VC into the `xenia` reference, Chatterbox
+  TTS for segments with transliterated words (read in Latin script). Fast-tier audio is
+  reused as VC source; new `polish` stage on a GPU pool; QA retries polish again, then
+  keep the unpolished source (`qa.unpolished`); `report.json` `polish`, `report.md`
+  line. `[lang.<code>] polish.<tier>` / `foreign.<tier>` overrides. Test fixture
+  `sine-polish`; `tests/e2e/test_novel.py::test_t1`.
 
 ### Changed
 

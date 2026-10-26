@@ -1,8 +1,10 @@
 """Sine worker: protocol 1 over stdin/stdout, standard library only.
 
 Each segment becomes a deterministic tone: 60 ms per character (0.5–30 s), pitch
-chosen by voice. Next to each WAV it writes `<wav>.heard.txt`, what an ASR "hears"
-(read back by the `sine-echo` ASR in `echo.py`), so tests can run the QA gate.
+chosen by voice. For each WAV it records what an ASR "hears" under `.heard/` next to
+it, keyed by the WAV's content so copies and moves keep it (read back by the
+`sine-echo` ASR in `echo.py`), so tests can run the QA gate. `polish` re-renders a
+source WAV's words at another pitch (the `sine-polish` polisher).
 
 Test hooks (environment):
 - `T2A_SINE_CRASH_ONCE=<path>`: the first synthesize request exits abruptly (and
@@ -14,6 +16,7 @@ Test hooks (environment):
 - `T2A_SINE_DELAY_MS`: sleep per segment; `T2A_SINE_LOG=<path>`: append
   `<hash> <id> <attempt>` per rendered segment (resume tests).
 - `T2A_SINE_FINAL=1`: retries reply `final`, like a deterministic backend.
+- `T2A_SINE_POLISH_FAULT=<mode>[:<n>]`: like `T2A_SINE_FAULT`, for `polish`.
 """
 
 from __future__ import annotations
@@ -32,11 +35,17 @@ from typing import Any
 PROTOCOL = 1
 MS_PER_CHAR = 60
 PITCH_HZ = {"narrator": 220.0, "dialogue": 330.0}
+POLISH_HZ = 275.0
 GARBAGE = ["шкаф", "луна", "дорога", "пингвин", "север", "ложка", "трамвай", "облако"]
 
 
-def fault(seg_id: str, attempt: int) -> str | None:
-    spec = os.environ.get("T2A_SINE_FAULT")
+def heard_path(wav: Path) -> Path:
+    digest = hashlib.sha256(wav.read_bytes()).hexdigest()
+    return wav.parent / ".heard" / f"{digest}.txt"
+
+
+def fault(seg_id: str, attempt: int, variable: str = "T2A_SINE_FAULT") -> str | None:
+    spec = os.environ.get(variable)
     if not spec:
         return None
     mode, _, good_from = spec.partition(":")
@@ -60,12 +69,21 @@ def heard(text: str, mode: str | None) -> str:
     return text
 
 
-def render(text: str, voice: str, out: Path, sample_rate: int, mode: str | None = None) -> int:
+def render(
+    text: str,
+    voice: str,
+    out: Path,
+    sample_rate: int,
+    mode: str | None = None,
+    freq: float | None = None,
+) -> int:
     duration_ms = min(30_000, max(500, MS_PER_CHAR * len(text)))
     if mode == "truncate":
         duration_ms //= 3
     n = sample_rate * duration_ms // 1000
-    freq = PITCH_HZ.get(voice, 440.0)
+    # A text-dependent offset keeps tones of equally long texts apart (`heard_path`).
+    offset = int(hashlib.sha256(text.encode()).hexdigest()[:4], 16) % 1000 / 100
+    freq = (freq or PITCH_HZ.get(voice, 440.0)) + offset
     amplitude = 0.0 if mode == "silence" else 0.3
     frames = b"".join(
         struct.pack("<h", int(amplitude * 32767 * math.sin(2 * math.pi * freq * i / sample_rate)))
@@ -77,7 +95,9 @@ def render(text: str, voice: str, out: Path, sample_rate: int, mode: str | None 
         w.setsampwidth(2)
         w.setframerate(sample_rate)
         w.writeframes(frames)
-    Path(f"{out}.heard.txt").write_text(heard(text, mode), encoding="utf-8")
+    sidecar = heard_path(out)
+    sidecar.parent.mkdir(exist_ok=True)
+    sidecar.write_text(heard(text, mode), encoding="utf-8")
     return duration_ms
 
 
@@ -118,6 +138,15 @@ def handle(msg: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
         if attempt > 1 and os.environ.get("T2A_SINE_FINAL") == "1":
             reply["final"] = True  # behave like a deterministic backend (Silero)
         return reply
+    if op == "polish":
+        source = Path(msg["source"])
+        seg = msg["segment"]
+        attempt = int(msg.get("attempt", 1))
+        text = heard_path(source).read_text(encoding="utf-8")
+        mode = fault(seg.get("id", ""), attempt, "T2A_SINE_POLISH_FAULT")
+        out = Path(msg["out"])
+        duration = render(text, "", out, state["sample_rate"], mode, POLISH_HZ)
+        return {"ok": True, "duration_ms": duration}
     if op == "shutdown":
         return {"ok": True}
     return {"ok": False, "error": f"unknown op {op!r}"}

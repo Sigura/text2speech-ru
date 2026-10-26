@@ -13,10 +13,13 @@ from pathlib import Path
 import pytest
 import soundfile as sf
 from text2audio_asr_gigaam.descriptor import GigaAM
+from text2audio_backend_chatterbox.descriptor import ChatterboxBackend
 from text2audio_backend_silero.descriptor import SileroBackend
 from text2audio_g2p_ruaccent.descriptor import RuAccent
+from text2audio_lang_ru import PROFILE
 
 from text2audio import api
+from text2audio.core import resources as res
 from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment
 from text2audio.core.envs import plugin_env
@@ -44,6 +47,14 @@ needs_silero = pytest.mark.skipif(
 )
 needs_gigaam = pytest.mark.skipif(
     not ready(GigaAM(), "asr:gigaam"), reason="GigaAM env or assets missing"
+)
+CHATTERBOX = ChatterboxBackend()
+needs_chatterbox = pytest.mark.skipif(
+    not ready(CHATTERBOX, "chatterbox"), reason="Chatterbox env or assets missing"
+)
+needs_gpu = pytest.mark.skipif(
+    res.plan(res.probe(), CHATTERBOX.capabilities).tier != "expressive",
+    reason="no GPU with enough free VRAM for Chatterbox",
 )
 
 
@@ -140,6 +151,67 @@ def test_codeswitch_loses_no_word_on_t0(tmp_path: Path) -> None:
         json.loads(x)
         for x in (converted.folder / "_work/segments.jsonl").read_text("utf-8").splitlines()
     ]
+    assert report["foreign_spans"] and all(
+        s["resolution"] != "unresolved" for s in report["foreign_spans"]
+    )
+    flagged = {s["text_norm"]: s["flags"] for s in segs if s["status"] != "done"}
+    assert not flagged, flagged
+    assert report["qa"]["flagged"] == 0
+
+
+def _hear(paths: list[Path]) -> list[str]:
+    with Worker(GigaAM(), STORE.root) as w:
+        w.load(assets=STORE.payload(assets_for("asr:gigaam")))
+        return [str(t) for t in w.call("transcribe", paths=[str(p) for p in paths])["texts"]]
+
+
+@pytest.mark.gpu
+@needs_chatterbox
+@needs_silero
+@needs_gigaam
+@needs_gpu
+def test_chatterbox_tts_and_vc_offline_pass_qa(tmp_path: Path) -> None:
+    # One worker, the network guard on: TTS from stressed text and VC of Silero audio
+    # into the narrator reference both read every word (§6.6.6).
+    source, tts, vc = (tmp_path / f"{name}.wav" for name in ("source", "tts", "vc"))
+    _silero(NUMBERS, source)
+    slot = res.plan(res.probe(), CHATTERBOX.capabilities, tier="expressive").slots[0]
+    ref = PROFILE.voices["narrator"]["chatterbox"]
+    seg = NUMBERS.model_dump(mode="json")
+    with WorkerBackend(CHATTERBOX, STORE.root, slot) as w:
+        assert w.load(assets=STORE.payload(assets_for("chatterbox")))["sample_rate"] == 24000
+        w.call("synthesize", segment=seg, out=str(tts), voice_id=ref, attempt=1)
+        reply = w.call(
+            "polish", segment=seg, source=str(source), out=str(vc), voice_id=ref, attempt=1
+        )
+    assert reply["elapsed_ms"] < reply["duration_ms"]  # VC is faster than real time on a GPU
+    for heard in _hear([tts, vc]):
+        assert wer(NUMBERS.speech_text, heard, {"ё": "е"}).wer <= 0.18, heard
+
+
+@pytest.mark.gpu
+@needs_ruaccent
+@needs_chatterbox
+@needs_silero
+@needs_gigaam
+@needs_gpu
+@pytest.mark.skipif(
+    shutil.which("espeak-ng") is None or shutil.which("ffmpeg") is None,
+    reason="needs espeak-ng and ffmpeg",
+)
+def test_codeswitch_loses_no_word_on_t1(tmp_path: Path) -> None:
+    # FR-24 acceptance on T1: segments with transliterated words are read by Chatterbox
+    # in their own script, the rest is Silero → Chatterbox VC; nothing flagged.
+    [converted] = api.convert([FIXTURES / "ru" / "codeswitch.md"], tmp_path / "out")
+    assert converted.folder is not None
+    cfg = load_config([], {"synthesis": {"tier": "expressive"}})
+    report = api.synthesize(converted.folder, config=cfg, store=STORE.root).report
+    segs = [
+        json.loads(x)
+        for x in (converted.folder / "_work/segments.jsonl").read_text("utf-8").splitlines()
+    ]
+    assert report["tier"] == "expressive"
+    assert {s["route"] for s in segs} == {"silero>chatterbox", "chatterbox"}
     assert report["foreign_spans"] and all(
         s["resolution"] != "unresolved" for s in report["foreign_spans"]
     )

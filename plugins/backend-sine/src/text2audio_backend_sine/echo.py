@@ -1,6 +1,6 @@
 """`sine-echo` ASR worker: protocol 1, standard library only (test fixture).
 
-"Transcribes" a WAV by reading the `<wav>.heard.txt` the sine worker wrote next to it,
+"Transcribes" a WAV by reading what the sine worker recorded for its content,
 so the QA gate can be tested without a speech model. `T2A_ECHO_DELAY_MS` sleeps per
 file (resume tests).
 """
@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from text2audio_backend_sine.worker import heard_path
+
 PROTOCOL = 1
 
 
@@ -21,7 +23,7 @@ def transcribe(path: str) -> str:
     delay = int(os.environ.get("T2A_ECHO_DELAY_MS", "0"))
     if delay:
         time.sleep(delay / 1000)
-    sidecar = Path(f"{path}.heard.txt")
+    sidecar = heard_path(Path(path))
     return sidecar.read_text(encoding="utf-8") if sidecar.is_file() else ""
 
 

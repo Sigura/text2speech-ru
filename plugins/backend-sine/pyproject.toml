@@ -8,6 +8,10 @@ dependencies = ["text2audio"]
 
 [project.entry-points."text2audio.backends"]
 sine = "text2audio_backend_sine.descriptor:SineBackend"
+sine-polish = "text2audio_backend_sine.descriptor:SinePolish"
+
+[project.entry-points."text2audio.polishers"]
+sine-polish = "text2audio_backend_sine.descriptor:SinePolish"
 
 [project.entry-points."text2audio.asr"]
 sine-echo = "text2audio_backend_sine.descriptor:SineEcho"
