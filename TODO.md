@@ -45,7 +45,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 4b — QA limit (100 per run) and polish/QA batches;
     - [x] 4c — covers: typographic, SD WebUI plugin, Opus-MT prompt translation;
     - [ ] 4c+ — repaint a poor embedded cover (img2img with a WD14-tagger prompt; rule to
-      be agreed with the owner);
+      embedded long side < 800 px → img2img at denoise 0.4, agreed 2026-10-26);
+    - [x] 4d — `preview`;
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

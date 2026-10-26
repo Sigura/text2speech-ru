@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.16-M2 |
+| Document version | 1.17-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -39,6 +39,7 @@
 | 1.14-M2 | 2026-10-26 | M2 step 4a: compound hyphens lost at PDF line ends are restored by `ru` normalization — only words pymorphy3 does not know (§6.3, §6.6.5, §13.1). |
 | 1.15-M2 | 2026-10-26 | M2 step 4b — **Decision:** QA limit as built: at most 100 segments checked per run (`[qa] max_segments`, `--qa-max`), the first in hash order; polish and QA run in batches of ≤ 100 segments on worker pools kept loaded; the M2 flagged-share criterion is measured over the checked sample (§6.9, §11, §13.1). |
 | 1.16-M2 | 2026-10-26 | M2 step 4c — covers as built (§6.8.2): typographic covers with bundled DejaVu Serif; `sd-webui` generator on a private WebUI instance (own data dir, the WebUI's default checkpoint); **Decision:** cover prompts of non-English books are translated offline by an Opus-MT `translators` component pinned in `models.lock` (closes the open §13.1 row); `[cover]` / `[cover.sd]` config; `doctor` covers line. |
+| 1.17-M2 | 2026-10-26 | M2 step 4d — `preview` as built (§6.11, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1043,7 +1044,7 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 | `text2audio convert --reconvert <book folder> [--reader <name>]` | Convert the stored source again (§5.2); an edited `<book>.md` is kept and the new text goes to `<book>.reconverted.md`. |
 | `text2audio synthesize <book folder>` | Book folder → audio (incremental). |
 | `text2audio run <input>… [-o <output root>] [--name <folder>] [--overwrite]` | Convert + synthesize in one step (batch-capable). |
-| `text2audio preview <book folder> --chapter 3 --seconds 30` | Quick sample to audition voices/expression. |
+| `text2audio preview <book folder> [--chapter N] [--seconds 30] [--tier] [--workers]` | Quick sample to audition voice and tier: the opening segments of the chapter (default: the first after the front matter) whose estimated length (14 characters/s) reaches `--seconds`, through normalize → stress → synthesize → polish, **no QA**, one MP3 in `<book>/_work/preview/chapter-NN.mp3`. Rendered segments go into the book's segment cache, so a later `run` reuses them. |
 | `text2audio voices [--lang en]` | List installed voices per backend. |
 | `text2audio models pull / list / verify / gc` | Manage the model store. |
 | `text2audio bundle export / import` | Air-gapped transfer. |
@@ -1373,6 +1374,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Optional two-stage synthesis: fast TTS, then a "polish" plugin (voice conversion or enhancement) before the QA gate (§6.6.6). Owner's idea. | Proposed — tried in the `ru-polish` spike (below), decided in M2 |
 | 2026-10-26 | Prompt language for generated covers (owner): genre keywords **plus** the title and a description translated offline by a per-language `translators` component — Helsinki-NLP Opus-MT `ru-en` (Marian, CPU worker in its own environment, pinned in `models.lock`). The description is the annotation's first sentences, else the book's first 20 words. | Decided |
 | 2026-10-26 | Covers as built: typographic with bundled DejaVu Serif 2.37 (Pillow becomes a core dependency); the `sd-webui` instance uses a private `--data-dir`/working directory and hash cache so the shared WebUI checkout is never written; checkpoint = the WebUI's configured default unless `[cover.sd] checkpoint`; the title colour on generated covers is chosen by contrast. First real run: SD 1.x default checkpoint on a free RTX 4090, 87 s for start, model load, hashing and one 1024² cover. | Decided |
+| 2026-10-26 | `preview` renders through the normal stages and segment cache (no QA, no split, no report), so a sample costs no extra work in the later `run`; it picks segments by an estimated 14 characters per second before rendering. | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |

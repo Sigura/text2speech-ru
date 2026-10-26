@@ -105,9 +105,9 @@ def test_cli_resources_json() -> None:
 
 
 def test_planned_commands_explain_their_milestone() -> None:
-    result = runner.invoke(app, ["preview", "output/Война и мир"])
+    result = runner.invoke(app, ["bundle", "output/Война и мир"])
     assert result.exit_code == ExitCode.USAGE
-    assert "M2" in result.output
+    assert "M5" in result.output
 
 
 def test_synthesize_rejects_a_folder_that_is_not_a_book(tmp_path: Path) -> None:

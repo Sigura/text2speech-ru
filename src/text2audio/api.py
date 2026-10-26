@@ -15,6 +15,7 @@ from text2audio.core.envs import PluginEnv, plugin_env
 from text2audio.core.envs import sync as _sync_env
 from text2audio.core.plugins import Discovery, discover
 from text2audio.core.synthesize import Progress, SynthesisReport
+from text2audio.core.synthesize import preview as _preview
 from text2audio.core.synthesize import synthesize as _synthesize
 from text2audio.models.lock import load_lock
 from text2audio.models.pull import pull
@@ -114,6 +115,31 @@ def synthesize(
     return _synthesize(
         folder,
         config,
+        store=ModelStore(store),
+        tier=tier,
+        max_workers=max_workers,
+        progress=progress,
+    )
+
+
+def preview(
+    folder: Path,
+    *,
+    chapter: int | None = None,
+    seconds: float = 30,
+    config: Config | None = None,
+    store: Path | None = None,
+    tier: Tier | None = None,
+    max_workers: int | None = None,
+    progress: Progress | None = None,
+) -> Path:
+    """A short MP3 sample of a chapter in `<book>/_work/preview/` (§6.11)."""
+    config = config or load_config(_book_config_files(folder))
+    return _preview(
+        folder,
+        config,
+        chapter=chapter,
+        seconds=seconds,
         store=ModelStore(store),
         tier=tier,
         max_workers=max_workers,

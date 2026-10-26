@@ -140,6 +140,9 @@ All notable changes to this project are documented here. The format follows
   ru→en, pinned in `models.lock`) translates title and description for the prompt;
   title colour by contrast; covers cached by key; `[cover]` / `[cover.sd]` config;
   `doctor` reports the cover route; new plugin group `translators` (SPEC 1.16-M2).
+- M2 step 4d — `text2audio preview <book> [--chapter N] [--seconds 30]` (API
+  `api.preview`): a short MP3 of a chapter's opening in `_work/preview/`, no QA; its
+  segments are reused by `run` (SPEC 1.17-M2).
 
 ### Changed
 

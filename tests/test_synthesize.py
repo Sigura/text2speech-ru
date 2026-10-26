@@ -13,8 +13,9 @@ import pytest
 
 from text2audio import api
 from text2audio.core.config import load_config
+from text2audio.core.contracts import Segment
 from text2audio.core.journal import Journal
-from text2audio.core.synthesize import SynthesisError
+from text2audio.core.synthesize import PREVIEW_CHARS_PER_SEC, SynthesisError, preview_segments
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
@@ -243,3 +244,49 @@ def test_foreign_spans_resolved_and_reported(tmp_path: Path) -> None:
     assert "unresolved" not in how.values()
     assert len(report["foreign_spans"]) == 21
     assert "## Foreign-script spans" in (converted.folder / "report.md").read_text("utf-8")
+
+
+def test_preview_renders_the_opening_of_a_chapter_and_feeds_the_cache(
+    book: Path, tmp_path: Path
+) -> None:
+    out = api.preview(book, seconds=20, config=config(), store=tmp_path / "store")
+    assert out == book / "_work" / "preview" / "chapter-01.mp3"
+    assert float(probe(out)["format"]["duration"]) > 5
+    entries = Journal(book / "_work" / "render.jsonl").entries
+    assert entries and all("qa" not in e for e in entries.values())  # no QA in a preview
+    assert all(e["segment"].startswith("ch01-") for e in entries.values())
+    assert not list(book.glob("*.mp3"))  # the book itself is not assembled
+    report = run(book, tmp_path / "store")
+    assert report.report["segments"]["cached"] == len(entries)
+
+
+def test_preview_of_another_chapter_and_a_missing_one(book: Path, tmp_path: Path) -> None:
+    out = api.preview(book, chapter=2, seconds=5, config=config(), store=tmp_path / "store")
+    assert out.name == "chapter-02.mp3"
+    with pytest.raises(SynthesisError, match="chapter 99"):
+        api.preview(book, chapter=99, config=config(), store=tmp_path / "store")
+
+
+def test_preview_segments_stop_at_the_estimated_length() -> None:
+    text = "а" * (PREVIEW_CHARS_PER_SEC * 10)  # ≈ 10 s each
+    segs = [Segment(id=f"s{i}", chapter=i // 5, text=text, lang="ru") for i in range(15)]
+    assert [s.id for s in preview_segments(segs, None, 25)] == ["s5", "s6", "s7"]
+    assert [s.id for s in preview_segments(segs, 0, 15)] == ["s0", "s1"]
+
+
+def test_preview_cli(book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer.testing import CliRunner
+
+    from text2audio.cli import app
+
+    (book / "_work" / "text2audio.toml").write_text(
+        '[synthesis]\ntier = "fast"\n[lang.ru]\ng2p = "backend"\n'
+        '[lang.ru.backend]\nfast = "sine"\n',
+        "utf-8",
+    )
+    monkeypatch.setenv("T2A_MODEL_HOME", str(tmp_path / "store"))
+    result = CliRunner().invoke(app, ["preview", str(book), "--seconds", "5", "--chapter", "1"])
+    assert result.exit_code == 0, result.output
+    assert str(book / "_work" / "preview" / "chapter-01.mp3") in result.output
+    bad = CliRunner().invoke(app, ["preview", str(book), "--chapter", "99"])
+    assert bad.exit_code == 2, bad.output

@@ -254,6 +254,7 @@ def prepare(
     store: ModelStore,
     progress: Progress | None = None,
     timings: Timings | None = None,
+    select: Callable[[list[Segment]], list[Segment]] | None = None,
 ) -> tuple[list[Segment], list[dict[str, str]], dict[str, Segment]]:
     """Segments with normalized, stressed text, route and hash; uncertain spans; and the
     backend-rendered source of every segment on a polish route, by the segment's hash.
@@ -272,6 +273,8 @@ def prepare(
             prof,
             seed=config.synthesis.seed,
         )
+        if select is not None:
+            segments = select(segments)
     lexicon = Lexicon.layered(
         Path(prof.lexicon) if prof.lexicon else None,
         user_lexicon(plan.lang),
@@ -1079,6 +1082,106 @@ def synthesize(
     write_json(folder.path / "report.json", report)
     (folder.path / "report.md").write_text(report_md.render(report), encoding="utf-8")
     return SynthesisReport(folder.path, files, report)
+
+
+PREVIEW_CHARS_PER_SEC = 14  # rough narration speed, to pick segments before rendering
+
+
+def preview_segments(segments: list[Segment], chapter: int | None, seconds: float) -> list[Segment]:
+    """The opening segments of `chapter` (default: the first chapter after the front
+    matter) whose estimated duration reaches `seconds`."""
+    chapters = sorted({s.chapter for s in segments})
+    if chapter is None:
+        chapter = next((c for c in chapters if c > 0), chapters[0] if chapters else 0)
+    out: list[Segment] = []
+    estimate = 0.0
+    for seg in segments:
+        if seg.chapter != chapter:
+            continue
+        out.append(seg)
+        estimate += len(seg.text) / PREVIEW_CHARS_PER_SEC + seg.pause_after_ms / 1000
+        if estimate >= seconds:
+            break
+    return out
+
+
+def preview(
+    path: Path,
+    config: Config,
+    *,
+    chapter: int | None = None,
+    seconds: float = 30,
+    store: ModelStore | None = None,
+    tier: Tier | None = None,
+    max_workers: int | None = None,
+    progress: Progress | None = None,
+) -> Path:
+    """A short sample of a chapter (§6.11): the pipeline up to polish, no QA, one MP3 in
+    `_work/preview/`. Rendered segments go into the book's cache, so `run` reuses them."""
+    folder = BookFolder(path)
+    if not folder.markdown.is_file():
+        raise SynthesisError(f"{path}: not a book folder (no {folder.markdown.name})")
+    store = store or ModelStore()
+    plan = make_plan(folder, config, tier)
+    picked: list[int] = []
+
+    def select(segments: list[Segment]) -> list[Segment]:
+        chosen = preview_segments(segments, chapter, seconds)
+        picked.extend(s.chapter for s in chosen[:1])
+        return chosen
+
+    segments, _, sources = prepare(folder, plan, config, store, progress, select=select)
+    if not segments:
+        raise SynthesisError(f"chapter {chapter} has no text")
+    journal = Journal(folder.work / "render.jsonl")
+    audio_dir = folder.work / "audio" / "segments"
+    own = [
+        sources.get(s.hash or "", s)
+        for s in segments
+        if s.hash in sources or s.route == plan.route.backend
+    ]
+    render(
+        folder,
+        plan.backend,
+        plan.tier,
+        own,
+        _job(plan, plan.backend.name, {}, audio_dir),
+        config,
+        store,
+        journal,
+        progress,
+        max_workers,
+    )
+    for backend, segs in _gpu_groups(plan, _ready(segments, sources, journal), sources).values():
+        render(
+            folder,
+            backend,
+            "expressive",
+            segs,
+            _job(plan, backend.name, sources, audio_dir),
+            config,
+            store,
+            journal,
+            progress,
+            max_workers,
+            stage="polish",
+            sources=sources,
+        )
+    missing = [s.id for s in segments if (s.hash or "") not in journal]
+    if missing:
+        raise SynthesisError(f"preview segments failed: {', '.join(missing)}")
+    meta = folder.metadata() or {}
+    out = folder.work / "preview" / f"chapter-{picked[0]:02d}.mp3"
+    wav = out.with_suffix(".wav")
+    with PartWriter(wav, ASSEMBLY_RATE) as writer:
+        _part_audio(segments, audio_dir, writer)
+    tags = {
+        "title": f"Preview: {segments[0].text[:60]}",
+        "album": str(meta.get("title") or folder.path.name),
+    }
+    encode_mp3(find_ffmpeg(config.tools.ffmpeg), wav, out, tags=tags, cover=_cover(folder))
+    wav.unlink(missing_ok=True)
+    return out
 
 
 def _report(

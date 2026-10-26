@@ -411,8 +411,52 @@ def run(
     raise typer.Exit(max(codes, default=ExitCode.INPUT))
 
 
+@app.command()
+def preview(
+    folder: Annotated[Path, typer.Argument(help="Book folder made by `convert`.")],
+    chapter: Annotated[
+        int | None, typer.Option("--chapter", help="Chapter number (default: the first).")
+    ] = None,
+    seconds: Annotated[float, typer.Option("--seconds", help="Approximate length.")] = 30,
+    tier: TierFlag = None,
+    workers: WorkersFlag = None,
+) -> None:
+    """Render a short sample of a chapter to audition voice and tier (no QA)."""
+    from text2audio import api
+    from text2audio.audio.encode import FfmpegError
+    from text2audio.core.config import load_config, user_config_path
+    from text2audio.core.envs import EnvMissing
+    from text2audio.core.synthesize import SynthesisError
+
+    with StageProgress() as ui:
+        ui.book(folder.name, folder)
+        try:
+            config = load_config([user_config_path(), folder / "_work" / "text2audio.toml"])
+        except ValueError as exc:
+            ui.print(f"  [red]✗ bad configuration:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.USAGE) from exc
+        try:
+            out = api.preview(
+                folder,
+                chapter=chapter,
+                seconds=seconds,
+                config=config,
+                tier=_tier(tier),
+                max_workers=workers,
+                progress=ui,
+            )
+        except (SynthesisError, EnvMissing, FfmpegError) as exc:
+            ui.print(f"  [red]✗ failed:[/] {escape(str(exc))}")
+            code = (
+                ExitCode.MISSING_ASSET
+                if isinstance(exc, EnvMissing | FfmpegError)
+                else ExitCode.INPUT
+            )
+            raise typer.Exit(code) from exc
+        ui.result(str(out))
+
+
 _PLANNED = {
-    "preview": "M2",
     "voices": "M2",
     "bundle": "M5",
 }
