@@ -18,7 +18,9 @@ commercially.
 - License is **not** a selection criterion for any component.
 - Every component is chosen by this priority:
   1. **works fully offline** after install (hard requirement, see ADR-0002);
-  2. **quality**, measured on the relevant benchmark;
+  2. **quality**, measured on the relevant benchmark — for TTS this means how natural
+     the speech sounds, judged by listening; ASR WER is only an intelligibility floor
+     (owner, 2026-10-26);
   3. everything else: speed, size, maintenance.
 - Licenses are still recorded in `models.lock` and shown by `doctor`, for information
   only.

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 1.19-M2 |
+| Document version | 1.20-M2 |
 | Status | **Approved for M0** (open decisions in §13.1) |
 | Last updated | 2026-10-26 |
 | Primary language | Python 3.11+ |
@@ -42,6 +42,7 @@
 | 1.17-M2 | 2026-10-26 | M2 step 4d — `preview` as built (§6.11, §13.1). |
 | 1.18-M2 | 2026-10-26 | M2 step 4c+ — **Decision (owner):** a small embedded cover (long side < 800 px) is repainted with img2img at denoise 0.4 from WD14-tagger tags (a `taggers` component, pinned in `models.lock`); an embedded image under 64 px is a placeholder and is replaced like a missing cover (§6.8.2, §13.1). |
 | 1.19-M2 | 2026-10-26 | M2 step 4e — language-pack template as built: `templates/lang/` + `scripts/new_lang.py` (standard-library `string.Template`) instead of cookiecutter (§6.6.4, §10, §13.1). |
+| 1.20-M2 | 2026-10-26 | M2 step 4f — benchmark metrics (`spikes/ru-bench/`). **Decision (owner):** each challenger synthesizes at most 100 segments, and the listening test is the owner alone with one female voice (§6.6.5 steps 1 and 3). **Decision (owner):** "quality" in the component priority means TTS quality judged by listening; ASR WER is a floor (§8, §13.1, ADR-0007). Benchmark winners are recorded as proposed until the listening test (§13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -687,10 +688,13 @@ with networking disabled to prove nothing is fetched at runtime.
    case agreement, dialogue with author's remarks, ≥ 30 sentences with Latin-script
    words (terms, brands, acronyms, inflected forms, an English quote; FR-24), and one
    poem.
+   Text-only metrics (normalization) use the whole set; each challenger synthesizes at
+   most **100 segments** of it (owner's decision, 2026-10-26).
 2. Metrics per backend: QA-ASR WER (GigaAM), **stress accuracy** on the homograph
    subset (human-checked), normalization exact match, RTF on T0 and T1, VRAM.
-3. Blind listening test with native speakers (≥ 5 listeners, ≥ 30 clips). UTMOS-type
-   predictors are trained mostly on English and are reported for reference only.
+3. Blind listening test by the owner alone (personal use, ADR-0007), one female
+   narrator voice, ≥ 30 clips. UTMOS-type predictors are trained mostly on English and
+   are reported for reference only.
 4. The winners per tier become the profile defaults and are recorded in the decision
    log (§13.1).
 
@@ -1157,7 +1161,8 @@ have `detail(stage, **fields)` for the facts above.
 **Selection priority (personal use only, ADR-0007).** Every component is chosen by:
 
 1. **Works fully offline** after install — a hard requirement, never traded away;
-2. **Quality** — measured on the relevant benchmark;
+2. **Quality** — measured on the relevant benchmark; for TTS, how natural the speech
+   sounds, judged by listening (ASR WER is only an intelligibility floor);
 3. everything else — speed, size, maintenance. **License is not a criterion**; the
    license column is kept for information only.
 
@@ -1392,6 +1397,9 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-26 | `preview` renders through the normal stages and segment cache (no QA, no split, no report), so a sample costs no extra work in the later `run`; it picks segments by an estimated 14 characters per second before rendering. | Decided |
 | 2026-10-26 | **Small embedded covers are repainted** (owner): long side < 800 px → img2img at denoise 0.4 with a prompt from WD14-tagger tags (`wd-swinv2-tagger-v3`, ONNX, pinned); explicit tags are filtered (the tagger invents them for blank pictures) and `nsfw, nude` added to the negative prompt; an embedded image under 64 px is a placeholder and gets a generated or typographic cover instead. First real run: 30 s on a free RTX 4090. | Decided |
 | 2026-10-26 | Language-pack template: a plain `templates/lang/` directory filled by `scripts/new_lang.py` with `string.Template` — no cookiecutter (no new dependency, nothing to download); content extracted from the `ru` pack. | Decided |
+| 2026-10-26 | Benchmark protocol for a personal project (owner): each challenger synthesizes at most 100 segments of the set (benchmark and tests only, never real book runs); the blind listening test is the owner alone, one female voice (§6.6.5). | Decided |
+| 2026-10-26 | **"Quality" means TTS quality** (owner): in the component priority (ADR-0007) it is how natural the speech sounds — intonation, stress — judged by listening. ASR WER is an intelligibility floor, not a ranking, and speed (third priority) does not rule out a better-sounding GPU backend. | Decided |
+| 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). For T1, Qwen3-TTS, ESpeech and XTTS-v2 all remain candidates against the hybrid, and the owner's listening test decides. Qwen3-TTS runs at RTF 2.5 on a 4090; XTTS-v2 truncates Russian text over 182 characters. | Proposed — decided after listening |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Proposed — confirmed by M2 benchmark and listening |
 | 2026-10-25 | Spike `ru-polish`: Russian T1 pipeline = **Silero `xenia` → Chatterbox VC** into a female narrator reference. UTMOS 3.80 vs 3.81 for Chatterbox Multilingual TTS with RUAccent stress, WER 0, RTF 0.20 vs 1.32 (4090). Chatterbox TTS is slower than real time stock and needs external stress marks; resemble-enhance on Silero dropped. T0 = Silero alone. Details: `spikes/ru-polish/FINDINGS.md`. Owner listening (2026-10-25): Chatterbox cloned from `xenia` is as good as VC on plain Russian and sounds like the same narrator → **hybrid**: Silero → VC for Cyrillic-only segments, Chatterbox Multilingual TTS (RUAccent stress, same reference) for segments with Latin-script words; both from one checkpoint and worker. | Decided |
 | 2026-10-25 | Russian text with English terms (FR-24, §6.6.5): the core tags foreign-script spans by Unicode script; the `ru` pack resolves homoglyphs → lexicon → acronyms → routes unresolved segments to Chatterbox (T1) or transliterates via English G2P (T0). Whole English sentences use Chatterbox `language_id="en"` until the `en` pack exists. | Decided |

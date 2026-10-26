@@ -1,0 +1,17 @@
+[project]
+name = "ru-bench-espeech"
+version = "0"
+description = "Throwaway spike env: ESpeech-TTS-1 SFT 256K (F5-TTS fine-tune) for the M2 benchmark"
+requires-python = ">=3.11,<3.13"
+# torchaudio 2.6 still loads WAV without torchcodec; f5-tts' infer_process uses torchaudio.load.
+dependencies = [
+    "f5-tts",
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "huggingface-hub",
+    "soundfile",
+    "numpy",
+]
+
+[tool.uv]
+package = false

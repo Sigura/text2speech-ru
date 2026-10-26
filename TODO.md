@@ -48,6 +48,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
       embedded long side < 800 px → img2img at denoise 0.4, agreed 2026-10-26);
     - [x] 4d — `preview`;
     - [x] 4e — language-pack template (`scripts/new_lang.py`);
+    - [ ] 4f — benchmark: metrics done ([findings](spikes/ru-bench/FINDINGS.md));
+      winners after the owner's listening test (`spikes/ru-bench/out/listen/`);
 - [ ] **M3 — Expression:** pauses, dialogue voice, author's remarks in the narrator
   voice, `<!-- t2a: … -->` directives, emotion classifier.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

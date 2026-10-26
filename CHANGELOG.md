@@ -149,6 +149,12 @@ All notable changes to this project are documented here. The format follows
 - M2 step 4e — language-pack template `templates/lang/` and `scripts/new_lang.py`
   (standard library, no cookiecutter); `docs/adding-a-language.md` updated
   (SPEC 1.19-M2).
+- M2 step 4f — benchmark spike `spikes/ru-bench/`: Silero and the hybrid against
+  Qwen3-TTS, ESpeech-TTS and XTTS-v2 (GigaAM WER/CER, RTF on T1 and T0, VRAM, text
+  metrics) and a blind listening page ([findings](spikes/ru-bench/FINDINGS.md)); all
+  systems pass the WER floor, T0 stays Silero, and the T1 winner is decided by the
+  owner's listening test. ADR-0007: "quality" means TTS quality judged by listening
+  (SPEC 1.20-M2).
 
 ### Changed
 

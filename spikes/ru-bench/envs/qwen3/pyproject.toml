@@ -1,0 +1,17 @@
+[project]
+name = "ru-bench-qwen3"
+version = "0"
+description = "Throwaway spike env: Qwen3-TTS 1.7B Base (voice clone) for the M2 benchmark"
+requires-python = ">=3.12,<3.13"
+# qwen-tts does not depend on torch itself; 2.6.0 is shared with the other envs (uv cache).
+dependencies = [
+    "qwen-tts",
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "huggingface-hub",
+    "soundfile",
+    "numpy",
+]
+
+[tool.uv]
+package = false
