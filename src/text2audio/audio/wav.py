@@ -6,12 +6,15 @@ memory (NFR-06).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from types import TracebackType
 
 import numpy as np
 import soundfile as sf
 import soxr
+
+from text2audio.audio.encode import FfmpegError
 
 ASSEMBLY_RATE = 44100  # the final encode rate (§6.8)
 TRIM_DB = -45.0  # edge trimming threshold relative to full scale
@@ -39,6 +42,19 @@ def resample(samples: np.ndarray, rate: int, target: int = ASSEMBLY_RATE) -> np.
     if rate == target or samples.size == 0:
         return samples
     return np.asarray(soxr.resample(samples, rate, target, quality="HQ"), dtype=np.float32)
+
+
+def atempo(samples: np.ndarray, rate: int, factor: float, ffmpeg: str) -> np.ndarray:
+    """Speech `factor` times faster (< 1: slower) at the same pitch: FFmpeg `atempo`."""
+    if factor == 1 or samples.size == 0:
+        return samples
+    cmd = [ffmpeg, "-v", "error", "-f", "f32le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0"]
+    cmd += ["-af", f"atempo={factor}", "-f", "f32le", "pipe:1"]
+    proc = subprocess.run(cmd, input=samples.astype("<f4").tobytes(), capture_output=True)
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", "replace")[-1500:]
+        raise FfmpegError(f"ffmpeg atempo failed ({proc.returncode}): {err}")
+    return np.frombuffer(proc.stdout, dtype="<f4").astype(np.float32)
 
 
 def speech(path: Path, target: int = ASSEMBLY_RATE) -> np.ndarray:

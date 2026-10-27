@@ -30,7 +30,7 @@ from text2audio import __version__
 from text2audio.audio import split as splitting
 from text2audio.audio.encode import Chapter, encode_m4b, encode_mp3, find_ffmpeg, write_m3u
 from text2audio.audio.srt import Cue, split_cue, write_srt
-from text2audio.audio.wav import ASSEMBLY_RATE, LEAD_IN_MS, PartWriter, speech
+from text2audio.audio.wav import ASSEMBLY_RATE, LEAD_IN_MS, PartWriter, atempo, speech
 from text2audio.core import report_md
 from text2audio.core import resources as res
 from text2audio.core.config import Config, parse_qa_mode
@@ -66,6 +66,7 @@ DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
 SEGMENTS_PER_WORKER = 25  # don't start a worker for fewer pending segments than this
 _FOREIGN = ("transliterated", "unresolved")  # span resolutions that go to the foreign backend
+_CORE_ROLES = ("narrator", "dialogue")  # voice roles the segmenter assigns itself
 
 # (stage, done, total): `done == 0` when a stage starts, `done == total` when it ends.
 # The callable may also have a `detail(stage, **fields)` method for facts a UI can show
@@ -257,26 +258,36 @@ def prepare(
     progress: Progress | None = None,
     timings: Timings | None = None,
     select: Callable[[list[Segment]], list[Segment]] | None = None,
-) -> tuple[list[Segment], list[dict[str, str]], dict[str, Segment]]:
-    """Segments with normalized, stressed text, route and hash; uncertain spans; and the
-    backend-rendered source of every segment on a polish route, by the segment's hash.
+) -> tuple[list[Segment], list[dict[str, str]], dict[str, Segment], list[dict[str, str]]]:
+    """Segments with normalized, stressed text, route and hash; uncertain spans; the
+    backend-rendered source of every segment on a polish route, by the segment's hash;
+    and warnings about `t2a` directives (§6.7 E3).
+
+    A `voice=` directive names a voice role of the profile or a voice id of the backend;
+    for the latter, `plan.profile` gains a role of that name, and its segments skip the
+    polisher, which has no reference clip for it and would turn it back into the
+    narrator. An emotion on a backend without emotion control is dropped with a warning.
 
     Routes (§6.6.6): `<backend>`; `<backend>><polisher>` (the source is the segment as the
     backend alone would render it, same hash, so fast-tier audio is reused); `<foreign>`
     for segments with words the pack could only transliterate (FR-24) — that backend
     reads them in their own script, while `text_norm` keeps the transliteration for QA.
     """
-    prof = plan.profile
     timings = Timings() if timings is None else timings
+    notes: list[dict[str, str]] = []
     with timings.stage("segment"):
         segments = segment_markdown(
             folder.markdown.read_text(encoding="utf-8"),
             plan.lang,
-            prof,
+            plan.profile,
             seed=config.synthesis.seed,
+            warnings=notes,
         )
         if select is not None:
             segments = select(segments)
+    roles = set(plan.profile.voices) | set(_CORE_ROLES)
+    plan.profile = _directive_voices(plan, segments, notes)
+    prof = plan.profile
     lexicon = Lexicon.layered(
         Path(prof.lexicon) if prof.lexicon else None,
         user_lexicon(plan.lang),
@@ -331,14 +342,20 @@ def prepare(
         return keys[voice]
 
     sources: dict[str, Segment] = {}
+    ignored: dict[tuple[str, str], list[str]] = {}
     for seg in segments:
+        foreign = plan.foreign is not None and seg.id in foreign_ids
+        target = plan.foreign if foreign and plan.foreign is not None else plan.backend
+        if seg.emotion and target.capabilities.emotion == "none":
+            ignored.setdefault((seg.emotion, target.name), []).append(seg.id)
+            seg.emotion, seg.intensity = None, 0.0
         text = marked[seg.id]
         seg.text_stress = (
             merge_marks(text, stressed[strip_marks(text)])
             if plan.g2p
             else (text if "+" in text else None)
         )
-        if plan.foreign is not None and seg.id in foreign_ids:
+        if foreign and plan.foreign is not None:
             seg.text_stress = seg.text_stress or text  # unlike text_norm, keeps the Latin
             seg.backend = seg.route = plan.foreign.name
             for span in seg.spans:
@@ -348,7 +365,7 @@ def prepare(
             continue
         seg.backend = seg.route = backend
         seg.hash = segment_hash(seg, _voice(prof, seg, backend), model)
-        if plan.polisher is not None:
+        if plan.polisher is not None and seg.voice in roles:
             source = seg.model_copy()
             name = plan.polisher.name
             seg.route = f"{backend}>{name}"
@@ -356,7 +373,45 @@ def prepare(
                 source.hash or "", name, voice_key(seg, name), _model_id(name, lock), seg.seed
             )
             sources[seg.hash] = source
-    return segments, uncertain, sources
+    for (emotion, name), ids in ignored.items():
+        notes.append(
+            {
+                "segment": ids[0],
+                "warning": f"t2a: emotion={emotion} ignored on {len(ids)} segment(s): "
+                f"{name} has no emotion control",
+            }
+        )
+    return segments, uncertain, sources, notes
+
+
+def _directive_voices(
+    plan: Plan, segments: list[Segment], notes: list[dict[str, str]]
+) -> LanguageProfile:
+    """The profile with a role for each backend voice id a `voice=` directive names;
+    other unknown names fall back to the narrator, with a warning."""
+    prof = plan.profile
+    backend = plan.backend.name
+    for name in sorted({s.voice for s in segments} - set(prof.voices) - set(_CORE_ROLES)):
+        ids = [s.id for s in segments if s.voice == name]
+        if name in plan.backend.capabilities.voices:
+            role = {**prof.voices.get("narrator", {}), backend: name}
+            prof = prof.model_copy(update={"voices": {**prof.voices, name: role}})
+            if plan.polisher is not None:
+                warning = f"t2a: voice={name} is read by {backend} alone, not polished"
+                notes.append({"segment": ids[0], "warning": warning})
+            continue
+        known = ", ".join([*plan.profile.voices, *plan.backend.capabilities.voices])
+        notes.append(
+            {
+                "segment": ids[0],
+                "warning": f"t2a: unknown voice {name!r} on {len(ids)} segment(s), read by "
+                f"the narrator; known: {known}",
+            }
+        )
+        for seg in segments:
+            if seg.voice == name:
+                seg.voice = "narrator"
+    return prof
 
 
 def _resolve_foreign(
@@ -770,7 +825,7 @@ def _items(segments: list[Segment], journal: Journal) -> list[splitting.Item]:
     items = []
     for seg in segments:
         entry = journal.get(seg.hash or "")
-        ms = int(entry["duration_ms"]) if entry else 0
+        ms = round(int(entry["duration_ms"]) / seg.rate) if entry else 0
         items.append(
             splitting.Item(
                 duration_ms=ms + seg.pause_after_ms,
@@ -860,7 +915,7 @@ def assemble(
         fingerprint = hashlib.sha256(
             json.dumps(
                 [
-                    [(s.hash, s.pause_after_ms) for s in segments[part.start : part.end]],
+                    [_assembled(s) for s in segments[part.start : part.end]],
                     tags,
                     [(c.title, c.start_ms, c.end_ms) for c in chapters],
                     cover_digest,
@@ -885,14 +940,14 @@ def assemble(
             if out not in current and not out.with_suffix(".srt").is_file():
                 write_srt(
                     out.with_suffix(".srt"),
-                    _part_audio(segments[part.start : part.end], audio_dir, None),
+                    _part_audio(segments[part.start : part.end], audio_dir, None, ffmpeg),
                 )
 
     def encode(job: tuple[int, splitting.Part, Path, dict[str, str], list[Chapter]]) -> None:
         n, part, out, tags, chapters = job
         wav = parts_dir / f"{n:04d}.wav"
         with PartWriter(wav, ASSEMBLY_RATE) as writer:
-            cues = _part_audio(segments[part.start : part.end], audio_dir, writer)
+            cues = _part_audio(segments[part.start : part.end], audio_dir, writer, ffmpeg)
         encode_mp3(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
         wav.unlink(missing_ok=True)
         if subtitles:
@@ -921,7 +976,7 @@ def assemble(
         fingerprint = hashlib.sha256(
             json.dumps(
                 [
-                    [(s.hash, s.pause_after_ms) for s in segments],
+                    [_assembled(s) for s in segments],
                     book_tags,
                     [(c.title, c.start_ms, c.end_ms) for c in book_chapters],
                     cover_digest,
@@ -939,7 +994,7 @@ def assemble(
         out, tags, chapters = job
         wav = parts_dir / "book.wav"
         with PartWriter(wav, ASSEMBLY_RATE) as writer:
-            _part_audio(segments, audio_dir, writer)
+            _part_audio(segments, audio_dir, writer, ffmpeg)
         encode_m4b(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
         wav.unlink(missing_ok=True)
 
@@ -973,14 +1028,22 @@ def assemble(
     return files, split, m4b
 
 
-def _part_audio(segments: list[Segment], audio_dir: Path, writer: PartWriter | None) -> list[Cue]:
+def _assembled(seg: Segment) -> tuple[Any, ...]:
+    """What a segment adds to a part's fingerprint; the rate only when set, so parts
+    assembled before `rate=` existed stay current."""
+    return (seg.hash, seg.pause_after_ms) + ((seg.rate,) if seg.rate != 1 else ())
+
+
+def _part_audio(
+    segments: list[Segment], audio_dir: Path, writer: PartWriter | None, ffmpeg: str
+) -> list[Cue]:
     """Write a part's audio (or only measure it) and return its subtitle cues."""
     frames = ASSEMBLY_RATE * LEAD_IN_MS // 1000 if writer is None else writer.frames
     cues: list[Cue] = []
     for seg in segments:
         path = gate.wav_path(audio_dir, seg.hash or "")
         if path.is_file():
-            samples = speech(path)
+            samples = atempo(speech(path), ASSEMBLY_RATE, seg.rate, ffmpeg)
             start = frames * 1000 // ASSEMBLY_RATE
             if writer is not None:
                 writer.add(samples)
@@ -1030,7 +1093,9 @@ def synthesize(
         voice=narrator,
         notes=plan.notes,
     )
-    segments, uncertain, sources = prepare(folder, plan, config, store, progress, timings)
+    segments, uncertain, sources, directive_warnings = prepare(
+        folder, plan, config, store, progress, timings
+    )
     write_manifest(folder.work / "segments.jsonl", segments)
     journal = Journal(folder.work / "render.jsonl")
     audio_dir = folder.work / "audio" / "segments"
@@ -1130,7 +1195,7 @@ def synthesize(
             if s.hash in sources
             and (journal.get(s.hash or "") or {}).get("qa", {}).get("attempt") == gate.MAX_ATTEMPTS
         )
-    report["warnings"] += retry_warnings
+    report["warnings"] = directive_warnings + report["warnings"] + retry_warnings
     report["wall_s"] = round(time.monotonic() - started, 2)
     if report["duration_ms"]:
         report["rtf_wall"] = round(report["wall_s"] * 1000 / report["duration_ms"], 4)
@@ -1187,7 +1252,7 @@ def preview(
         picked.extend(s.chapter for s in chosen[:1])
         return chosen
 
-    segments, _, sources = prepare(folder, plan, config, store, progress, select=select)
+    segments, _, sources, _ = prepare(folder, plan, config, store, progress, select=select)
     if not segments:
         raise SynthesisError(f"chapter {chapter} has no text")
     journal = Journal(folder.work / "render.jsonl")
@@ -1230,13 +1295,14 @@ def preview(
     meta = folder.metadata() or {}
     out = folder.work / "preview" / f"chapter-{picked[0]:02d}.mp3"
     wav = out.with_suffix(".wav")
+    ffmpeg = find_ffmpeg(config.tools.ffmpeg)
     with PartWriter(wav, ASSEMBLY_RATE) as writer:
-        _part_audio(segments, audio_dir, writer)
+        _part_audio(segments, audio_dir, writer, ffmpeg)
     tags = {
         "title": f"Preview: {segments[0].text[:60]}",
         "album": str(meta.get("title") or folder.path.name),
     }
-    encode_mp3(find_ffmpeg(config.tools.ffmpeg), wav, out, tags=tags, cover=_cover(folder))
+    encode_mp3(ffmpeg, wav, out, tags=tags, cover=_cover(folder))
     wav.unlink(missing_ok=True)
     return out
 
@@ -1255,10 +1321,13 @@ def _report(
     meta: dict[str, Any],
 ) -> dict[str, Any]:
     entries = [journal.get(s.hash or "") for s in segments]
-    audio_ms = sum(int(e["duration_ms"]) for e in entries if e) + sum(
-        s.pause_after_ms for s in segments
-    )
-    synth_ms = sum(int(e["duration_ms"]) for e in entries if e)
+    # As assembled: a `rate=` directive stretches the rendered audio.
+    spoken = [
+        round(int(e["duration_ms"]) / s.rate) if e else 0
+        for s, e in zip(segments, entries, strict=True)
+    ]
+    synth_ms = sum(spoken)
+    audio_ms = synth_ms + sum(s.pause_after_ms for s in segments)
     backend = plan.route.backend
     own = [
         journal.get(sources[s.hash].hash or "") if s.hash in sources else e
@@ -1271,10 +1340,8 @@ def _report(
     gpu_ms = sum(int(e["duration_ms"]) for e in gpu)
     gpu_elapsed = sum(int(e.get("elapsed_ms", 0)) for e in gpu)
     chapters: dict[int, int] = {}
-    for seg, e in zip(segments, entries, strict=True):
-        chapters[seg.chapter] = (
-            chapters.get(seg.chapter, 0) + (int(e["duration_ms"]) if e else 0) + seg.pause_after_ms
-        )
+    for seg, ms in zip(segments, spoken, strict=True):
+        chapters[seg.chapter] = chapters.get(seg.chapter, 0) + ms + seg.pause_after_ms
     titles = {s.chapter: s.text for s in segments if s.heading_level and s.heading_level <= 2}
     warnings = [
         {"segment": seg.id, "warning": w}

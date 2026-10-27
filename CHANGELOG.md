@@ -183,6 +183,11 @@ All notable changes to this project are documented here. The format follows
   and the author's remarks, read in the narrator voice with a 200 ms `remark` pause
   between them; `LanguageProfile.dialogue` and `remark_words`; the `ru` pack turns it
   on with its verbs of speech (SPEC 2.4-M3). Golden manifests regenerated.
+- M3 step 3 — `<!-- t2a: … -->` directives in `book.md` (E3): `voice=`, `pause=`,
+  `rate=`, `emotion=`/`intensity=`, `skip`, `reset`; block scope until `reset`, inline
+  for the containing sentence; `rate` is applied at assembly (FFmpeg `atempo`) on
+  every backend; unknown keys, unknown voices and ignored emotions are report
+  warnings. New manifest field `rate` (SPEC 2.5-M3); golden manifests regenerated.
 
 ### Changed
 

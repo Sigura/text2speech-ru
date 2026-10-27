@@ -14,12 +14,13 @@ from typing import Literal
 # A scene-break line: "* * *", "***", "———", "•", "⁂" … (no letters or digits).
 DINKUS = re.compile(r"[*\u2022\u00b7\u25ca\u2042~#=_\-\u2013\u2014\s]{1,20}")
 
-InlineKind = Literal["text", "emph", "strong", "note"]
+InlineKind = Literal["text", "emph", "strong", "note", "directive"]
 
 
 @dataclass
 class Inline:
-    """A run of text. `note` is a footnote reference; its `text` is the footnote id."""
+    """A run of text. `note` is a footnote reference; its `text` is the footnote id.
+    `directive` is the body of an inline `<!-- t2a: … -->` comment (§6.4.1)."""
 
     kind: InlineKind
     text: str
@@ -57,7 +58,16 @@ class SceneBreak:
     pass
 
 
-Block = Heading | Paragraph | Quote | Poem | SceneBreak
+@dataclass
+class Directive:
+    """A `<!-- t2a: … -->` comment on its own line of `book.md` (§6.4.1); `body` is the
+    text after `t2a:`, `line` its 1-based line number."""
+
+    body: str
+    line: int
+
+
+Block = Heading | Paragraph | Quote | Poem | SceneBreak | Directive
 
 
 @dataclass
@@ -130,5 +140,5 @@ def drop_empty_headings(blocks: list[Block]) -> list[Block]:
 
 
 def plain(inlines: list[Inline]) -> str:
-    """Text of inline spans without markup or note references."""
-    return "".join(i.text for i in inlines if i.kind != "note")
+    """Text of inline spans without markup, note references or directives."""
+    return "".join(i.text for i in inlines if i.kind not in ("note", "directive"))

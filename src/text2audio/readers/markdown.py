@@ -17,6 +17,7 @@ from markdown_it.token import Token
 from text2audio.readers.document import (
     DINKUS,
     Block,
+    Directive,
     Document,
     Heading,
     Inline,
@@ -27,6 +28,7 @@ from text2audio.readers.document import (
     SceneBreak,
     plain,
 )
+from text2audio.text.directives import COMMENT
 
 _SPACES = re.compile(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000\t\r\n]+")
 _MULTI_SPACE = re.compile(r" {2,}")
@@ -166,7 +168,7 @@ def to_markdown(doc: Document) -> str:
     return _Writer(doc).write()
 
 
-def _inlines(children: list[Token]) -> list[list[Inline]]:
+def _inlines(children: list[Token], directives: bool = False) -> list[list[Inline]]:
     """Inline tokens → lines of spans (split at hard breaks)."""
     lines: list[list[Inline]] = [[]]
     kinds: list[InlineKind] = ["text"]
@@ -185,14 +187,23 @@ def _inlines(children: list[Token]) -> list[list[Inline]]:
             kinds.pop()
         elif tok.type == "footnote_ref":
             lines[-1].append(Inline("note", str(tok.meta.get("label", tok.meta.get("id")))))
+        elif tok.type == "html_inline" and directives:
+            m = COMMENT.fullmatch(tok.content.strip())
+            if m:
+                lines[-1].append(Inline("directive", m.group(1)))
     return lines
 
 
-def parse_markdown(text: str) -> Document:
+def _spoken(line: list[Inline]) -> bool:
+    return bool(plain(line).strip()) or any(i.kind == "directive" for i in line)
+
+
+def parse_markdown(text: str, *, directives: bool = False) -> Document:
     """Markdown (CommonMark + footnotes) → `Document`, e.g. for PDF reader output.
 
     A paragraph with hard line breaks becomes a poem; in a block quote, a last
-    paragraph that starts with a dash is the attribution.
+    paragraph that starts with a dash is the attribution. Other HTML is dropped; with
+    `directives`, `<!-- t2a: … -->` comments are kept (`book.md`, §6.4.1).
     """
     from markdown_it import MarkdownIt
     from mdit_py_plugins.footnote import footnote_plugin
@@ -205,7 +216,7 @@ def parse_markdown(text: str) -> Document:
     while i < len(tokens):
         tok = tokens[i]
         if tok.type == "heading_open":
-            lines = _inlines(tokens[i + 1].children or [])
+            lines = _inlines(tokens[i + 1].children or [], directives)
             joined = [
                 x
                 for n, line in enumerate(lines)
@@ -215,9 +226,9 @@ def parse_markdown(text: str) -> Document:
             i += 3
             continue
         if tok.type == "paragraph_open":
-            lines = _inlines(tokens[i + 1].children or [])
+            lines = _inlines(tokens[i + 1].children or [], directives)
             if len(lines) > 1:
-                stack[-1].append(Poem([[line for line in lines if plain(line).strip()]]))
+                stack[-1].append(Poem([[line for line in lines if _spoken(line)]]))
             elif DINKUS.fullmatch(plain(lines[0]).strip() or "x"):
                 stack[-1].append(SceneBreak())
             else:
@@ -240,6 +251,20 @@ def parse_markdown(text: str) -> Document:
                     Inline(first.kind, _DIALOGUE.sub("", first.text)),
                     *last.inlines[1:],
                 ]
+        elif tok.type == "html_block" and directives:
+            found = list(COMMENT.finditer(tok.content))
+            rest = COMMENT.sub("", tok.content)
+            inner = parse_markdown(rest, directives=True).blocks if found and rest.strip() else []
+            if found and inner and isinstance(inner[0], Paragraph):
+                # `<!-- t2a: … -->Text` on one line: CommonMark makes the whole line an
+                # HTML block; the text is a paragraph and the comment an inline directive.
+                inner[0].inlines[:0] = [Inline("directive", m.group(1)) for m in found]
+            else:
+                line = tok.map[0] + 1 if tok.map else 0
+                for m in found:
+                    at = line + tok.content.count("\n", 0, m.start())
+                    stack[-1].append(Directive(m.group(1), at))
+            stack[-1].extend(inner)
         elif tok.type == "hr":
             stack[-1].append(SceneBreak())
         elif tok.type in ("code_block", "fence") and tok.content.strip():

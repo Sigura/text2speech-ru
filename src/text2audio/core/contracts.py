@@ -120,6 +120,7 @@ class Segment(BaseModel):
     role: str = "narration"
     emotion: str | None = None
     intensity: float = 0.0
+    rate: float = 1.0  # speaking rate, applied at assembly (`rate=` directive, §6.7 E3)
     pause: str = "sentence"  # type of the boundary after the segment (§6.7 E1)
     pause_after_ms: int = 0
     backend: str | None = None
