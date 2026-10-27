@@ -178,3 +178,22 @@ def test_unknown_pause_type_in_a_profile_is_an_error() -> None:
     bad = RU.model_copy(update={"pauses_ms": {"paragrah": 800}})
     with pytest.raises(ValueError, match="paragrah"):
         segment_markdown(PAUSES_MD, "ru", bad)
+
+
+def test_e0_keeps_dialogue_in_the_narration_and_three_pause_lengths() -> None:
+    line = "— Эх, батюшка Петр Андреич! — отвечал он с глубоким вздохом. — Сержусь-то я."
+    e1 = segment_markdown(line, "ru", RU)
+    e0 = segment_markdown(line, "ru", RU, expression="E0")
+    assert {s.role for s in e1} == {"dialogue", "remark"}
+    assert {s.role for s in e0} == {"narration"}
+    segments = segment_markdown(PAUSES_MD, "ru", RU, max_chars=40, expression="E0")
+    by_type = {s.pause: s.pause_after_ms for s in segments}
+    assert by_type == {
+        "heading": 800,
+        "paragraph": 800,
+        "quote": 800,
+        "sentence": 300,
+        "stanza": 800,
+        "scene": 800,
+        "chapter": 3000,
+    }

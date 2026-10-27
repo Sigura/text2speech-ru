@@ -51,6 +51,8 @@ PAUSE_MS = {
     "scene": 1500,
     "chapter": 3000,
 }
+# E0 (neutral, §6.7): the boundary types M2 had; the finer E1 types fall back to these.
+_E0_PAUSE = {"sentence": "sentence", "chapter": "chapter"}
 _MARK0 = 0xFDD0
 _MAX_MARKS = 32  # U+FDD0–U+FDEF: noncharacters, never in real text
 _MARK = re.compile("[﷐-﷯]")
@@ -71,16 +73,25 @@ def _notes_in(block: Block) -> list[str]:
 
 
 class _Builder:
-    def __init__(self, lang: str, profile: LanguageProfile | None, max_chars: int, seed: int):
+    def __init__(
+        self,
+        lang: str,
+        profile: LanguageProfile | None,
+        max_chars: int,
+        seed: int,
+        expression: str = "E1",
+    ):
         self.lang = lang
         self.abbreviations = profile.abbreviations if profile else ()
-        self.dialogue = profile is not None and profile.dialogue == "dash"
+        self.dialogue = profile is not None and profile.dialogue == "dash" and expression != "E0"
         self.remark_words = profile.remark_words if profile else ()
         overrides = profile.pauses_ms if profile else {}
         unknown = sorted(set(overrides) - set(PAUSE_MS))
         if unknown:
             raise ValueError(f"unknown pause type(s) in the {lang!r} profile: {unknown}")
         self.pauses = PAUSE_MS | overrides
+        if expression == "E0":
+            self.pauses = {t: self.pauses[_E0_PAUSE.get(t, "paragraph")] for t in self.pauses}
         self.max_chars = max_chars
         self.seed = seed
         self.segments: list[Segment] = []
@@ -295,9 +306,11 @@ def segment_markdown(
     max_chars: int = DEFAULT_MAX_CHARS,
     seed: int = 1234,
     warnings: list[dict[str, str]] | None = None,
+    expression: str = "E1",
 ) -> list[Segment]:
-    """Segments of `book.md`; directive problems are appended to `warnings`."""
-    builder = _Builder(lang, profile, max_chars, seed)
+    """Segments of `book.md`; directive problems are appended to `warnings`. E0 keeps
+    dialogue in the narration and pauses only sentences, paragraphs and chapters."""
+    builder = _Builder(lang, profile, max_chars, seed, expression)
     segments = builder.build(parse_markdown(markdown, directives=True))
     if warnings is not None:
         warnings += builder.warnings

@@ -282,6 +282,7 @@ def prepare(
             plan.profile,
             seed=config.synthesis.seed,
             warnings=notes,
+            expression=config.synthesis.expression,
         )
         if select is not None:
             segments = select(segments)
@@ -1227,34 +1228,26 @@ def preview_segments(segments: list[Segment], chapter: int | None, seconds: floa
     return out
 
 
-def preview(
+def render_selection(
     path: Path,
     config: Config,
+    select: Callable[[list[Segment]], list[Segment]],
     *,
-    chapter: int | None = None,
-    seconds: float = 30,
     store: ModelStore | None = None,
     tier: Tier | None = None,
     max_workers: int | None = None,
     progress: Progress | None = None,
-) -> Path:
-    """A short sample of a chapter (§6.11): the pipeline up to polish, no QA, one MP3 in
-    `_work/preview/`. Rendered segments go into the book's cache, so `run` reuses them."""
+) -> list[Segment]:
+    """Render the segments `select` picks through the stages up to polish, no QA, into
+    the book's segment cache (`preview`, listening tests)."""
     folder = BookFolder(path)
     if not folder.markdown.is_file():
         raise SynthesisError(f"{path}: not a book folder (no {folder.markdown.name})")
     store = store or ModelStore()
     plan = make_plan(folder, config, tier)
-    picked: list[int] = []
-
-    def select(segments: list[Segment]) -> list[Segment]:
-        chosen = preview_segments(segments, chapter, seconds)
-        picked.extend(s.chapter for s in chosen[:1])
-        return chosen
-
     segments, _, sources, _ = prepare(folder, plan, config, store, progress, select=select)
     if not segments:
-        raise SynthesisError(f"chapter {chapter} has no text")
+        return []
     journal = Journal(folder.work / "render.jsonl")
     audio_dir = folder.work / "audio" / "segments"
     own = [
@@ -1291,20 +1284,58 @@ def preview(
         )
     missing = [s.id for s in segments if (s.hash or "") not in journal]
     if missing:
-        raise SynthesisError(f"preview segments failed: {', '.join(missing)}")
-    meta = folder.metadata() or {}
-    out = folder.work / "preview" / f"chapter-{picked[0]:02d}.mp3"
+        raise SynthesisError(f"segments failed: {', '.join(missing)}")
+    return segments
+
+
+def write_clip(
+    path: Path, groups: list[list[Segment]], out: Path, config: Config, tags: dict[str, str]
+) -> Path:
+    """One MP3 of rendered segment groups in order, after the lead-in."""
+    folder = BookFolder(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     wav = out.with_suffix(".wav")
     ffmpeg = find_ffmpeg(config.tools.ffmpeg)
     with PartWriter(wav, ASSEMBLY_RATE) as writer:
-        _part_audio(segments, audio_dir, writer, ffmpeg)
+        for group in groups:
+            _part_audio(group, folder.work / "audio" / "segments", writer, ffmpeg)
+    encode_mp3(ffmpeg, wav, out, tags=tags, cover=_cover(folder))
+    wav.unlink(missing_ok=True)
+    return out
+
+
+def preview(
+    path: Path,
+    config: Config,
+    *,
+    chapter: int | None = None,
+    seconds: float = 30,
+    store: ModelStore | None = None,
+    tier: Tier | None = None,
+    max_workers: int | None = None,
+    progress: Progress | None = None,
+) -> Path:
+    """A short sample of a chapter (§6.11): the pipeline up to polish, no QA, one MP3 in
+    `_work/preview/`. Rendered segments go into the book's cache, so `run` reuses them."""
+    segments = render_selection(
+        path,
+        config,
+        lambda found: preview_segments(found, chapter, seconds),
+        store=store,
+        tier=tier,
+        max_workers=max_workers,
+        progress=progress,
+    )
+    if not segments:
+        raise SynthesisError(f"chapter {chapter} has no text")
+    folder = BookFolder(path)
+    meta = folder.metadata() or {}
     tags = {
         "title": f"Preview: {segments[0].text[:60]}",
         "album": str(meta.get("title") or folder.path.name),
     }
-    encode_mp3(ffmpeg, wav, out, tags=tags, cover=_cover(folder))
-    wav.unlink(missing_ok=True)
-    return out
+    name = f"chapter-{segments[0].chapter:02d}"
+    return write_clip(path, [segments], folder.work / "preview" / f"{name}.mp3", config, tags)
 
 
 def _report(

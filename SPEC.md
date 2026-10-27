@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 2.6-M3 |
+| Document version | 2.7-M3 |
 | Status | **M3 in progress** (open decisions in §13.1) |
 | Last updated | 2026-10-27 |
 | Primary language | Python 3.11+ |
@@ -52,6 +52,7 @@
 | 2.4-M3 | 2026-10-27 | M3 step 2 — dialogue split for the dash convention: `LanguageProfile.dialogue` / `remark_words`, roles `dialogue` / `remark`, `remark` pause type (§6.4.2, §6.6.5, §13.1). |
 | 2.5-M3 | 2026-10-27 | M3 step 3 — E3 directives as built: keys, scope, comment at a line start, warnings (§6.4.1); `rate` manifest field, applied at assembly (§6.4.2, §6.7); backend voice ids and emotion on backends without emotion control (§6.7, §13.1). |
 | 2.6-M3 | 2026-10-27 | M3 step 4 — `config show` and `voices` as built (FR-22, §6.6.5, §6.11); no content profile yet, so there is no `content` source (§13.1). |
+| 2.7-M3 | 2026-10-27 | M3 step 5 — **Decision (owner):** E0 = the M2 baseline (no dialogue split; sentence, paragraph and chapter pauses only), `expression = "E0"` works; listening test as built (`scripts/listen_ab.py`), plus T1-vs-T0 narration pairs (§6.7, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -846,7 +847,7 @@ gracefully on backends with fewer capabilities.
 
 | Level | Name | Source of expression | Works on |
 |---|---|---|---|
-| **E0** | Neutral | None. | All backends. |
+| **E0** | Neutral | None: dialogue stays in the narration (no dialogue/remark split) and only three pause lengths are used — sentence, paragraph (stanza, quote, heading, scene and remark boundaries take the paragraph length) and chapter; the M2 behaviour (owner, §13.1). `t2a` directives still apply. | All backends. |
 | **E1** | Structural *(default)* | Document structure: pause lengths by boundary type; slower rate and separate voice for epigraphs/poetry/quotes; dialogue detection → dialogue voice; emphasis → backend emphasis if supported. | All backends. |
 | **E2** | Inferred | A small offline emotion classifier labels each segment (e.g. `neutral, joy, sadness, anger, fear, surprise`) with an intensity; smoothed across neighbouring segments to avoid jarring jumps. | Backends with `emotion != none`. |
 | **E3** | Manual | `<!-- t2a: … -->` directives in `book.md` override E1/E2 (§6.4.1). | Backends with `emotion != none` (voice, pause, rate and skip directives work everywhere). |
@@ -866,6 +867,18 @@ A/B preference test by the owner alone (personal use, ADR-0007; owner's decision
 ≥ 60 % of the pairs where a side was chosen. Automatic MOS prediction
 ([UTMOSv2](https://github.com/sarulab-speech/UTMOSv2)) is reported for reference only:
 it is trained mostly on English.
+
+As built (`scripts/listen_ab.py`): `build e1` picks paragraphs of the full
+«Капитанская дочка» that E0 and E1 segment differently (dialogue with an author's
+remark), cheapest first, within 100 rendered segments (30 pairs, 98 segments), and
+renders both levels on T0 through the normal stages without QA; `build t1` picks 20
+narration paragraphs (150–320 characters) and renders them on T0 and T1. Each pair is
+one MP3 — the 1.5 s lead-in, side A, 1.5 s of silence, side B — with the sides drawn at
+random into a hidden key; the owner answers A, B or "=" per pair, and `score` applies
+the rule above. E1 needs all 30 pairs answered and ≥ 60 % of decided pairs. The same
+rule decides T1 vs T0 on narration (owner: plain Silero sounded better on the dialogue
+samples), with no minimum pair count: T1 stays the default on a GPU only if it wins.
+UTMOSv2 is not pinned in `models.lock`, so no automatic score is reported.
 
 ### 6.8 Audio Output
 
@@ -1474,6 +1487,8 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-27 | **E3 directives as built** (M3 step 3, §6.4.1): block scope until `reset`, inline = the containing sentence (made a segment of its own). `rate=` is applied by the core at assembly with FFmpeg `atempo` instead of per backend (Silero SSML `prosody`, Chatterbox nothing), so it works on every backend and route, VC included, and only re-assembles; `pause=` likewise. `voice=` takes a profile role or a backend voice id; a backend voice id is not polished on T1 (VC would turn it back into the narrator). On backends without emotion control `emotion=` is dropped from the segment (and its hash) with one warning per emotion. A comment at the start of a text line is treated as inline, because CommonMark would otherwise swallow the text into an HTML block. | Decided |
 | 2026-10-27 | **Dialogue split in the core, data in the profile** (M3 step 2): the dash convention is typographic, shared by several languages, so the splitter lives in the core and the pack supplies only `dialogue = "dash"` and its verbs of speech; dialogue parts keep their dash in `text` (subtitles show the book). Checked on the full «Капитанская дочка»: 138 dash paragraphs, 77 split; the lib.ru quoting style «— "…" — отвечал он — "…"» is handled by the quotation rule. | Decided |
 | 2026-10-27 | **`config show` as built** (M3 step 4, FR-22, §6.6.5): sources `core` → `profile:<lang>` → `metadata` → `user` → `book` → `cli`; no `content` source until a content profile exists. Run-time values (tier, devices, workers, `ffmpeg`) print as `(auto)` with their rule instead of probing hardware, so the output is a deterministic snapshot (tests: `tests/golden/config-show/`). `convert` writes the same view, commented out, to a missing `_work/text2audio.toml` and never overwrites an existing one. `voices` lists pack roles and backend voice ids. | Decided |
+| 2026-10-27 | **E0 = the M2 baseline** (owner, M3 step 5): no dialogue/remark split; pauses sentence, paragraph (every finer boundary type) and chapter. A flat E0 would make the E1 test a formality; this one asks whether the M3 dialogue work is audible. Directives still apply at E0. | Decided |
+| 2026-10-27 | **T1 vs T0 on narration** (M3 step 5): 20 blind pairs in the same test; T1 stays the default tier on a GPU only if preferred in ≥ 60 % of decided pairs, otherwise T0 becomes the default on every machine. | Proposed — awaiting the owner's answers |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

@@ -193,6 +193,11 @@ All notable changes to this project are documented here. The format follows
   book, CLI); `text2audio voices [--lang]`: voice roles per language pack and voices
   per backend. `convert` writes the commented view to a new book's
   `_work/text2audio.toml` (SPEC 2.6-M3).
+- M3 step 5 — `[synthesis] expression = "E0"` (no dialogue split, three pause
+  lengths); `scripts/listen_ab.py` builds blind A/B pairs (E1 vs E0, T1 vs T0 on
+  narration) from the full novel within 100 segments per call and scores the answers
+  (≥ 60 % rule); `preview` rendering split into `render_selection` / `write_clip`
+  (SPEC 2.7-M3).
 
 ### Changed
 
