@@ -28,6 +28,13 @@ class SynthesisConfig(_Section):
     expression: Literal["E0", "E1", "E2", "E3"] = "E1"
     seed: int = 1234
 
+    @field_validator("expression")
+    @classmethod
+    def _built(cls, value: str) -> str:
+        if value == "E2":
+            raise ValueError("E2 (inferred emotion) is deferred, not built (SPEC §6.7)")
+        return value
+
 
 class OutputConfig(_Section):
     root: Path = Path("output")

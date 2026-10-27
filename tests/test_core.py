@@ -75,3 +75,8 @@ def test_config_rejects_unknown_keys(tmp_path: Path) -> None:
     bad.write_text("[synthesis]\nlangauge = 'ru'\n")
     with pytest.raises(ValueError, match="langauge"):
         load_config([bad])
+
+
+def test_config_rejects_e2_until_it_is_built() -> None:
+    with pytest.raises(ValueError, match=r"E2 .* deferred"):
+        load_config([], {"synthesis": {"expression": "E2"}})

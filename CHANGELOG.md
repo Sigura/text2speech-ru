@@ -198,6 +198,8 @@ All notable changes to this project are documented here. The format follows
   narration) from the full novel within 100 segments per call and scores the answers
   (≥ 60 % rule); `preview` rendering split into `render_selection` / `write_clip`
   (SPEC 2.7-M3).
+- M3 step 6 — E2 deferred and documented (SPEC 2.8-M3, §6.7); `expression = "E2"`
+  is now a configuration error instead of silently acting as E1.
 
 ### Changed
 

@@ -63,7 +63,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     pairs (owner preferred plain Silero on the dialogue samples);
     - [x] `scripts/listen_ab.py`, E0 level, 30 + 20 pairs built;
     - [ ] owner's answers → `listen_ab.py score`, result in SPEC §13.1;
-  - [ ] step 6 — E2 deferral documented in §6.7;
+  - [x] step 6 — E2 deferral documented in §6.7;
   - [ ] step 7 — Qwen3-TTS dialogue spike (stress marks, Latin routing, speed; ≤ 100
     segments);
   - [ ] step 8 — `ru` text gaps from the benchmark: number agreement («21 страницу»,
