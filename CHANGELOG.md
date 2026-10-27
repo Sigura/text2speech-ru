@@ -203,6 +203,9 @@ All notable changes to this project are documented here. The format follows
 - M3 step 5 result: E1 preferred in 61 % of decided blind pairs, stays the default.
 - M3 step 7 — `spikes/qwen3-dialogue`: Qwen3-TTS vs the T1 hybrid on dialogue lines;
   the hybrid won every decided pair, Qwen3-TTS is not integrated (SPEC 2.9-M3).
+- M3 step 8a — `ru` numbers agree with transitive verbs and accusative nouns,
+  named days after «завтра», sentence-final «и т. д.» / «до н. э.» keep the dot
+  (SPEC 2.10-M3).
 
 ### Changed
 

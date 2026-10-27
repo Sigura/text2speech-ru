@@ -67,7 +67,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 6 — E2 deferral documented in §6.7;
   - [x] step 7 — Qwen3-TTS dialogue spike: the hybrid won 10 of 10 blind pairs, not
     integrated ([findings](spikes/qwen3-dialogue/FINDINGS.md));
-  - [ ] step 8 — `ru` text gaps from the benchmark: number agreement («21 страницу»,
+  - [ ] step 8 — (8a number case and abbreviation dots done) `ru` text gaps from the benchmark: number agreement («21 страницу»,
     «1000», dates), ё in proper names, 7 homograph misses, «небо» → «нёбо»; from the
     listening test: «Зурин» stress, stray `"` at paragraph ends in the novel fixture.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):

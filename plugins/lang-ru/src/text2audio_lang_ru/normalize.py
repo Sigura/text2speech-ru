@@ -193,6 +193,12 @@ FIXED = [  # multi-word abbreviations, matched on the raw text first
     (r"\bт\.\s*ч\.", "том числе"),
 ]
 _FIXED = [(re.compile(p), r) for p, r in FIXED]
+# Readings that close a phrase, so their dot may also end the sentence ("т. е." never does).
+_CLOSING = frozenset(
+    {"и так далее", "и тому подобное", "и другие", "и прочее", "до нашей эры", "нашей эры"}
+)
+# Days named, not dated, after these: "Завтра 31 декабря" → «тридцать первое декабря».
+NAMING_DAY = frozenset({"сегодня", "завтра", "вчера", "послезавтра", "позавчера"})
 
 LETTERS = {
     "А": "а",
@@ -492,6 +498,8 @@ class _Pass:
             return ordinal(n, "nomn", "n")  # "по десятое мая", "на пятое июня"
         if prep:
             return ordinal(n, prep[0], "n")
+        if p is not None and p.low in NAMING_DAY:
+            return ordinal(n, "nomn", "n")
         # A date opening the text is named ("12 июня — праздник"); inside a sentence
         # it says when ("родился пятого мая").
         return ordinal(n, "nomn" if self.prev_idx(i) is None else "gent", "n")
@@ -521,7 +529,7 @@ class _Pass:
             return self.day(i, n, prep)
         found = self.noun_after(i)
         if found is None:
-            case = prep[0] if prep else "nomn"
+            case = prep[0] if prep else "accs" if self.after_transitive(i) else "nomn"
             return cardinal(n, case)
         j, readings = found
         noun = self.toks[j]
@@ -542,7 +550,14 @@ class _Pass:
             r, case = hit, hit.case or "nomn"
         elif r.case in ("datv", "ablt", "loct"):
             case = r.case
+        elif all(x.case == "accs" for x in readings) or (not prep and self.after_transitive(i)):
+            case = "accs"  # "21 страницу", "заплатил 1000 рублей"
         return cardinal(n, case, r.gender or "m")
+
+    def after_transitive(self, i: int) -> bool:
+        """A transitive verb right before the number governs its accusative."""
+        p = self.tok(self.prev_idx(i))
+        return p is not None and p.kind == "word" and morph.transitive(p.low)
 
     def with_unit(
         self, i: int, n: int, prep: tuple[str, ...], unit: tuple[str, int, int | None]
@@ -904,6 +919,13 @@ def _compound(m: re.Match[str]) -> str:
     return word
 
 
+def _sentence_end(text: str, end: int) -> str:
+    """The dot an abbreviation shares with its sentence: at the end of the text or
+    before a capital letter ("… и т. д. Потом")."""
+    rest = text[end:].lstrip()
+    return "." if not rest or rest[0].isupper() else ""
+
+
 def _initials(text: str) -> str:
     return _INITIALS.sub(lambda m: LETTERS[m[1]].capitalize() + " ", text)
 
@@ -915,7 +937,10 @@ class RussianNormalizer:
         text, resolved = latin.fix_homoglyphs(text)
         text = _JOINED.sub(_compound, text)
         for pattern, repl in _FIXED:
-            text = pattern.sub(repl, text)
+            text = pattern.sub(
+                lambda m, r=repl: r + (_sentence_end(m.string, m.end()) if r in _CLOSING else ""),
+                text,
+            )
         text = _DATE.sub(_date, text)
         text = _time(text)
         p = _Pass(tokenize(text), role)

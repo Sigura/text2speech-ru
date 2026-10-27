@@ -80,6 +80,13 @@ def imperative(word: str) -> bool:
     return any(p.tag.mood == "impr" for p in analyzer().parse(word.lower()))
 
 
+@lru_cache(maxsize=16384)
+def transitive(word: str) -> bool:
+    """Whether the most probable reading is a transitive verb ("заплатил", "прочитал")."""
+    parses = analyzer().parse(word.lower())
+    return bool(parses) and parses[0].tag.POS in ("VERB", "INFN") and "tran" in parses[0].tag
+
+
 def nominal(word: str) -> tuple[Form, ...]:
     """Readings as a noun, adjective or participle (what a number agrees with)."""
     return tuple(f for f in forms(word) if f.pos in ("NOUN", "ADJF", "PRTF") and f.case)
