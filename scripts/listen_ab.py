@@ -51,7 +51,7 @@ MIN_PAIRS = {"e1": 30, "t1": 1}
 SIDES = {"e1": ("E0", "E1"), "t1": ("T0", "T1")}  # (old, new)
 # "e01 A", "E01: b", "e03 =", "e04 same, a remark"
 CHOICE = re.compile(
-    r"^\s*([et]\d+)\s*[:\s]\s*(a|b|=|same)(?=[\s,;]|$)\s*(?:[,;].*)?$", re.IGNORECASE
+    r"^\s*([a-z]\d+)\s*[:\s]\s*(a|b|=|same)(?=[\s,;]|$)\s*(?:[,;].*)?$", re.IGNORECASE
 )
 
 

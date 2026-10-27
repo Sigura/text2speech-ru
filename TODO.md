@@ -62,12 +62,14 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
     pairs (owner preferred plain Silero on the dialogue samples);
     - [x] `scripts/listen_ab.py`, E0 level, 30 + 20 pairs built;
-    - [ ] owner's answers → `listen_ab.py score`, result in SPEC §13.1;
+    - [x] E1 vs E0: 11 of 18 decided pairs (61 %) → E1 stays the default;
+    - [ ] T1 vs T0: waiting for the last answer (t20);
   - [x] step 6 — E2 deferral documented in §6.7;
-  - [ ] step 7 — Qwen3-TTS dialogue spike (stress marks, Latin routing, speed; ≤ 100
-    segments);
+  - [x] step 7 — Qwen3-TTS dialogue spike: the hybrid won 10 of 10 blind pairs, not
+    integrated ([findings](spikes/qwen3-dialogue/FINDINGS.md));
   - [ ] step 8 — `ru` text gaps from the benchmark: number agreement («21 страницу»,
-    «1000», dates), ё in proper names, 7 homograph misses, «небо» → «нёбо».
+    «1000», dates), ё in proper names, 7 homograph misses, «небо» → «нёбо»; from the
+    listening test: «Зурин» stress, stray `"` at paragraph ends in the novel fixture.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and

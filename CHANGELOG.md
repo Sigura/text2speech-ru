@@ -200,6 +200,9 @@ All notable changes to this project are documented here. The format follows
   (SPEC 2.7-M3).
 - M3 step 6 — E2 deferred and documented (SPEC 2.8-M3, §6.7); `expression = "E2"`
   is now a configuration error instead of silently acting as E1.
+- M3 step 5 result: E1 preferred in 61 % of decided blind pairs, stays the default.
+- M3 step 7 — `spikes/qwen3-dialogue`: Qwen3-TTS vs the T1 hybrid on dialogue lines;
+  the hybrid won every decided pair, Qwen3-TTS is not integrated (SPEC 2.9-M3).
 
 ### Changed
 
