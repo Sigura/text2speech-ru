@@ -59,8 +59,8 @@ def test_sides_are_one_of_each_and_vary() -> None:
 
 
 def test_read_answers() -> None:
-    text = "# pair\tchoice\ne01\tA\nE02 b\n\nt01 =\n"
-    assert listen_ab.read_answers(text) == {"e01": "A", "e02": "B", "t01": "="}
+    text = "# pair\tchoice\ne01\tA\nE02: b\n\nt01 =\nE04: same, bad word\n"
+    assert listen_ab.read_answers(text) == {"e01": "A", "e02": "B", "t01": "=", "e04": "="}
     with pytest.raises(ValueError, match="line 1"):
         listen_ab.read_answers("e01 maybe\n")
 

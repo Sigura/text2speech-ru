@@ -11,7 +11,7 @@ most 100 segments per call. `e1` takes paragraphs that E0 and E1 segment differe
 renders them on T0 and T1 (needs a GPU). Each pair is one MP3: the 1.5 s lead-in,
 side A, 1.5 s of silence, side B. The sides are drawn at random and written to
 DIR/key.json — do not open it before scoring. Answers go in DIR/answers.tsv, one line per pair, e.g.
-`e01<TAB>A` (A, B, or = for no preference; spaces work too).
+`e01 A` (A, B, or `=` / `same` for no preference; `E01: b, note` works too).
 
 `score` prints, per comparison, how many decided pairs the new side (E1, T1) won; it
 becomes the default at ≥ 60 % of decided pairs, with at least 30 pairs for E1
@@ -49,7 +49,10 @@ THRESHOLD = 0.6
 GAP_MS = 1500  # after each side, the same for both: a passage ends at a heading here
 MIN_PAIRS = {"e1": 30, "t1": 1}
 SIDES = {"e1": ("E0", "E1"), "t1": ("T0", "T1")}  # (old, new)
-CHOICE = re.compile(r"^\s*([et]\d+)\s+([AB=])\s*$", re.IGNORECASE)
+# "e01 A", "E01: b", "e03 =", "e04 same, a remark"
+CHOICE = re.compile(
+    r"^\s*([et]\d+)\s*[:\s]\s*(a|b|=|same)(?=[\s,;]|$)\s*(?:[,;].*)?$", re.IGNORECASE
+)
 
 
 @dataclass
@@ -99,7 +102,8 @@ def read_answers(text: str) -> dict[str, str]:
         m = CHOICE.match(line)
         if m is None:
             raise ValueError(f"answers line {n}: expected '<pair> A|B|=', got {line!r}")
-        answers[m.group(1).lower()] = m.group(2).upper()
+        choice = m.group(2).upper()
+        answers[m.group(1).lower()] = "=" if choice == "SAME" else choice
     return answers
 
 
