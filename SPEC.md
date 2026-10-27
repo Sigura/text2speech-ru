@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 2.5-M3 |
+| Document version | 2.6-M3 |
 | Status | **M3 in progress** (open decisions in §13.1) |
 | Last updated | 2026-10-27 |
 | Primary language | Python 3.11+ |
@@ -51,6 +51,7 @@
 | 2.3-M3 | 2026-10-27 | **Decision (owner):** every audio file starts with 1.5 s of silence (was 0.3 s) — book parts, M4B, previews, listening clips (§6.8, §13.1). |
 | 2.4-M3 | 2026-10-27 | M3 step 2 — dialogue split for the dash convention: `LanguageProfile.dialogue` / `remark_words`, roles `dialogue` / `remark`, `remark` pause type (§6.4.2, §6.6.5, §13.1). |
 | 2.5-M3 | 2026-10-27 | M3 step 3 — E3 directives as built: keys, scope, comment at a line start, warnings (§6.4.1); `rate` manifest field, applied at assembly (§6.4.2, §6.7); backend voice ids and emotion on backends without emotion control (§6.7, §13.1). |
+| 2.6-M3 | 2026-10-27 | M3 step 4 — `config show` and `voices` as built (FR-22, §6.6.5, §6.11); no content profile yet, so there is no `content` source (§13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -605,6 +606,18 @@ The generated `_work/text2audio.toml` lists every effective value **as comments*
 its source (`# from profile:ru`), so users can see exactly what to change.
 `text2audio config show <book>` prints the same view.
 
+As built (M3): sources are `core`, `profile:<lang>`, `metadata` (the book's language),
+`user`, `book` and `cli`. **No content profile exists yet**, so there is no `content`
+source; the layer is added when one is implemented. The profile layer covers
+`lang.<code>.backend/polish/foreign.<tier>`, `g2p`, `asr` and the QA thresholds; a
+per-language string override (`[lang.ru] backend = "sine"`) replaces the profile's
+per-tier keys. Values decided at run time — the tier, devices, workers, `ffmpeg` — are
+shown as `(auto)` with the rule that picks them: `config show` does not probe the
+hardware, so its output is deterministic. Voices, pause lengths, the dialogue
+convention and the normalizer follow as a reference block (they are pack data, not
+settings). `convert` writes the commented view to `_work/text2audio.toml` only when the
+file does not exist; every line is a comment, so it loads as an empty config.
+
 ##### Automatic decisions
 
 | Setting | Automatic rule when not configured |
@@ -1116,11 +1129,11 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 | `text2audio synthesize <book folder>` | Book folder → audio (incremental). |
 | `text2audio run <input>… [-o <output root>] [--name <folder>] [--overwrite]` | Convert + synthesize in one step (batch-capable). |
 | `text2audio preview <book folder> [--chapter N] [--seconds 30] [--tier] [--workers]` | Quick sample to audition voice and tier: the opening segments of the chapter (default: the first after the front matter) whose estimated length (14 characters/s) reaches `--seconds`, through normalize → stress → synthesize → polish, **no QA**, one MP3 in `<book>/_work/preview/chapter-NN.mp3`. Rendered segments go into the book's segment cache, so a later `run` reuses them. |
-| `text2audio voices [--lang en]` | List installed voices per backend. |
+| `text2audio voices [--lang en]` | Voice roles per installed language pack (backend → voice id) and the voices each installed backend declares; cloning backends are listed as cloning a reference clip. A `voice=` directive accepts either (§6.4.1). |
 | `text2audio models pull / list / verify / gc` | Manage the model store. |
 | `text2audio bundle export / import` | Air-gapped transfer. |
 | `text2audio doctor` | Environment and offline-readiness check. |
-| `text2audio config show <book folder>` | Effective configuration with the source of each value (default, profile, user, book, CLI). |
+| `text2audio config show <book folder> [--lang] [--tier]` | Effective configuration as TOML with the source of each value (`core`, `profile:<lang>`, `metadata`, `user`, `book`, `cli`), §6.6.5. |
 | `text2audio plugins` | List discovered languages and backends with capabilities. |
 | `text2audio resources [--json]` | Usable CPUs, RAM and GPUs (within affinity, cgroup and `CUDA_VISIBLE_DEVICES` limits) and the planned worker slots (§9.1). |
 
@@ -1460,6 +1473,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-27 | **1.5 s lead-in** (owner): every audio file — MP3 parts, the M4B, previews, samples and listening-test clips — starts with 1.5 s of silence instead of 0.3 s, because many players start playback late; subtitle and chapter times include it. Re-assembles existing books (part fingerprints) without re-synthesis. | Decided |
 | 2026-10-27 | **E3 directives as built** (M3 step 3, §6.4.1): block scope until `reset`, inline = the containing sentence (made a segment of its own). `rate=` is applied by the core at assembly with FFmpeg `atempo` instead of per backend (Silero SSML `prosody`, Chatterbox nothing), so it works on every backend and route, VC included, and only re-assembles; `pause=` likewise. `voice=` takes a profile role or a backend voice id; a backend voice id is not polished on T1 (VC would turn it back into the narrator). On backends without emotion control `emotion=` is dropped from the segment (and its hash) with one warning per emotion. A comment at the start of a text line is treated as inline, because CommonMark would otherwise swallow the text into an HTML block. | Decided |
 | 2026-10-27 | **Dialogue split in the core, data in the profile** (M3 step 2): the dash convention is typographic, shared by several languages, so the splitter lives in the core and the pack supplies only `dialogue = "dash"` and its verbs of speech; dialogue parts keep their dash in `text` (subtitles show the book). Checked on the full «Капитанская дочка»: 138 dash paragraphs, 77 split; the lib.ru quoting style «— "…" — отвечал он — "…"» is handled by the quotation rule. | Decided |
+| 2026-10-27 | **`config show` as built** (M3 step 4, FR-22, §6.6.5): sources `core` → `profile:<lang>` → `metadata` → `user` → `book` → `cli`; no `content` source until a content profile exists. Run-time values (tier, devices, workers, `ffmpeg`) print as `(auto)` with their rule instead of probing hardware, so the output is a deterministic snapshot (tests: `tests/golden/config-show/`). `convert` writes the same view, commented out, to a missing `_work/text2audio.toml` and never overwrites an existing one. `voices` lists pack roles and backend voice ids. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

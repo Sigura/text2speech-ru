@@ -1,0 +1,50 @@
+[synthesis]
+expression = "E1"  # core
+language = "de"  # metadata
+seed = 1234  # core
+# tier = (auto)  # core: resource plan at run time
+
+[output]
+formats = ["mp3", "m4b"]  # core
+loudness = "default"  # core
+max_merge_ratio = 0.5  # core
+max_part_minutes = 90.0  # core
+max_parts = 150  # core
+min_part_minutes = 3.0  # core
+min_parts = 2  # core
+root = "output"  # core
+split = "auto"  # core
+subtitles = true  # core
+target_part_minutes = 45.0  # core
+
+[qa]
+batch = 100  # core
+# cer_threshold = (auto)  # core: language profile
+max_segments = 100  # core
+mode = "on"  # core
+# wer_threshold = (auto)  # core: language profile
+
+[resources]
+# devices = (auto)  # core: resource plan
+# max_workers = (auto)  # core: resource plan
+# threads_per_worker = (auto)  # core: resource plan
+
+[tools]
+# ffmpeg = (auto)  # core: found on PATH
+
+[cover]
+generator = "sd-webui"  # core
+mode = "auto"  # core
+repaint_below = 800  # core
+repaint_denoise = 0.4  # core
+tagger = "wd14"  # core
+
+[cover.sd]
+# checkpoint = (auto)  # core: the WebUI's default
+# dir = (auto)  # core: cover generation off until set
+# python = (auto)  # core: <dir>/venv/bin/python
+# size = (auto)  # core: by checkpoint family
+steps = 30  # core
+timeout_s = 600.0  # core
+
+# No language pack for de: install text2audio-lang-de.

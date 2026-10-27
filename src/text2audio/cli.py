@@ -31,6 +31,8 @@ models_app = typer.Typer(no_args_is_help=True, help="Manage the local model stor
 app.add_typer(models_app, name="models")
 envs_app = typer.Typer(no_args_is_help=True, help="Manage plugin worker environments.")
 app.add_typer(envs_app, name="envs")
+config_app = typer.Typer(no_args_is_help=True, help="Inspect the configuration of a book.")
+app.add_typer(config_app, name="config")
 
 LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code(s), e.g. ru or ru,en.")]
 TierOpt = Annotated[str | None, typer.Option("--tier", help="fast | expressive")]
@@ -459,8 +461,51 @@ def preview(
         ui.result(str(out))
 
 
+@config_app.command("show")
+def config_show(
+    folder: Annotated[Path, typer.Argument(help="Book folder made by `convert`.")],
+    lang: Annotated[str | None, typer.Option("--lang", help="Book language override.")] = None,
+    tier: TierFlag = None,
+) -> None:
+    """Print the effective settings of a book with the source of each value."""
+    from text2audio import api
+    from text2audio.core.config import load_config, user_config_path
+    from text2audio.core.effective import render
+
+    if not folder.is_dir():
+        typer.echo(f"error: not a book folder: {folder}", err=True)
+        raise typer.Exit(ExitCode.INPUT)
+    overrides: dict[str, Any] = {"synthesis": {}}
+    if lang:
+        overrides["synthesis"]["language"] = lang
+    if tier:
+        overrides["synthesis"]["tier"] = _tier(tier)
+    try:
+        load_config([user_config_path(), folder / "_work" / "text2audio.toml"], overrides)
+    except ValueError as exc:  # pydantic's ValidationError and TOMLDecodeError are ValueErrors
+        typer.echo(f"error: bad configuration: {exc}", err=True)
+        raise typer.Exit(ExitCode.USAGE) from exc
+    typer.echo(render(api.config_show(folder, overrides)), nl=False)
+
+
+@app.command()
+def voices(
+    lang: Annotated[str | None, typer.Option("--lang", help="Language code.")] = None,
+) -> None:
+    """List voice roles per language pack and the voices of installed backends."""
+    from text2audio import api
+
+    found = api.voices(lang)
+    for code, roles in found.roles.items():
+        typer.echo(f"{code}:")
+        for role, ids in roles.items():
+            typer.echo(f"  {role}: " + ", ".join(f"{b} {v}" for b, v in ids.items()))
+    typer.echo("backends:")
+    for name, voice_ids in found.backends.items():
+        typer.echo(f"  {name}: {', '.join(voice_ids) or '-'}")
+
+
 _PLANNED = {
-    "voices": "M3",
     "bundle": "M5",
 }
 

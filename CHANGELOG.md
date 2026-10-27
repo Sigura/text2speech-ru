@@ -188,6 +188,11 @@ All notable changes to this project are documented here. The format follows
   for the containing sentence; `rate` is applied at assembly (FFmpeg `atempo`) on
   every backend; unknown keys, unknown voices and ignored emotions are report
   warnings. New manifest field `rate` (SPEC 2.5-M3); golden manifests regenerated.
+- M3 step 4 — `text2audio config show <book> [--lang] [--tier]`: the effective
+  settings as TOML with the source of each value (core, profile, metadata, user,
+  book, CLI); `text2audio voices [--lang]`: voice roles per language pack and voices
+  per backend. `convert` writes the commented view to a new book's
+  `_work/text2audio.toml` (SPEC 2.6-M3).
 
 ### Changed
 

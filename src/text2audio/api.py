@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from text2audio import __version__
 from text2audio.core import resources as res
@@ -11,6 +13,8 @@ from text2audio.core.contracts import Capabilities, ModelAsset, Tier
 from text2audio.core.convert import ConvertResult
 from text2audio.core.convert import convert as _convert
 from text2audio.core.doctor import DoctorReport, run_doctor
+from text2audio.core.effective import View, Voices, effective_config
+from text2audio.core.effective import voices as _voices
 from text2audio.core.envs import PluginEnv, UnknownEnv, plugin_env
 from text2audio.core.envs import sync as _sync_env
 from text2audio.core.plugins import Discovery, discover
@@ -182,3 +186,13 @@ def envs_sync(names: list[str] | None = None) -> list[PluginEnv]:
     for env in envs:
         _sync_env(env)
     return envs
+
+
+def config_show(folder: Path, overrides: Mapping[str, Any] | None = None) -> View:
+    """Effective settings of a book with the source of each value (FR-22)."""
+    return effective_config(folder, overrides)
+
+
+def voices(lang: str | None = None) -> Voices:
+    """Voice roles per language pack and voices per installed backend."""
+    return _voices(lang)

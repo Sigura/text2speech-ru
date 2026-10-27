@@ -1,0 +1,68 @@
+[synthesis]
+expression = "E1"  # core
+language = "ru"  # metadata
+seed = 1234  # core
+# tier = (auto)  # core: resource plan at run time
+
+[output]
+formats = ["mp3", "m4b"]  # core
+loudness = "default"  # core
+max_merge_ratio = 0.5  # core
+max_part_minutes = 90.0  # core
+max_parts = 150  # core
+min_part_minutes = 3.0  # core
+min_parts = 2  # core
+root = "output"  # core
+split = "auto"  # core
+subtitles = true  # core
+target_part_minutes = 45.0  # core
+
+[qa]
+batch = 100  # core
+cer_threshold = 0.1  # profile:ru
+max_segments = 100  # core
+mode = "on"  # core
+wer_threshold = 0.18  # profile:ru
+
+[resources]
+# devices = (auto)  # core: resource plan
+# max_workers = (auto)  # core: resource plan
+# threads_per_worker = (auto)  # core: resource plan
+
+[tools]
+# ffmpeg = (auto)  # core: found on PATH
+
+[cover]
+generator = "sd-webui"  # core
+mode = "auto"  # core
+repaint_below = 800  # core
+repaint_denoise = 0.4  # core
+tagger = "wd14"  # core
+
+[cover.sd]
+# checkpoint = (auto)  # core: the WebUI's default
+# dir = (auto)  # core: cover generation off until set
+# python = (auto)  # core: <dir>/venv/bin/python
+# size = (auto)  # core: by checkpoint family
+steps = 30  # core
+timeout_s = 600.0  # core
+
+[lang.ru]
+asr = "gigaam"  # profile:ru
+g2p = "ruaccent"  # profile:ru
+
+[lang.ru.backend]
+expressive = "silero"  # profile:ru
+fast = "silero"  # profile:ru
+
+[lang.ru.foreign]
+expressive = "chatterbox"  # profile:ru
+
+[lang.ru.polish]
+expressive = "chatterbox"  # profile:ru
+
+# Language profile ru (Русский), from the pack:
+#   voice narrator: silero: xenia, chatterbox: ref-xenia.wav
+#   voice dialogue: silero: xenia, chatterbox: ref-xenia.wav
+#   pauses, ms: remark 200, sentence 300, paragraph 800 (pack), stanza 900, quote 1000, heading 1000, scene 1500, chapter 3000
+#   dialogue: dash; normalizer: ru

@@ -58,7 +58,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 1 — pause types instead of milliseconds; voice/role in the segment hash;
   - [x] step 2 — dialogue split (dash paragraphs, author's remarks);
   - [x] step 3 — `<!-- t2a: … -->` directives (E3);
-  - [ ] step 4 — `voices` and `config show` (FR-22);
+  - [x] step 4 — `voices` and `config show` (FR-22);
   - [ ] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
     pairs (owner preferred plain Silero on the dialogue samples);
   - [ ] step 6 — E2 deferral documented in §6.7;

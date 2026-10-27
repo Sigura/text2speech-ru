@@ -11,6 +11,7 @@ from typing import Literal
 
 from text2audio import __version__, readers
 from text2audio.core.config import Config, CoverConfig
+from text2audio.core.effective import starting_book_config
 from text2audio.core.languages import profile
 from text2audio.core.workspace import (
     WORK,
@@ -151,6 +152,9 @@ def convert_one(
             folder.markdown.read_text(encoding="utf-8"), code, profile(code)
         )
         write_manifest(folder.work / "segments.jsonl", segments)
+        book_config = folder.work / "text2audio.toml"
+        if not book_config.exists():
+            book_config.write_text(starting_book_config(folder.path), encoding="utf-8")
         markdown = folder.reconverted if status == "kept-edits" else folder.markdown
         return ConvertResult(
             input=src,
