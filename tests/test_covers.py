@@ -387,7 +387,7 @@ def test_large_embedded_cover_is_kept(tmp_path: Path, webui: Path, real_size: No
 
 # --------------------------------------------------------------------------- real models
 
-SD_DIR = Path(os.environ.get("T2A_SD_DIR", "/path/to/stable-diffusion-webui"))
+SD_DIR = Path(os.environ.get("T2A_SD_DIR", ""))
 
 
 def _translator_ready() -> bool:

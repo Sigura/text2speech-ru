@@ -57,8 +57,9 @@ Guidance for Claude Code sessions working in this repository.
 - GPUs are shared with other jobs (a local bot: SD WebUI on GPU3 port 8801,
   `video_server.py` on GPUs 1–2). Plan from free VRAM (`text2audio resources`);
   never stop, reconfigure or reuse those processes.
-- Stable Diffusion WebUI for covers (ADR-0009): `/path/to/stable-diffusion-webui`
-  (its own `venv/`, conda env `sdui`); text2audio starts its own instance on 127.0.0.1.
+- Stable Diffusion WebUI for covers (ADR-0009): path set in `[cover.sd] dir` of the
+  user config and `T2A_SD_DIR` for tests (its own `venv/`, conda env `sdui`);
+  text2audio starts its own instance on 127.0.0.1.
 - Offline tests: AppArmor blocks `unshare -rn` here
   (`kernel.apparmor_restrict_unprivileged_userns=1`), so `scripts/test-offline.sh`
   falls back to pytest-socket; changing the sysctl is the user's call.

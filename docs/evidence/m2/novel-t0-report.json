@@ -1,0 +1,1032 @@
+{
+  "text2audio": "0.1.0.dev0",
+  "book": "Александр Пушкин. Капитанская дочка",
+  "language": "ru",
+  "tier": "fast",
+  "route": {
+    "backend": "silero",
+    "polish": null,
+    "foreign": null
+  },
+  "notes": [
+    "tier expressive: no GPU with enough free VRAM"
+  ],
+  "segments": {
+    "total": 1246,
+    "rendered_now": 1242,
+    "cached": 0,
+    "duplicate": 4,
+    "failed": 0,
+    "failures": []
+  },
+  "duration_ms": 13974815,
+  "speech_ms": 13198615,
+  "synthesis": {
+    "workers": 1,
+    "elapsed_ms": 1163198,
+    "rtf": 0.0881,
+    "wall_s_this_run": 1174.37
+  },
+  "polish": null,
+  "rtf_wall": 0.1283,
+  "chapters": [
+    {
+      "chapter": 0,
+      "title": "Александр Пушкин. Капитанская дочка",
+      "duration_ms": 9737
+    },
+    {
+      "chapter": 1,
+      "title": "Глава I. Сержант гвардии",
+      "duration_ms": 911727
+    },
+    {
+      "chapter": 2,
+      "title": "Глава II. Вожатый",
+      "duration_ms": 1056227
+    },
+    {
+      "chapter": 3,
+      "title": "Глава III. Крепость",
+      "duration_ms": 674162
+    },
+    {
+      "chapter": 4,
+      "title": "Глава IV. Поединок",
+      "duration_ms": 977161
+    },
+    {
+      "chapter": 5,
+      "title": "Глава V. Любовь",
+      "duration_ms": 828447
+    },
+    {
+      "chapter": 6,
+      "title": "Глава VI. Пугачевщина",
+      "duration_ms": 1081001
+    },
+    {
+      "chapter": 7,
+      "title": "Глава VII. Приступ",
+      "duration_ms": 780996
+    },
+    {
+      "chapter": 8,
+      "title": "Глава VIII. Незваный гость",
+      "duration_ms": 914277
+    },
+    {
+      "chapter": 9,
+      "title": "Глава IX. Разлука",
+      "duration_ms": 536188
+    },
+    {
+      "chapter": 10,
+      "title": "Глава X. Осада города",
+      "duration_ms": 836627
+    },
+    {
+      "chapter": 11,
+      "title": "Глава XI. Мятежная слобода",
+      "duration_ms": 1198097
+    },
+    {
+      "chapter": 12,
+      "title": "Глава XII. Сирота",
+      "duration_ms": 736075
+    },
+    {
+      "chapter": 13,
+      "title": "Глава XIII. Арест",
+      "duration_ms": 740196
+    },
+    {
+      "chapter": 14,
+      "title": "Глава XIV. Суд",
+      "duration_ms": 1424238
+    },
+    {
+      "chapter": 15,
+      "title": "Приложение. Пропущенная глава.",
+      "duration_ms": 1269659
+    }
+  ],
+  "split": {
+    "mode": "split",
+    "files": 15,
+    "level": 2,
+    "merged_sections": 1,
+    "split_sections": 0,
+    "reason": "15 files at heading level 2",
+    "notes": []
+  },
+  "files": [
+    "01 - Глава I. Сержант гвардии.mp3",
+    "02 - Глава II. Вожатый.mp3",
+    "03 - Глава III. Крепость.mp3",
+    "04 - Глава IV. Поединок.mp3",
+    "05 - Глава V. Любовь.mp3",
+    "06 - Глава VI. Пугачевщина.mp3",
+    "07 - Глава VII. Приступ.mp3",
+    "08 - Глава VIII. Незваный гость.mp3",
+    "09 - Глава IX. Разлука.mp3",
+    "10 - Глава X. Осада города.mp3",
+    "11 - Глава XI. Мятежная слобода.mp3",
+    "12 - Глава XII. Сирота.mp3",
+    "13 - Глава XIII. Арест.mp3",
+    "14 - Глава XIV. Суд.mp3",
+    "15 - Приложение. Пропущенная глава.mp3"
+  ],
+  "parts": [
+    {
+      "file": "01 - Глава I. Сержант гвардии.mp3",
+      "title": "Глава I. Сержант гвардии",
+      "duration_ms": 921464
+    },
+    {
+      "file": "02 - Глава II. Вожатый.mp3",
+      "title": "Глава II. Вожатый",
+      "duration_ms": 1056227
+    },
+    {
+      "file": "03 - Глава III. Крепость.mp3",
+      "title": "Глава III. Крепость",
+      "duration_ms": 674162
+    },
+    {
+      "file": "04 - Глава IV. Поединок.mp3",
+      "title": "Глава IV. Поединок",
+      "duration_ms": 977161
+    },
+    {
+      "file": "05 - Глава V. Любовь.mp3",
+      "title": "Глава V. Любовь",
+      "duration_ms": 828447
+    },
+    {
+      "file": "06 - Глава VI. Пугачевщина.mp3",
+      "title": "Глава VI. Пугачевщина",
+      "duration_ms": 1081001
+    },
+    {
+      "file": "07 - Глава VII. Приступ.mp3",
+      "title": "Глава VII. Приступ",
+      "duration_ms": 780996
+    },
+    {
+      "file": "08 - Глава VIII. Незваный гость.mp3",
+      "title": "Глава VIII. Незваный гость",
+      "duration_ms": 914277
+    },
+    {
+      "file": "09 - Глава IX. Разлука.mp3",
+      "title": "Глава IX. Разлука",
+      "duration_ms": 536188
+    },
+    {
+      "file": "10 - Глава X. Осада города.mp3",
+      "title": "Глава X. Осада города",
+      "duration_ms": 836627
+    },
+    {
+      "file": "11 - Глава XI. Мятежная слобода.mp3",
+      "title": "Глава XI. Мятежная слобода",
+      "duration_ms": 1198097
+    },
+    {
+      "file": "12 - Глава XII. Сирота.mp3",
+      "title": "Глава XII. Сирота",
+      "duration_ms": 736075
+    },
+    {
+      "file": "13 - Глава XIII. Арест.mp3",
+      "title": "Глава XIII. Арест",
+      "duration_ms": 740196
+    },
+    {
+      "file": "14 - Глава XIV. Суд.mp3",
+      "title": "Глава XIV. Суд",
+      "duration_ms": 1424238
+    },
+    {
+      "file": "15 - Приложение. Пропущенная глава.mp3",
+      "title": "Приложение. Пропущенная глава.",
+      "duration_ms": 1269659
+    }
+  ],
+  "normalization": {
+    "uncertain": []
+  },
+  "foreign_spans": [
+    {
+      "segment": "ch01-s0013",
+      "text": "pour Йtre outchitel",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "п+ор икр+еткойи т+и +ар +и аутч+итл"
+    },
+    {
+      "segment": "ch01-s0043",
+      "text": "P",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "п+и"
+    },
+    {
+      "segment": "ch01-s0068",
+      "text": "I",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "+ай"
+    },
+    {
+      "segment": "ch04-s0101",
+      "text": "monsieur",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "масй+ё"
+    },
+    {
+      "segment": "ch10-s0027",
+      "text": "Y-xe-xe",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "у+айз+из+и"
+    },
+    {
+      "segment": "ch10-s0068",
+      "text": "Schelm",
+      "script": "Latn",
+      "resolution": "transliterated",
+      "reading": "ш+елм"
+    },
+    {
+      "segment": "ch14-s0027",
+      "text": "нaзoву",
+      "script": "Latn",
+      "resolution": "homoglyph",
+      "reading": "назову"
+    }
+  ],
+  "warnings": [],
+  "qa": {
+    "mode": "on",
+    "asr": "gigaam",
+    "device": "cpu",
+    "workers": 1,
+    "threshold": 0.18,
+    "cer_threshold": 0.1,
+    "max_segments": 100,
+    "sample": 100,
+    "checked_now": 100,
+    "retried_now": 2,
+    "wall_s_this_run": 234.7,
+    "checked": 100,
+    "passed": 98,
+    "retried": 2,
+    "flagged": 2,
+    "flagged_share": 0.02,
+    "mean_wer": 0.0309,
+    "flagged_list": [
+      {
+        "segment": "ch02-s0005",
+        "text_norm": "Что не добрый ли да меня конь завез:",
+        "heard": "что не добрили до меня конь завес",
+        "wer": 0.5,
+        "cer": 0.1071,
+        "flags": [
+          "wer"
+        ],
+        "attempts": 2
+      },
+      {
+        "segment": "ch09-s0003",
+        "text_norm": "Мне, прекрасная, с тобой;",
+        "heard": "мне прекрасное с тобой",
+        "wer": 0.25,
+        "cer": 0.1053,
+        "flags": [
+          "wer"
+        ],
+        "attempts": 2
+      }
+    ],
+    "unverified": [],
+    "segments": [
+      {
+        "segment": "ch01-s0004",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0016",
+        "wer": 0.0196,
+        "cer": 0.0046,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0019",
+        "wer": 0.0244,
+        "cer": 0.0049,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0022",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0029",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0041",
+        "wer": 0.0286,
+        "cer": 0.0056,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0049",
+        "wer": 0.0588,
+        "cer": 0.0349,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0051",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch01-s0056",
+        "wer": 0.0208,
+        "cer": 0.0043,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0005",
+        "wer": 0.5,
+        "cer": 0.1071,
+        "attempts": 2,
+        "flags": [
+          "wer"
+        ]
+      },
+      {
+        "segment": "ch02-s0007",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0017",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0036",
+        "wer": 0.027,
+        "cer": 0.0049,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0037",
+        "wer": 0.1136,
+        "cer": 0.0045,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0050",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch02-s0054",
+        "wer": 0.0312,
+        "cer": 0.0058,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch03-s0007",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch03-s0013",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch03-s0046",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch03-s0049",
+        "wer": 0.0256,
+        "cer": 0.0048,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0007",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0015",
+        "wer": 0.0303,
+        "cer": 0.0054,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0027",
+        "wer": 0.25,
+        "cer": 0.0526,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0030",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0034",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0072",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0087",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch04-s0103",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0001",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0008",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0010",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0034",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0043",
+        "wer": 0.0444,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0046",
+        "wer": 0.0526,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0050",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch05-s0067",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch06-s0026",
+        "wer": 0.0345,
+        "cer": 0.006,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch06-s0045",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch06-s0079",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch07-s0019",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch07-s0031",
+        "wer": 0.0488,
+        "cer": 0.0093,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch07-s0053",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0016",
+        "wer": 0.0238,
+        "cer": 0.0049,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0018",
+        "wer": 0.025,
+        "cer": 0.005,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0021",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0026",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0033",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0035",
+        "wer": 0.0488,
+        "cer": 0.0093,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0042",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0051",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0055",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0057",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0062",
+        "wer": 0.3333,
+        "cer": 0.0968,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0064",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0070",
+        "wer": 0.0625,
+        "cer": 0.0137,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0077",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch08-s0079",
+        "wer": 0.0465,
+        "cer": 0.0089,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch09-s0003",
+        "wer": 0.25,
+        "cer": 0.1053,
+        "attempts": 2,
+        "flags": [
+          "wer"
+        ]
+      },
+      {
+        "segment": "ch10-s0004",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0009",
+        "wer": 0.0244,
+        "cer": 0.0043,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0020",
+        "wer": 0.0833,
+        "cer": 0.0154,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0025",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0033",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0036",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0039",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0055",
+        "wer": 0.0208,
+        "cer": 0.0044,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0058",
+        "wer": 0.0208,
+        "cer": 0.0045,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch10-s0069",
+        "wer": 0.0714,
+        "cer": 0.0161,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch11-s0004",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch11-s0047",
+        "wer": 0.02,
+        "cer": 0.0042,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch11-s0055",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch11-s0081",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch11-s0107",
+        "wer": 0.0455,
+        "cer": 0.0091,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch12-s0019",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch12-s0020",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch12-s0029",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch12-s0036",
+        "wer": 0.0408,
+        "cer": 0.0094,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch12-s0040",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0017",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0023",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0032",
+        "wer": 0.025,
+        "cer": 0.005,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0033",
+        "wer": 0.1087,
+        "cer": 0.0048,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0036",
+        "wer": 0.0233,
+        "cer": 0.0048,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch13-s0040",
+        "wer": 0.0312,
+        "cer": 0.0065,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0023",
+        "wer": 0.1481,
+        "cer": 0.0223,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0035",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0037",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0038",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0043",
+        "wer": 0.125,
+        "cer": 0.0208,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0053",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0096",
+        "wer": 0.1111,
+        "cer": 0.0071,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0102",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0104",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0117",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0121",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0123",
+        "wer": 0.087,
+        "cer": 0.0085,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch14-s0125",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch15-s0014",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch15-s0062",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      },
+      {
+        "segment": "ch15-s0075",
+        "wer": 0.0,
+        "cer": 0.0,
+        "attempts": 1,
+        "flags": []
+      }
+    ]
+  },
+  "wall_s": 1792.49,
+  "timings_s": {
+    "segment": 0.14,
+    "normalize": 1.83,
+    "stress": 114.46,
+    "synthesize": 1174.37,
+    "qa": 234.71,
+    "assemble": 264.16,
+    "total": 1792.49
+  }
+}

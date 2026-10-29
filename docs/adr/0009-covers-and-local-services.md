@@ -8,8 +8,8 @@
 
 MP3/M4B output embeds a cover (FR-09). FB2 and EPUB usually carry one; TXT, many
 PDFs and some FB2 files do not. The owner already runs AUTOMATIC1111's Stable
-Diffusion WebUI on this machine (`/path/to/stable-diffusion-webui`,
-conda env `sdui`, 63 local checkpoints, used by a local bot on port 8801). Its
+Diffusion WebUI on this machine (conda env `sdui`, 63 local checkpoints, used by
+another local service on port 8801). Its
 weights are local files from Civitai, not Hugging Face repositories, and it runs in
 its own environment with its own torch.
 
