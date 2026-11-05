@@ -97,6 +97,11 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   paragraph, Markdown structure kept; benchmark a stronger offline MT than Opus-MT for
   whole books, e.g. NLLB / MADLAD) and `text2audio cover <book> [--mode …]` to remake a
   cover without re-conversion.
+- [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
+  - English → Russian book translation as an option at the Markdown step, using the
+    strongest model that runs offline on this hardware, chosen by benchmark;
+  - English speech-to-text, so lectures and similar recordings can be re-voiced in
+    Russian with the female voice (speech → English text → Russian text → audio).
 - [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
 
 ## Housekeeping
