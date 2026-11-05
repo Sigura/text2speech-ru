@@ -50,7 +50,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 4f — benchmark ([findings](spikes/ru-bench/FINDINGS.md)): T0 Silero, T1 hybrid;
       Qwen3-TTS → M3 candidate for dialogue/expressive segments;
   - [x] step 5 — M4B of the whole book next to the MP3s, on by default (FR-09);
-- [ ] **M3 — Expression:** pauses, dialogue (narrator voice `xenia`, owner), author's
+- [x] **M3 — Expression:** pauses, dialogue (narrator voice `xenia`, owner), author's
   remarks, `<!-- t2a: … -->` directives; E2 deferred (owner, SPEC §13.1).
   - [x] step 0 — carry-overs: `envs sync` names, report route counts and `foreign`
     span label, «pour être»; dialogue voice samples (`spikes/dialogue-voice`);
@@ -74,6 +74,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 8b full gate with real models and espeak-ng: 399 passed;
     - [x] 8c stray `"` at paragraph ends in the novel fixture script;
     - [x] 8c local fixture rebuilt; the script follows the charset lib.ru sends.
+  - [ ] carried over: rerun the `slow` full-book renders (`pytest -m slow`) with the new
+    lexicon and tier default; listen to «Зурин», «небо», «уже»; `espeak-ng` in the devbox
+    image.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and
