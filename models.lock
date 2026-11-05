@@ -114,7 +114,7 @@ repo = "ResembleAI/chatterbox"
 revision = "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
 license = "MIT"
 backend = "chatterbox"
-langs = ["ru"]
+langs = ["ru", "en"]
 tiers = ["expressive"]
 files = [
     "ve.pt",
@@ -161,3 +161,121 @@ files = ["model.onnx", "selected_tags.csv"]
 [asset.sha256]
 "model.onnx" = "e6774bff34d43bd49f75a47db4ef217dce701c9847b546523eb85ff6dbba1db1"
 "selected_tags.csv" = "298633d94d0031d2081c0893f29c82eab7f0df00b08483ba8f29d1e979441217"
+
+# faster-whisper small (CTranslate2): English QA ASR on CPU (§9.6).
+[[asset]]
+repo = "Systran/faster-whisper-small"
+revision = "536b0662742c02347bc0e980a01041f333bce120"
+license = "MIT"
+component = "asr:whisper"
+langs = ["en"]
+files = ["config.json", "model.bin", "tokenizer.json", "vocabulary.txt"]
+[asset.sha256]
+"config.json" = "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828"
+"model.bin" = "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
+"tokenizer.json" = "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+"vocabulary.txt" = "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+
+# faster-whisper large-v3-turbo (CTranslate2): English QA ASR on a GPU (§9.6).
+[[asset]]
+repo = "deepdml/faster-whisper-large-v3-turbo-ct2"
+revision = "4df90f75321148c3a29a9e2351b7ddf8f5b115a8"
+license = "MIT"
+component = "asr:whisper"
+langs = ["en"]
+tiers = ["expressive"]
+files = ["config.json", "model.bin", "preprocessor_config.json", "tokenizer.json", "vocabulary.json"]
+[asset.sha256]
+"config.json" = "b0253ea6c0d3bea6b1e19e91a02acfd3b53f4467362efcb5a3e6b16c9b3a9b7e"
+"model.bin" = "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da"
+"preprocessor_config.json" = "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
+"tokenizer.json" = "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd"
+"vocabulary.json" = "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
+
+# Kokoro-82M v1.0: English fast tier (CPU). Voices: a = American, b = British; f/m.
+[[asset]]
+repo = "hexgrad/Kokoro-82M"
+revision = "f3ff3571791e39611d31c381e3a41a3af07b4987"
+license = "Apache-2.0"
+backend = "kokoro"
+langs = ["en"]
+files = [
+    "config.json",
+    "kokoro-v1_0.pth",
+    "voices/af_heart.pt",
+    "voices/af_bella.pt",
+    "voices/af_nicole.pt",
+    "voices/bf_emma.pt",
+    "voices/bf_isabella.pt",
+    "voices/am_michael.pt",
+    "voices/am_fenrir.pt",
+    "voices/bm_george.pt",
+]
+[asset.sha256]
+"config.json" = "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f"
+"kokoro-v1_0.pth" = "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
+"voices/af_heart.pt" = "0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff"
+"voices/af_bella.pt" = "8cb64e02fcc8de0327a8e13817e49c76c945ecf0052ceac97d3081480e8e48d6"
+"voices/af_nicole.pt" = "c5561808bcf5250fe8c5f5de32caf2d94f27e57e95befdb098c5c85991d4c5da"
+"voices/bf_emma.pt" = "d0a423deabf4a52b4f49318c51742c54e21bb89bbbe9a12141e7758ddb5da701"
+"voices/bf_isabella.pt" = "cdd4c37003805104d1d08fb1e05855c8fb2c68de24ca6e71f264a30aaa59eefd"
+"voices/am_michael.pt" = "9a443b79a4b22489a5b0ab7c651a0bcd1a30bef675c28333f06971abbd47bd37"
+"voices/am_fenrir.pt" = "98e507eca1db08230ae3b6232d59c10aec9630022d19accac4f5d12fcec3c37a"
+"voices/bm_george.pt" = "f1bc812213dc59774769e5c80004b13eeb79bd78130b11b2d7f934542dab811b"
+
+# spaCy en_core_web_sm 3.7.1: misaki tags parts of speech with it to read heteronyms
+# (*read*, *lead*). misaki would download it on first use; the Kokoro worker loads it
+# from this directory instead.
+[[asset]]
+repo = "spacy/en_core_web_sm"
+revision = "8fb6f8155286360bf5486fe399e2738d1df7ded2"
+license = "MIT"
+backend = "kokoro"
+langs = ["en"]
+files = [
+    "config.cfg",
+    "meta.json",
+    "tokenizer",
+    "attribute_ruler/patterns",
+    "lemmatizer/lookups/lookups.bin",
+    "ner/cfg",
+    "ner/model",
+    "ner/moves",
+    "parser/cfg",
+    "parser/model",
+    "parser/moves",
+    "senter/cfg",
+    "senter/model",
+    "tagger/cfg",
+    "tagger/model",
+    "tok2vec/cfg",
+    "tok2vec/model",
+    "vocab/key2row",
+    "vocab/lookups.bin",
+    "vocab/strings.json",
+    "vocab/vectors",
+    "vocab/vectors.cfg",
+]
+[asset.sha256]
+"config.cfg" = "65c545ca2da5bd4b87b22d4917318605360b37dee6ed6b18516a036f87319f79"
+"meta.json" = "5fc475fbe5bb0317249fd7e51c22d53052345bb23f13eaf149ff590223964d1c"
+"tokenizer" = "b014e8bba4958b120af2d0c1c63eabb7c00379f2bacaf10df7c5325efd2ea467"
+"attribute_ruler/patterns" = "f8b97f7ebef9b8536bba5f0fc1e73af6183563e96e2325bcbb021b8c6dbc6683"
+"lemmatizer/lookups/lookups.bin" = "eb64f40c0f8396d1762730c0ddf4dad2a52d138f5a389f71a1a1d088173b7737"
+"ner/cfg" = "a7172edadafba9f472e9ac0f2660eec04b6405e471be9e20267b79c67288d22d"
+"ner/model" = "6f47ca062eb419c8ffb7d3023e6fbc4b2eb21dab14c5d49aa5e5586228b87405"
+"ner/moves" = "d82b13473ebd33e0396004dd22f00c71fe3c1251742bf1f7c4554f23fd3b0af4"
+"parser/cfg" = "e2a240ef01f95e58f5dd4c9d6e90d61f597b8d998966570d3009dd81e8879780"
+"parser/model" = "a1836fbc02b3924b2fd5f65325c58ae852ff112db1090ca724e5a801e68b85fd"
+"parser/moves" = "ec41318c32eb7f9e4d8f050b2e8466ee67954d2d3455c1aec73abf46c82dd67f"
+"senter/cfg" = "2a4db4a729b6469da1f87d71cc7cd3ed2a73360cc85326821e850836c4671103"
+"senter/model" = "e62c2504dcdc66144b30c048100af05f12207f933f6d669982b947ae71ffdeef"
+"tagger/cfg" = "d484c3d9391f37bf9c727aa2eb4c477a24cb103020f95e52dc37842818b50118"
+"tagger/model" = "fb00ef592a2a464d95dd889ce424952ae7fd64e095153054c310345198cc0fc4"
+"tok2vec/cfg" = "f8a5a26e3056eb6fb06deeb3dbccfd88ae74900200c98c70b5966bbb7ec9d4de"
+"tok2vec/model" = "42d8414521eaf75f817bd1b351b26039a22a912bb2617f95ead305420f2ebffd"
+"vocab/key2row" = "76be8b528d0075f7aae98d6fa57a6d3c83ae480a8469e668d7b0af968995ac71"
+"vocab/lookups.bin" = "fce9c883c56165f29573cc938c2a1c9d417ac61bd8f56b671dd5f7996de70682"
+"vocab/strings.json" = "b1966d1f07a05b68576df07f43f40203b4e11124ad82cc839e8312ad8d7fdae7"
+"vocab/vectors" = "14772b683e726436d5948ad3fff2b43d036ef2ebbe3458aafed6004e05a40706"
+"vocab/vectors.cfg" = "ff4359091952c8cd16f1f0482f5770fb82d1707368d5cca3c46aa501f552e3c5"

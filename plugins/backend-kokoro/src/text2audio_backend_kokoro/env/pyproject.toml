@@ -1,0 +1,27 @@
+[project]
+name = "t2a-env-backend-kokoro"
+version = "0"
+description = "Worker environment of the Kokoro backend (not installed as a package)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "kokoro==0.9.4",
+    "misaki[en]==0.9.4",
+    # The pinned en_core_web_sm 3.7.1 in models.lock needs spaCy 3.7.
+    "spacy>=3.7.2,<3.8",
+    "torch==2.14.1",
+    "soundfile==0.14.0",
+    # thinc 8.2 (spaCy 3.7) is built against numpy 1.x.
+    "numpy>=1.26,<2",
+]
+
+[tool.uv]
+package = false
+
+# CPU wheels: Kokoro runs on CPU slots only, and they are a fraction of the CUDA size.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }

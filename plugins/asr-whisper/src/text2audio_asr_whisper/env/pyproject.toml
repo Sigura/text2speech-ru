@@ -1,0 +1,15 @@
+[project]
+name = "t2a-env-asr-whisper"
+version = "0"
+description = "Worker environment of the faster-whisper QA ASR component (not installed as a package)."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "faster-whisper==1.2.1",
+    # faster-whisper 1.2.1 passes `metadata_errors` to `av.open`, which newer PyAV removed.
+    "av==15.1.0",
+    "nvidia-cublas-cu12==12.9.1.4",
+    "nvidia-cudnn-cu12==9.14.0.64",
+]
+
+[tool.uv]
+package = false

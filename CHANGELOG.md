@@ -220,6 +220,9 @@ All notable changes to this project are documented here. The format follows
   fixtures with goldens (SPEC 3.2-M4).
 - M4 step 2 — `en` normalization by rules, 324-case test set (SPEC 3.3-M4).
 - M4 step 3 — quote dialogue for `en`, attribution read by the narrator (SPEC 3.4-M4).
+- M4 steps 4–6 — `asr-whisper` (faster-whisper QA), `backend-kokoro` (fast tier),
+  Chatterbox for `en` (expressive tier); an English book passes the QA gate on both
+  tiers (SPEC 3.5-M4).
 
 ### Changed
 

@@ -34,7 +34,9 @@ langs = [
     "text2audio-lang-en",
     "text2audio-g2p-ruaccent",
     "text2audio-backend-silero",
+    "text2audio-backend-kokoro",
     "text2audio-asr-gigaam",
+    "text2audio-asr-whisper",
     "text2audio-backend-chatterbox",
     "text2audio-mt-opus",
 ]
@@ -64,7 +66,9 @@ text2audio-lang-ru = { workspace = true }
 text2audio-lang-en = { workspace = true }
 text2audio-g2p-ruaccent = { workspace = true }
 text2audio-backend-silero = { workspace = true }
+text2audio-backend-kokoro = { workspace = true }
 text2audio-asr-gigaam = { workspace = true }
+text2audio-asr-whisper = { workspace = true }
 text2audio-backend-chatterbox = { workspace = true }
 text2audio-mt-opus = { workspace = true }
 text2audio-cover-sd-webui = { workspace = true }

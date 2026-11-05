@@ -20,6 +20,7 @@ _NUMBER = (
     rf"(?:the\s+)?(?:{_ORDINALS}))"
 )
 _TITLE_TAIL = r"(?:\s*[.:—–-]?\s+\S.*)?"  # "Chapter 1. A title", "Chapter 1 — A title"
+_VOICES = Path(__file__).parent / "voices"
 
 PROFILE = LanguageProfile(
     code="en",
@@ -63,11 +64,17 @@ PROFILE = LanguageProfile(
     ),
     normalizer="en",
     g2p=None,  # misaki runs inside the Kokoro worker; Chatterbox reads plain text (§13.1)
-    tiers={},
-    voices={},
+    tiers={"fast": TierRoute(backend="kokoro"), "expressive": TierRoute(backend="chatterbox")},
+    # Provisional until the owner's listening test (M4 step 8): a female narrator and a
+    # contrasting dialogue voice. Chatterbox clones the Kokoro voice from a clip it read
+    # (`spikes/en-voices/make_refs.py`), so both tiers keep the same narrator.
+    voices={
+        "narrator": {"kokoro": "af_heart", "chatterbox": str(_VOICES / "ref-af_heart.wav")},
+        "dialogue": {"kokoro": "am_michael", "chatterbox": str(_VOICES / "ref-am_michael.wav")},
+    },
     pauses_ms={},
     dialogue="quote",
-    qa=QaProfile(asr=None, wer_threshold=0.12, chars_per_sec=(10.0, 22.0)),
+    qa=QaProfile(asr="whisper", wer_threshold=0.12, chars_per_sec=(10.0, 22.0)),
     translator=None,  # English needs no translation for cover prompts
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",

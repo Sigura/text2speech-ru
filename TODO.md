@@ -86,9 +86,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     Carroll», `en/alice.txt` golden); the TXT reader treats the opening lines as title;
   - [x] normalization: years and ordinals, Roman numerals (324 cases, 99.7 %);
   - [x] quote dialogue;
-  - [ ] components: misaki + espeak-ng G2P in the Kokoro worker, faster-whisper QA;
-  - [ ] backends: Kokoro (fast), Chatterbox (expressive), IndexTTS-2 benchmarked;
-  - [ ] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
+  - [x] components: misaki + espeak-ng G2P in the Kokoro worker, faster-whisper QA;
+  - [x] backends: Kokoro (fast), Chatterbox (expressive);
+  - [ ] benchmark incl. IndexTTS-2 (M4 step 7);
+  - [x] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [ ] female narrator + contrasting dialogue voice; listening test; record in
     SPEC §13.1.
 - [ ] **After M4 (owner, 2026-10-26):** review the components built so far and expose
