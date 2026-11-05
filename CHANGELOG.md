@@ -216,6 +216,8 @@ All notable changes to this project are documented here. The format follows
 - M3 closed against every SPEC §11 exit criterion; end-to-end test that dialogue
   renders at its own pitch; TODO carry-overs for M4 (SPEC 3.0-M4).
 - M4 step 0 — `plugins/lang-en` generated from the template and registered (SPEC 3.1-M4).
+- M4 step 1 — `en` headings, front matter and abbreviations; FB2, TXT and Markdown
+  fixtures with goldens (SPEC 3.2-M4).
 
 ### Changed
 

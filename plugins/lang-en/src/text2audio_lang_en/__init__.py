@@ -1,8 +1,6 @@
 """English language pack (SPEC §6.6.5), generated from templates/lang.
 
-Fill in the profile from your research (docs/adding-a-language.md): text structure for
-TXT/PDF headings, the normalizer, the stress/G2P component, tier routes, voices and QA
-bounds. Components are named by entry point; keep this package free of heavy deps.
+Components are named by entry point; the pack itself stays free of heavy dependencies.
 """
 
 from __future__ import annotations
@@ -11,27 +9,65 @@ from pathlib import Path
 
 from text2audio.core.contracts import LanguageProfile, QaProfile, TierRoute
 
+_UNITS = (
+    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+    "fifteen|sixteen|seventeen|eighteen|nineteen"
+)
+_TENS = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety"
+_ORDINALS = "first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last"
+_NUMBER = (
+    rf"(?:[ivxlcdm]+|\d+|(?:{_TENS})(?:-(?:{_UNITS}))?|{_UNITS}|hundred|"
+    rf"(?:the\s+)?(?:{_ORDINALS}))"
+)
+_TITLE_TAIL = r"(?:\s*[.:—–-]?\s+\S.*)?"  # "Chapter 1. A title", "Chapter 1 — A title"
+
 PROFILE = LanguageProfile(
     code="en",
     name="English",
-    script="Latn",  # ISO 15924; text in other scripts goes through FR-24
-    # Regexes matched (case-insensitive) against a whole stripped line of plain text.
-    part_headings=(),  # e.g. r"part\s+\d+"
-    chapter_headings=(),  # e.g. r"chapter\s+\d+"
-    front_matter=(),  # e.g. r"contents"
-    # Lowercase abbreviations ending with a full stop that do not end a sentence.
-    abbreviations=(),
+    script="Latn",
+    part_headings=(rf"(?:part|book|volume)\s+{_NUMBER}\.?{_TITLE_TAIL}",),
+    chapter_headings=(
+        rf"(?:chapter|ch\.)\s*{_NUMBER}\.?{_TITLE_TAIL}",
+        rf"(?:prologue|epilogue|preface|foreword|introduction|afterword){_TITLE_TAIL}",
+    ),
+    front_matter=(r"(?:table\s+of\s+)?contents\.?",),
+    abbreviations=(
+        "mr.",
+        "mrs.",
+        "ms.",
+        "dr.",
+        "prof.",
+        "rev.",
+        "hon.",
+        "sr.",
+        "jr.",
+        "st.",
+        "mt.",
+        "gen.",
+        "col.",
+        "capt.",
+        "lt.",
+        "sgt.",
+        "gov.",
+        "sen.",
+        "etc.",
+        "e.g.",
+        "i.e.",
+        "vs.",
+        "no.",
+        "p.",
+        "pp.",
+        "vol.",
+        "fig.",
+        "ed.",
+    ),
     normalizer="en",
-    g2p=None,  # a `text2audio.g2p` component (worker) that adds stress or phonemes
-    tiers={
-        # One backend per tier, chosen by the benchmark (§6.6.5), e.g.
-        # "fast": TierRoute(backend="piper"),
-        # "expressive": TierRoute(backend="chatterbox"),
-    },
-    voices={},  # role → backend → voice, e.g. {"narrator": {"piper": "…"}}
-    pauses_ms={},  # overrides of the core's structural pauses
-    qa=QaProfile(asr=None, wer_threshold=0.15, chars_per_sec=(8.0, 25.0)),
-    translator=None,  # a `text2audio.translators` component into English (cover prompts)
+    g2p=None,  # misaki runs inside the Kokoro worker; Chatterbox reads plain text (§13.1)
+    tiers={},
+    voices={},
+    pauses_ms={},
+    qa=QaProfile(asr=None, wer_threshold=0.12, chars_per_sec=(10.0, 22.0)),
+    translator=None,  # English needs no translation for cover prompts
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",
 )

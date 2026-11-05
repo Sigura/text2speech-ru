@@ -1,0 +1,26 @@
+{
+  "title": "Alice’s Adventures in Wonderland. by Lewis Carroll",
+  "authors": [],
+  "language": "en",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": 0.9,
+  "source": {
+    "name": "alice.txt",
+    "format": "txt",
+    "sha256": "fef6279bf8d6d06d9fff70055f24d26118c5fc104a6d21ebdb36522e88bd8fd7",
+    "bytes": 1328
+  },
+  "reader": {
+    "name": "txt"
+  },
+  "cover": null,
+  "warnings": []
+}

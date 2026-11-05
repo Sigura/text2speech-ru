@@ -1,0 +1,26 @@
+{
+  "title": "Alice’s Adventures in Wonderland",
+  "authors": [],
+  "language": "en",
+  "series": null,
+  "series_index": null,
+  "genres": [],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": null,
+  "source": {
+    "name": "alice.md",
+    "format": "md",
+    "sha256": "635e080f13f3d11e1221bcbacf3ea1686d4ade1c94adefbed93580ccb3f4e88c",
+    "bytes": 1313
+  },
+  "reader": {
+    "name": "md"
+  },
+  "cover": null,
+  "warnings": []
+}

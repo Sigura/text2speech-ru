@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 3.1-M4 |
+| Document version | 3.2-M4 |
 | Status | **M4 in progress** (open decisions in §13.1) |
 | Last updated | 2026-11-05 |
 | Primary language | Python 3.11+ |
@@ -62,6 +62,7 @@
 | 2.14-M3 | 2026-11-05 | M3 step 5 result — **Decision (owner):** `ru` defaults to the fast tier on every machine (T1 won 4 of 15 decided pairs, 27 %); `LanguageProfile.default_tier` (§6.6.5, §6.7, §9, §13.1). |
 | 3.0-M4 | 2026-11-05 | **M3 closed**: every §11 exit criterion met (§13.1); open items carried to M4 in `TODO.md`. |
 | 3.1-M4 | 2026-11-05 | M4 step 0 — `plugins/lang-en` generated from the template and registered; plan decisions: rule-based normalizer, G2P inside the Kokoro worker, QA model by device, one-word `dialogue` contract change (§11, §13.1). |
+| 3.2-M4 | 2026-11-05 | M4 step 1 — `en` text structure: headings, front matter, abbreviations; FB2, TXT and Markdown fixtures with goldens (§6.5, §6.6.5). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).

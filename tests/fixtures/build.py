@@ -636,6 +636,48 @@ def md_book() -> str:
     return "\n".join(out) + "\n"
 
 
+ALICE_TITLE = "Alice’s Adventures in Wonderland"
+ALICE_CHAPTERS = ("Chapter I. Down the Rabbit-Hole", "Chapter II. The Pool of Tears")
+
+
+def fb2_english() -> str:
+    sections = "".join(
+        f"<section><title><p>{escape(title)}</p></title>"
+        + "".join(f"<p>{escape(p)}</p>" for p in ALICE)
+        + "</section>"
+        for title in ALICE_CHAPTERS
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">'
+        "<description><title-info><genre>child_prose</genre>"
+        "<author><first-name>Lewis</first-name><last-name>Carroll</last-name></author>"
+        f"<book-title>{ALICE_TITLE}</book-title><lang>en</lang></title-info></description>"
+        f"<body>{sections}</body></FictionBook>\n"
+    )
+
+
+def txt_english() -> str:
+    """Project Gutenberg layout: hard-wrapped paragraphs, blank lines between them."""
+    import textwrap
+
+    out = [ALICE_TITLE, "", "by Lewis Carroll", ""]
+    for title in ALICE_CHAPTERS:
+        out += ["", "", title.upper(), ""]
+        for p in ALICE:
+            out += [*textwrap.wrap(p, width=70), ""]
+    return "\n".join(out) + "\n"
+
+
+def md_english() -> str:
+    out = [f"# {ALICE_TITLE}", ""]
+    for title in ALICE_CHAPTERS:
+        out += [f"## {title}", ""]
+        for p in ALICE:
+            out += [p, ""]
+    return "\n".join(out)
+
+
 def write(path: Path, data: bytes | str, encoding: str = "utf-8") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data if isinstance(data, bytes) else data.encode(encoding))
@@ -651,6 +693,9 @@ def main() -> None:
     write(HERE / "quirks/wrapped-parts.fb2", WRAPPED_FB2)
     write(HERE / "ru/kapitanskaya-dochka.txt", txt_librus(), "cp1251")
     write(HERE / "ru/blank-lines-parts.txt", BLANK_LINES_TXT)
+    write(HERE / "en/alice.fb2", fb2_english())
+    write(HERE / "en/alice.txt", txt_english())
+    write(HERE / "en/alice.md", md_english())
     write(HERE / "ru/kapitanskaya-dochka.md", md_book())
     write(HERE / "ru/kapitanskaya-dochka.epub", epub3_book())
     write(HERE / "ru/kapitanskaya-dochka-epub2.epub", epub2_book())

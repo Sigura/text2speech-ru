@@ -1,0 +1,30 @@
+{
+  "title": "Alice’s Adventures in Wonderland",
+  "authors": [
+    "Lewis Carroll"
+  ],
+  "language": "en",
+  "series": null,
+  "series_index": null,
+  "genres": [
+    "child_prose"
+  ],
+  "translators": [],
+  "annotation": null,
+  "date": null,
+  "publisher": null,
+  "isbn": null,
+  "chapters": 2,
+  "heading_confidence": null,
+  "source": {
+    "name": "alice.fb2",
+    "format": "fb2",
+    "sha256": "5f245d5beba0f54a32c2fd802f4d668b976fc128503da8ce825d0fd2e4ae9260",
+    "bytes": 1728
+  },
+  "reader": {
+    "name": "fb2"
+  },
+  "cover": null,
+  "warnings": []
+}
