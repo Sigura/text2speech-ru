@@ -70,8 +70,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] step 8 — `ru` text gaps from the benchmark and the listening test:
     - [x] 8a number case and abbreviation dots;
     - [x] 8b pack lexicon (ё in names, «небо», «Зурин»; other homographs are known limits);
-    - [ ] 8b check on the host: `test_pack_lexicon_wins_over_ruaccent` and the espeak-ng
-      tests have not run yet (no model store or espeak-ng in the container);
+    - [x] 8b `test_pack_lexicon_wins_over_ruaccent` passes on real RUAccent;
+    - [ ] 8b the tests that need espeak-ng have not run since (not in the container);
     - [x] 8c stray `"` at paragraph ends in the novel fixture script;
     - [x] 8c local fixture rebuilt; the script follows the charset lib.ru sends.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
