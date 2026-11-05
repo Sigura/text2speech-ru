@@ -10,10 +10,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 from text2audio import api
-from text2audio.audio.wav import LEAD_IN_MS
+from text2audio.audio.wav import LEAD_IN_MS, read_mono
 from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment
 from text2audio.core.journal import Journal
@@ -24,6 +25,7 @@ from text2audio.core.synthesize import (
     preview_segments,
     segment_hash,
 )
+from text2audio.qa.gate import wav_path
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
@@ -251,6 +253,24 @@ def test_resume_after_interruption(book: Path, tmp_path: Path) -> None:
     result = run(book, tmp_path / "store")
     total = result.report["segments"]["total"]
     assert result.report["segments"]["rendered_now"] == total - 3
+
+
+def dominant_hz(path: Path) -> float:
+    samples, rate = read_mono(path)
+    return float(np.argmax(np.abs(np.fft.rfft(samples)))) * rate / len(samples)
+
+
+def test_dialogue_is_rendered_in_its_own_voice(book: Path, tmp_path: Path) -> None:
+    # §6.7 E1: the sine backend gives each voice role a pitch, plus up to 10 Hz per text.
+    run(book, tmp_path / "store")
+    lines = (book / "_work" / "segments.jsonl").read_text("utf-8").splitlines()
+    audio = book / "_work" / "audio" / "segments"
+    heard: dict[str, list[float]] = {"narrator": [], "dialogue": []}
+    for seg in map(json.loads, lines):
+        heard[seg["voice"]].append(dominant_hz(wav_path(audio, seg["hash"])))
+    assert heard["dialogue"] and heard["narrator"]
+    assert all(219 <= hz <= 231 for hz in heard["narrator"])
+    assert all(329 <= hz <= 341 for hz in heard["dialogue"])
 
 
 def test_journal_ignores_torn_last_line(tmp_path: Path) -> None:
