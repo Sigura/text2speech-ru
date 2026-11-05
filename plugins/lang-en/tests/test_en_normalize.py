@@ -28,8 +28,16 @@ def test_profile_and_hooks() -> None:
     assert Path(PROFILE.lexicon or "").is_file()
 
 
+def test_set_is_large_enough() -> None:
+    assert len(CASES) >= 300
+
+
+def test_flags_what_it_cannot_read() -> None:
+    assert PackNormalizer().normalize("He has an MP3.").uncertain == ["MP3"]
+    assert PackNormalizer().normalize("I have 5 cats.").uncertain == []
+
+
 def test_exact_match_rate() -> None:
-    assert CASES
     misses = [(c[0], c[1], got) for c in CASES if (got := _run(c)) != c[1]]
     rate = 1 - len(misses) / len(CASES)
     report = "\n".join(f"{src!r}: expected {exp!r}, got {got!r}" for src, exp, got in misses)

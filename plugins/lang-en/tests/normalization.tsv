@@ -1,4 +1,346 @@
-# input	expected	[role]  — English normalization test set (FR-11, ≥ 95 % exact match)
-# Grow it to ≥ 300 cases: numbers with agreement, dates, times, units, abbreviations,
-# Roman numerals, initials, acronyms, foreign words (see plugins/lang-ru/tests).
-Hello there.	Hello there.
+# input	expected	[role]  — English normalization test set (FR-11, ≥ 95 % exact match).
+# Cardinals
+I have 5 cats.	I have five cats.
+There were 12 men.	There were twelve men.
+She owned 13 hats.	She owned thirteen hats.
+He ate 19 plums.	He ate nineteen plums.
+They sold 20 books.	They sold twenty books.
+We saw 21 ships.	We saw twenty-one ships.
+It cost 40 marks.	It cost forty marks.
+He walked 99 miles.	He walked ninety-nine miles.
+They paid 100 crowns.	They paid one hundred crowns.
+There were 101 steps.	There were one hundred one steps.
+He counted 110 sheep.	He counted one hundred ten sheep.
+She had 342 letters.	She had three hundred forty-two letters.
+About 999 people came.	About nine hundred ninety-nine people came.
+A crowd of 1,000 gathered.	A crowd of one thousand gathered.
+They lost 1,250 men.	They lost one thousand two hundred fifty men.
+It held 12,500 volumes.	It held twelve thousand five hundred volumes.
+The town had 100,000 souls.	The town had one hundred thousand souls.
+The city had 1,000,000 people.	The city had one million people.
+It was 2,500,000 miles away.	It was two million five hundred thousand miles away.
+They spent 3,000,000,000 dollars.	They spent three billion dollars.
+Only 0 remained.	Only zero remained.
+7	seven
+At 5 we left.	At five we left.
+5 men came in.	five men came in.
+2000 people came.	two thousand people came.
+1500 men marched.	one thousand five hundred men marched.
+He has 3 sons and 2 daughters.	He has three sons and two daughters.
+Room 7 was empty.	Room seven was empty.
+Agent 007 left.	Agent zero zero seven left.
+Page 15 is torn.	Page fifteen is torn.
+Take 2 or 3.	Take two or three.
+# Ordinals
+He came 1st.	He came first.
+She was 2nd.	She was second.
+It was the 3rd day.	It was the third day.
+The 4th man fell.	The fourth man fell.
+On the 5th floor.	On the fifth floor.
+The 8th wonder.	The eighth wonder.
+The 9th hour.	The ninth hour.
+The 11th hour.	The eleventh hour.
+The 12th night.	The twelfth night.
+The 13th guest.	The thirteenth guest.
+The 20th century.	The twentieth century.
+The 21st century.	The twenty-first century.
+The 22nd day.	The twenty-second day.
+The 23rd psalm.	The twenty-third psalm.
+The 30th year.	The thirtieth year.
+The 40th day.	The fortieth day.
+The 99th time.	The ninety-ninth time.
+The 100th time.	The one hundredth time.
+The 101st regiment.	The one hundred first regiment.
+The 1,000th visitor.	The one thousandth visitor.
+# Years
+It happened in 1984.	It happened in nineteen eighty-four.
+Born in 1812, he died young.	Born in eighteen twelve, he died young.
+By 1900 it was gone.	By nineteen hundred it was gone.
+Since 1905 we lived there.	Since nineteen oh five we lived there.
+In 2000 we moved.	In two thousand we moved.
+In 2005 we moved.	In two thousand five we moved.
+In 2010 we moved.	In twenty ten we moved.
+In 2021 we moved.	In twenty twenty-one we moved.
+The battle of 1066 changed all.	The battle of ten sixty-six changed all.
+From 1914 to 1918.	From nineteen fourteen to nineteen eighteen.
+During 1776 they rebelled.	During seventeen seventy-six they rebelled.
+Until 1865 it stood.	Until eighteen sixty-five it stood.
+After 1945 peace came.	After nineteen forty-five peace came.
+Before 1600 nobody knew.	Before sixteen hundred nobody knew.
+Around 1850 it grew.	Around eighteen fifty it grew.
+The year 1492 was famous.	The year fourteen ninety-two was famous.
+1984 was a bad year.	nineteen eighty-four was a bad year.
+1776 saw a revolution.	seventeen seventy-six saw a revolution.
+He wrote it (1851).	He wrote it (eighteen fifty-one).
+The summer of 1969.	The summer of nineteen sixty-nine.
+1914-1918	nineteen fourteen to nineteen eighteen
+The war of 1914–1918 ended.	The war of nineteen fourteen to nineteen eighteen ended.
+The years 1939—1945 were hard.	The years nineteen thirty-nine to nineteen forty-five were hard.
+In 1914–18 he fought.	In nineteen fourteen to eighteen he fought.
+In 44 BC Caesar fell.	In forty-four B C Caesar fell.
+In 44 B.C. Caesar fell.	In forty-four B C Caesar fell.
+It was 300 BCE then.	It was three hundred B C E then.
+In AD 79 it erupted.	In A D seventy-nine it erupted.
+In A.D. 79 it erupted.	In A D seventy-nine it erupted.
+It was 476 AD then.	It was four hundred seventy-six A D then.
+It fell in 1453 CE.	It fell in fourteen fifty-three C E.
+He died in 44 B.C.	He died in forty-four B C.
+# Decades
+The 1980s were loud.	The nineteen eighties were loud.
+In the 1800s it grew.	In the eighteen hundreds it grew.
+The 1900s passed.	The nineteen hundreds passed.
+The 2000s began.	The two thousands began.
+The 2010s ended.	The twenty tens ended.
+In the 1920's they danced.	In the nineteen twenties they danced.
+The '60s were wild.	The sixties were wild.
+The 70s were dull.	The seventies were dull.
+In his 50s he wrote.	In his fifties he wrote.
+The ’90s ended.	The nineties ended.
+# Dates
+March 5, 1984 was cold.	March fifth, nineteen eighty-four was cold.
+On March 5 we left.	On March fifth we left.
+On January 1st we rest.	On January first we rest.
+On 5 March 1984 we left.	On the fifth of March, nineteen eighty-four we left.
+On 12 June he left.	On the twelfth of June he left.
+On the 5th of March we left.	On the fifth of March we left.
+In March 1984 we left.	In March nineteen eighty-four we left.
+On Dec. 25, 1999 it snowed.	On December twenty-fifth, nineteen ninety-nine it snowed.
+On Jan. 3 he came.	On January third he came.
+On Sept. 11 it rained.	On September eleventh it rained.
+On Feb. 28 it ended.	On February twenty-eighth it ended.
+It was 1999-12-25.	It was December twenty-fifth, nineteen ninety-nine.
+October 21st, 1805 was the day.	October twenty-first, eighteen oh five was the day.
+July 4, 1776	July fourth, seventeen seventy-six
+You may 5 times try.	You may five times try.
+On August 2 and 3 we met.	On August second and three we met.
+# Times
+At 3:45 we left.	At three forty-five we left.
+At 3:05 we left.	At three oh five we left.
+At 3:00 we left.	At three o'clock we left.
+At 12:00 it rang.	At twelve o'clock it rang.
+At 10:30 a.m. we left.	At ten thirty A M we left.
+At 10:30 AM we left.	At ten thirty A M we left.
+At 9:15 pm we ate.	At nine fifteen P M we ate.
+At 3 p.m. we ate.	At three P M we ate.
+At 7am we rose.	At seven A M we rose.
+At 7 AM we rose.	At seven A M we rose.
+At 3:00 PM we ate.	At three P M we ate.
+We ate at 3 p.m.	We ate at three P M.
+We ate at 3 p.m. Then we left.	We ate at three P M. Then we left.
+We ate at 3 p.m. and left.	We ate at three P M and left.
+At 15:30 it ended.	At fifteen thirty it ended.
+At 15:00 it ended.	At fifteen hundred it ended.
+At 0:30 it ended.	At zero thirty it ended.
+John 3:16 is known.	John three sixteen is known.
+# Currency
+It cost $5.	It cost five dollars.
+It cost $1.	It cost one dollar.
+It cost $5.20.	It cost five dollars and twenty cents.
+It cost $1.01.	It cost one dollar and one cent.
+It cost $0.50.	It cost fifty cents.
+It cost $0.01.	It cost one cent.
+It cost $1,000.	It cost one thousand dollars.
+It cost $1,250.75.	It cost one thousand two hundred fifty dollars and seventy-five cents.
+It cost $3 million.	It cost three million dollars.
+It cost $1.5 million.	It cost one point five million dollars.
+It cost $2 billion.	It cost two billion dollars.
+It cost £5.	It cost five pounds.
+It cost £1.	It cost one pound.
+It cost £3.50.	It cost three pounds and fifty pence.
+It cost £1.01.	It cost one pound and one penny.
+It cost €10.	It cost ten euros.
+It cost €1.	It cost one euro.
+It cost €2.50.	It cost two euros and fifty cents.
+It cost 50¢.	It cost fifty cents.
+It cost 1¢.	It cost one cent.
+It cost $5.00.	It cost five dollars.
+For $20 he sold it.	For twenty dollars he sold it.
+# Roman numerals
+Henry VIII had six wives.	Henry the Eighth had six wives.
+Elizabeth II reigned long.	Elizabeth the Second reigned long.
+Louis XIV built it.	Louis the Fourteenth built it.
+Pope John Paul II spoke.	Pope John Paul the Second spoke.
+George III went mad.	George the Third went mad.
+Richard III lost.	Richard the Third lost.
+Henry V won.	Henry the Fifth won.
+Charles I was beheaded.	Charles the First was beheaded.
+Elizabeth I ruled.	Elizabeth the First ruled.
+Peter I built ships.	Peter the First built ships.
+Pius X prayed.	Pius the Tenth prayed.
+Chapter IV	Chapter Four	heading
+CHAPTER IV	Chapter Four	heading
+Chapter I. Down the Rabbit-Hole	Chapter One. Down the Rabbit-Hole	heading
+CHAPTER I. DOWN THE RABBIT-HOLE	Chapter One. Down The Rabbit-Hole	heading
+Part II	Part Two	heading
+PART III. THE END	Part Three. The End	heading
+Book IX	Book Nine	heading
+Volume XII	Volume Twelve	heading
+Act V	Act Five	heading
+Scene II	Scene Two	heading
+Stave I	Stave One	heading
+Chapter XL	Chapter Forty	heading
+Chapter 12	Chapter twelve	heading
+See Chapter IV for that.	See Chapter Four for that.
+In Part II he dies.	In Part Two he dies.
+World War II ended.	World War Two ended.
+World War I began.	World War One began.
+# The pronoun I stays
+I went home.	I went home.
+Then I left.	Then I left.
+So did I.	So did I.
+To John I said nothing.	To John I said nothing.
+When Henry I know is here.	When Henry I know is here.
+Malcolm X spoke.	Malcolm X spoke.
+Is it I?	Is it I?
+Charles and I left.	Charles and I left.
+Yes, I am.	Yes, I am.
+Mary I think is right.	Mary I think is right.
+MIX it well.	MIX it well.
+He has a CD.	He has a CD.
+The word mix is short.	The word mix is short.
+# Titles
+Mr. Darcy bowed.	Mister Darcy bowed.
+Mrs. Bennet sighed.	Missus Bennet sighed.
+Ms. Lee smiled.	Miz Lee smiled.
+Dr. Watson ran.	Doctor Watson ran.
+Prof. Moriarty fled.	Professor Moriarty fled.
+Rev. Collins spoke.	Reverend Collins spoke.
+Hon. Lady Grey came.	Honorable Lady Grey came.
+Gen. Grant won.	General Grant won.
+Col. Brandon waited.	Colonel Brandon waited.
+Capt. Wentworth wrote.	Captain Wentworth wrote.
+Lt. Dan fell.	Lieutenant Dan fell.
+Sgt. Cuff looked.	Sergeant Cuff looked.
+Gov. Bradford wrote.	Governor Bradford wrote.
+Sen. Clay spoke.	Senator Clay spoke.
+John Smith Jr. came.	John Smith Junior came.
+John Smith Sr. stayed.	John Smith Senior stayed.
+It was John Smith Jr.	It was John Smith Junior.
+Mt. Everest stood.	Mount Everest stood.
+MR. DARCY BOWED	Mister Darcy Bowed	heading
+Mr Darcy bowed.	Mister Darcy bowed.
+Mrs Bennet sighed.	Missus Bennet sighed.
+Dr Watson ran.	Doctor Watson ran.
+# Saint or Street
+St. Paul preached.	Saint Paul preached.
+He visited St. Paul's.	He visited Saint Paul's.
+In St. James there is a park.	In Saint James there is a park.
+She lives on St. James Street.	She lives on Saint James Street.
+The feast of St. John came.	The feast of Saint John came.
+He lives on Baker St.	He lives on Baker Street.
+He lives at 221 Baker St. in London.	He lives at two hundred twenty-one Baker Street in London.
+He lives on Baker St. Then he moved.	He lives on Baker Street. Then he moved.
+Main St. was empty.	Main Street was empty.
+Wall St. fell.	Wall Street fell.
+# Street types
+He lives on Fifth Ave.	He lives on Fifth Avenue.
+He lives on Abbey Rd. in London.	He lives on Abbey Road in London.
+He lives on Sunset Blvd.	He lives on Sunset Boulevard.
+# Common abbreviations
+Bring fruit, etc.	Bring fruit, et cetera.
+Bring fruit, etc., and wine.	Bring fruit, et cetera, and wine.
+Bring fruit, etc. Then leave.	Bring fruit, et cetera. Then leave.
+Bring fruit etc. and wine.	Bring fruit et cetera and wine.
+Fruit, e.g. apples.	Fruit, for example apples.
+Fruit, e.g., apples.	Fruit, for example, apples.
+Fruit (e.g. apples).	Fruit (for example apples).
+E.g. apples.	For example apples.
+The red one, i.e. mine.	The red one, that is mine.
+The red one, i.e., mine.	The red one, that is, mine.
+I.e. mine.	That is mine.
+Town vs. country.	Town versus country.
+Town vs country.	Town versus country.
+See No. 5.	See number five.
+See no. 5.	See number five.
+I said no. He left.	I said no. He left.
+See p. 12.	See page twelve.
+See pp. 12-15.	See pages twelve to fifteen.
+See Vol. 2.	See volume two.
+See vol. 2.	See volume two.
+See Fig. 3.	See figure three.
+See fig. 3.	See figure three.
+It took approx. 5 days.	It took approximately five days.
+Smith & Sons Ltd. closed.	Smith and Sons Limited closed.
+Acme Inc. closed.	Acme Incorporated closed.
+Acme Co. closed.	Acme Company closed.
+Tom & Jerry ran.	Tom and Jerry ran.
+# Numbers with units
+It was 5 km away.	It was five kilometers away.
+It was 1 km away.	It was one kilometer away.
+It was 5km away.	It was five kilometers away.
+It weighed 10 kg.	It weighed ten kilograms.
+It weighed 1 kg.	It weighed one kilogram.
+It was 30 cm long.	It was thirty centimeters long.
+It was 2 mm thick.	It was two millimeters thick.
+Take 50 mg daily.	Take fifty milligrams daily.
+Add 100 ml of milk.	Add one hundred milliliters of milk.
+He drove 60 mph.	He drove sixty miles per hour.
+It was 6 ft tall.	It was six feet tall.
+It was 1 ft tall.	It was one foot tall.
+It weighed 5 lbs.	It weighed five pounds.
+It weighed 1 lb.	It weighed one pound.
+It weighed 8 oz.	It weighed eight ounces.
+It rose by 50%.	It rose by fifty percent.
+It rose by 1.5%.	It rose by one point five percent.
+It was 20°C.	It was twenty degrees Celsius.
+It was 98.6°F.	It was ninety-eight point six degrees Fahrenheit.
+It was 1°C.	It was one degree Celsius.
+It was 45° north.	It was forty-five degrees north.
+# Decimals and signs
+Pi is 3.14.	Pi is three point one four.
+It was 0.5 inches.	It was zero point five inches.
+It was .5 inches.	It was point five inches.
+It fell to -5.	It fell to minus five.
+It fell to −5.	It fell to minus five.
+It was 10.05 exactly.	It was ten point zero five exactly.
+Version 1.2.3 shipped.	Version 1.2.3 shipped.
+# Fractions
+Add 1/2 a cup.	Add one half a cup.
+Add 1/4 of it.	Add one quarter of it.
+Add 3/4 of it.	Add three quarters of it.
+Add 2/3 of it.	Add two thirds of it.
+Add 1/3 of it.	Add one third of it.
+Add 5/8 of it.	Add five eighths of it.
+Add 1/10 of it.	Add one tenth of it.
+Add 3/2 of it.	Add three halves of it.
+It took 2 1/2 hours.	It took two and one half hours.
+# Ranges
+Read pages 5-10.	Read pages five to ten.
+It took 3–5 days.	It took three to five days.
+Ages 18-25 came.	Ages eighteen to twenty-five came.
+# Hyphenated
+A 3-year-old boy.	A three-year-old boy.
+A 24-hour day.	A twenty-four-hour day.
+A 19th-century house.	A nineteenth-century house.
+A 100-page book.	A one hundred-page book.
+# Symbols
+Call me @ home.	Call me at home.
+2 + 2 = 4.	two plus two equals four.
+Ticket #5 won.	Ticket number five won.
+Read § 5.	Read section five.
+# Left alone
+He has an MP3.	He has an MP3.
+It was NASA.	It was NASA.
+The FBI came.	The FBI came.
+J. R. R. Tolkien wrote it.	J. R. R. Tolkien wrote it.
+“Who is there?” she asked.	“Who is there?” she asked.
+Don't do that.	Don't do that.
+Alice’s cat sat.	Alice’s cat sat.
+He said привет to her.	He said привет to her.
+Wait... what?	Wait... what?
+No numbers here at all.	No numbers here at all.
+A well-known rabbit-hole.	A well-known rabbit-hole.
+Oh—no!	Oh—no!
+The Mount Everest climb.	The Mount Everest climb.
+He went to the store.	He went to the store.
+# Mixed sentences
+On March 5, 1984, Mr. Smith paid $5.20.	On March fifth, nineteen eighty-four, Mister Smith paid five dollars and twenty cents.
+Dr. Lee saw 12 patients at 3:45 p.m.	Doctor Lee saw twelve patients at three forty-five P M.
+In 1812 Louis XIV was long dead.	In eighteen twelve Louis the Fourteenth was long dead.
+St. Paul's held 1,000 people in 1700.	Saint Paul's held one thousand people in seventeen hundred.
+Mrs. Lee, e.g., paid £3.50 on Jan. 3.	Missus Lee, for example, paid three pounds and fifty pence on January third.
+The 21st century began in 2001.	The twenty-first century began in two thousand one.
+Henry VIII died in 1547, aged 55.	Henry the Eighth died in fifteen forty-seven, aged fifty-five.
+He walked 5 km in 1 hour.	He walked five kilometers in one hour.
+At 7:30 a.m. on May 1st he rode 20 miles.	At seven thirty A M on May first he rode twenty miles.
+Chapter IV begins on p. 40.	Chapter Four begins on page forty.

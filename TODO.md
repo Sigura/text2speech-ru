@@ -84,8 +84,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] profile: "Chapter", abbreviations (*Mr., St., e.g.*), fixtures per format;
   - [ ] known limit: a plain-text byline joins the title («… Wonderland. by Lewis
     Carroll», `en/alice.txt` golden); the TXT reader treats the opening lines as title;
-  - [ ] normalization: years and ordinals, Roman numerals; quote dialogue;
-  - [ ] components: misaki + espeak-ng G2P, NeMo TN or rules, faster-whisper QA;
+  - [x] normalization: years and ordinals, Roman numerals (324 cases, 99.7 %);
+  - [ ] quote dialogue;
+  - [ ] components: misaki + espeak-ng G2P in the Kokoro worker, faster-whisper QA;
   - [ ] backends: Kokoro (fast), Chatterbox (expressive), IndexTTS-2 benchmarked;
   - [ ] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [ ] female narrator + contrasting dialogue voice; listening test; record in

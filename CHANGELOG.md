@@ -218,6 +218,7 @@ All notable changes to this project are documented here. The format follows
 - M4 step 0 — `plugins/lang-en` generated from the template and registered (SPEC 3.1-M4).
 - M4 step 1 — `en` headings, front matter and abbreviations; FB2, TXT and Markdown
   fixtures with goldens (SPEC 3.2-M4).
+- M4 step 2 — `en` normalization by rules, 324-case test set (SPEC 3.3-M4).
 
 ### Changed
 
