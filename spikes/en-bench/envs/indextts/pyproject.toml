@@ -1,0 +1,33 @@
+[project]
+name = "en-bench-indextts"
+version = "0"
+description = "Throwaway spike env: IndexTTS-2 (voice clone) for the M4 benchmark"
+requires-python = ">=3.12,<3.13"
+# The index-tts checkout is put on sys.path by synth.py, not installed: its pyproject
+# wants Python < 3.12, torch 2.8 and WeTextProcessing (pynini). The spike reads text the
+# en pack already normalized, so its text normalizer is replaced by a pass-through, and
+# torch 2.6.0 is shared with the Chatterbox env through the uv cache.
+dependencies = [
+    "torch==2.6.0",
+    "torchaudio==2.6.0",
+    "transformers==4.52.1",
+    "accelerate==1.8.1",
+    "modelscope==1.27.0",
+    "librosa==0.10.2.post1",
+    "omegaconf>=2.3.0",
+    "sentencepiece>=0.2.1",
+    "safetensors==0.5.2",
+    "tokenizers==0.21.0",
+    "einops>=0.8.1",
+    "munch==4.0.0",
+    "json5==0.10.0",
+    "huggingface-hub<1",
+    "soundfile",
+    "numpy<2.3",
+    "openai-whisper>=20231117",
+    "matplotlib",
+    "descript-audiotools==0.7.2",
+]
+
+[tool.uv]
+package = false

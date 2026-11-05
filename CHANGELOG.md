@@ -223,6 +223,9 @@ All notable changes to this project are documented here. The format follows
 - M4 steps 4–6 — `asr-whisper` (faster-whisper QA), `backend-kokoro` (fast tier),
   Chatterbox for `en` (expressive tier); an English book passes the QA gate on both
   tiers (SPEC 3.5-M4).
+- M4 step 7 — `en` benchmark spike (`spikes/en-bench/`): Kokoro, Chatterbox and
+  IndexTTS-2 on 100 segments of a Project Gutenberg novel
+  (`tests/fixtures/fetch_novel_en.py`) (SPEC 3.6-M4).
 
 ### Changed
 

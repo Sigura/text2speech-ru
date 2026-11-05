@@ -43,5 +43,6 @@ outputs
 # Owner's own books (personal input, never committed)
 /inputs/
 
-# Full-length test books, downloaded by tests/fixtures/fetch_novel.py
+# Full-length test books, downloaded by tests/fixtures/fetch_novel*.py
 tests/fixtures/ru/large/
+tests/fixtures/en/large/

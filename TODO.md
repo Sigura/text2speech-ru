@@ -88,10 +88,21 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] quote dialogue;
   - [x] components: misaki + espeak-ng G2P in the Kokoro worker, faster-whisper QA;
   - [x] backends: Kokoro (fast), Chatterbox (expressive);
-  - [ ] benchmark incl. IndexTTS-2 (M4 step 7);
+  - [x] benchmark incl. IndexTTS-2 (M4 step 7, `spikes/en-bench/FINDINGS.md`):
+    IndexTTS-2 runs offline in the spike and is the T1 challenger until listening;
+  - [ ] Kokoro misses NFR-05 on T0 (RTF 1.01 on 4 cores): try Kokoro ONNX / int8 or
+    Piper for `en` T0;
+  - [ ] Chatterbox hallucinates on quote pieces under ~15 characters («“Holmes,”»):
+    join short remarks to their line, or a minimum split length, for cloned backends;
+  - [ ] `en` text gaps from the benchmark: *St.* before a name after a capitalized
+    word («Avenue, St. John’s Wood» → Street), pre-decimal money («2s. 6d.»);
   - [x] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [ ] female narrator + contrasting dialogue voice; listening test; record in
     SPEC §13.1.
+- [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that
+  there are two packs: misaki G2P / Kokoro for English words in Russian text (FR-24,
+  instead of espeak-ng transliteration), the quote splitter for «» dialogue in Russian
+  books; refactor only where both packs use it.
 - [ ] **After M4 (owner, 2026-10-26):** review the components built so far and expose
   the useful ones as standalone commands — `text2audio translate book.md --to en -o
   book-en.md` (owner's form: `text2audio ru2en text-ru.md -o text-en.md`; paragraph by
