@@ -59,11 +59,11 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 2 — dialogue split (dash paragraphs, author's remarks);
   - [x] step 3 — `<!-- t2a: … -->` directives (E3);
   - [x] step 4 — `voices` and `config show` (FR-22);
-  - [ ] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
+  - [x] step 5 — blind A/B listening, E1 vs E0 (≥ 30 pairs) plus T0-vs-T1 narration
     pairs (owner preferred plain Silero on the dialogue samples);
     - [x] `scripts/listen_ab.py`, E0 level, 30 + 20 pairs built;
     - [x] E1 vs E0: 11 of 18 decided pairs (61 %) → E1 stays the default;
-    - [ ] T1 vs T0: waiting for the last answer (t20);
+    - [x] T1 vs T0: 4 of 15 decided pairs (27 %) → `ru` defaults to the fast tier;
   - [x] step 6 — E2 deferral documented in §6.7;
   - [x] step 7 — Qwen3-TTS dialogue spike: the hybrid won 10 of 10 blind pairs, not
     integrated ([findings](spikes/qwen3-dialogue/FINDINGS.md));

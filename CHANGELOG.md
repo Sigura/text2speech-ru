@@ -211,6 +211,8 @@ All notable changes to this project are documented here. The format follows
   words (SPEC 2.11-M3).
 - M3 step 8c — novel fixture script: no stray `"` at paragraph ends (SPEC 2.12-M3);
   it follows the charset lib.ru sends, with the same pin (SPEC 2.13-M3).
+- M3 step 5 result: `LanguageProfile.default_tier`; `ru` defaults to the fast tier on
+  every machine after T1 won 27 % of decided blind pairs (SPEC 2.14-M3).
 
 ### Changed
 

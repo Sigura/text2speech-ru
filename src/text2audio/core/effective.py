@@ -74,6 +74,8 @@ def _read(path: Path) -> dict[str, Any]:
 def _profile_layer(prof: LanguageProfile) -> dict[str, Any]:
     c = prof.code
     out: dict[str, Any] = {}
+    if prof.default_tier:
+        out["synthesis.tier"] = prof.default_tier
     for tier, route in prof.tiers.items():
         for key in ("backend", "polish", "foreign"):
             value = getattr(route, key)

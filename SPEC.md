@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 2.13-M3 |
+| Document version | 2.14-M3 |
 | Status | **M3 in progress** (open decisions in §13.1) |
 | Last updated | 2026-11-05 |
 | Primary language | Python 3.11+ |
@@ -59,6 +59,7 @@
 | 2.11-M3 | 2026-11-05 | M3 step 8b — `ru` pack lexicon: stress and ё in the novel's names, «небо», «уже», «кругом»; a lexicon replacement keeps a sentence-initial capital and skips a word the author stressed; remaining homograph misses recorded as known limits (§13.1). |
 | 2.12-M3 | 2026-11-05 | M3 step 8c — novel fixture: detached `"` at paragraph ends closed up when paired, dropped when not (§13.1). |
 | 2.13-M3 | 2026-11-05 | M3 step 8c — novel fixture script follows the charset lib.ru sends; the SHA-256 pin is of the koi8-r form and is unchanged (§13.1). |
+| 2.14-M3 | 2026-11-05 | M3 step 5 result — **Decision (owner):** `ru` defaults to the fast tier on every machine (T1 won 4 of 15 decided pairs, 27 %); `LanguageProfile.default_tier` (§6.6.5, §6.7, §9, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -824,8 +825,9 @@ As built (M2 step 3b):
 - A tier route names `backend`, optional `polish` and optional `foreign`
   (`TierRoute`; `[lang.<code>] polish.<tier>` / `foreign.<tier>` override them like
   `backend.<tier>`). `ru` expressive = Silero, polish Chatterbox, foreign Chatterbox.
-  The expressive tier is chosen automatically when the GPU stage (polisher or foreign
-  backend) fits on a GPU, not the CPU-only backend.
+  A pack's `default_tier` is used when neither the CLI nor the config names a tier
+  (`ru`: fast, §13.1). Without one, the expressive tier is chosen automatically when the
+  GPU stage (polisher or foreign backend) fits on a GPU, not the CPU-only backend.
 - Per segment: `silero>chatterbox` (polish) or `chatterbox` (foreign) when FR-24 left a
   span `transliterated` or `unresolved`. The foreign backend reads the text with the
   Latin words kept (`text_stress`), while `text_norm` keeps the transliteration as the
@@ -884,6 +886,7 @@ random into a hidden key; the owner answers A, B or "=" per pair, and `score` ap
 the rule above. E1 needs all 30 pairs answered and ≥ 60 % of decided pairs. The same
 rule decides T1 vs T0 on narration (owner: plain Silero sounded better on the dialogue
 samples), with no minimum pair count: T1 stays the default on a GPU only if it wins.
+It did not: 4 of 15 decided pairs (27 %), so `ru` defaults to the fast tier (§13.1).
 UTMOSv2 is not pinned in `models.lock`, so no automatic score is reported.
 
 **E2 deferred (M3, owner's decision, §13.1).** No backend on the `ru` routes can use an
@@ -1371,7 +1374,8 @@ Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`
 3. CPU slots: `min(usable CPUs ÷ threads, (available RAM − 2 GiB) ÷ ram_mb)` workers,
    each with disjoint CPUs and `OMP/MKL/OPENBLAS/TORCH_NUM_THREADS` set.
 4. `[resources]` config (`devices`, `max_workers`, `threads_per_worker`) and
-   `[synthesis] tier` override the automatic choice. The reasons are reported.
+   `[synthesis] tier` override the automatic choice. The reasons are reported. A pack's
+   `default_tier` replaces the choice between tiers, not the worker plan (§6.6.6).
 5. One-off GPU services (the cover generator) take the first GPU in nvidia-smi order
    with enough free VRAM.
 6. A backend declares the devices it may use: Silero is CPU-only (≈ 12× real time on 4
@@ -1511,14 +1515,14 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-27 | **Dialogue split in the core, data in the profile** (M3 step 2): the dash convention is typographic, shared by several languages, so the splitter lives in the core and the pack supplies only `dialogue = "dash"` and its verbs of speech; dialogue parts keep their dash in `text` (subtitles show the book). Checked on the full «Капитанская дочка»: 138 dash paragraphs, 77 split; the lib.ru quoting style «— "…" — отвечал он — "…"» is handled by the quotation rule. | Decided |
 | 2026-10-27 | **`config show` as built** (M3 step 4, FR-22, §6.6.5): sources `core` → `profile:<lang>` → `metadata` → `user` → `book` → `cli`; no `content` source until a content profile exists. Run-time values (tier, devices, workers, `ffmpeg`) print as `(auto)` with their rule instead of probing hardware, so the output is a deterministic snapshot (tests: `tests/golden/config-show/`). `convert` writes the same view, commented out, to a missing `_work/text2audio.toml` and never overwrites an existing one. `voices` lists pack roles and backend voice ids. | Decided |
 | 2026-10-27 | **E0 = the M2 baseline** (owner, M3 step 5): no dialogue/remark split; pauses sentence, paragraph (every finer boundary type) and chapter. A flat E0 would make the E1 test a formality; this one asks whether the M3 dialogue work is audible. Directives still apply at E0. | Decided |
-| 2026-10-27 | **T1 vs T0 on narration** (M3 step 5): 20 blind pairs in the same test; T1 stays the default tier on a GPU only if preferred in ≥ 60 % of decided pairs, otherwise T0 becomes the default on every machine. | Proposed — awaiting the owner's answers |
+| 2026-11-05 | **`ru` defaults to the fast tier on every machine** (owner, M3 step 5): 20 blind pairs answered, 15 decided, T1 (hybrid) preferred in 4 (27 % < 60 %), plain Silero in 11. A pack sets it with `LanguageProfile.default_tier`; without one the automatic choice is unchanged. `--tier expressive` or `[synthesis] tier` still gives the hybrid, and Latin-word segments keep the Chatterbox route only on it. The fast tier uses CPU workers even when a GPU is free (§9). | Decided |
 | 2026-10-27 | **E2 deferred** (owner, M3 step 6, §6.7): no `ru` backend on the current routes takes an emotion (Silero has no input, VC copies the source intonation), so E2 is not built in M3 and `expression = "E2"` is rejected. Revisit with the Qwen3-TTS instruct spike, per-emotion Chatterbox references, or English. Design when built: a second pass after the E1 book is delivered — a local classifier (e.g. a small Qwen) labels segments and only changed segments are re-rendered through the hash. | Decided |
 | 2026-10-27 | **E1 stays the default** (M3 exit criterion, §6.7): owner's blind test `scripts/listen_ab.py`, 30 pairs E1 vs E0 on T0 — 12 "same", 18 decided, E1 preferred in 11 (61 % ≥ 60 %). The margin is small: on the `ru` route E1 differs from E0 only by the dialogue/remark split and its short pauses, since dialogue uses the narrator's voice. | Decided |
 | 2026-10-27 | **Qwen3-TTS not integrated** (M3 step 7, `spikes/qwen3-dialogue/FINDINGS.md`): blind pairs Qwen3-TTS 1.7B Base (batched, cloned from `xenia`) vs the T1 hybrid on dialogue lines — hybrid 10 of 10, owner stopped early. RTF bf16 2.44 per line, 0.24 batched (18 GB). T1 dialogue stays on the hybrid. | Decided |
 | 2026-10-27 | `ru` number case from context (M3 step 8a): the accusative after a transitive verb (pymorphy3 `tran`, most probable reading) or before a noun read only as accusative («прочитал 21 страницу», «заплатил 1000»); nominative days after сегодня/завтра/вчера; «и т. д.», «и др.», «до н. э.» keep their dot at the end of the text or before a capital (`т. е.` never). Seven fragment cases in `normalization.tsv` now end with the dot. | Decided |
-| 2026-11-05 | `ru` pack lexicon (M3 step 8b, FR-13): exact forms with both е and ё spellings for Пугачёв (and пугачёвский, пугачёвщина), Гринёв, Зурин, Нижнеозёрная; «небо» forms, «уже» → уж+е, «кругом» → круг+ом. The core lexicon now keeps the capital of a capitalized word when the reading is in the same script (a lowercase «уж+е» after «и т. д.» would have cost the sentence its dot, step 8a) and leaves a word the author stressed with U+0301. **Known limits:** ирис, хлопок, косой, острота, воды are true homographs left to RUAccent; the pack forces «уже» (never comparative у́же) and «кругом» (never кру́гом), and «небо» spelled without ё is never read as the palate; a user or book lexicon, or a mark in the text, overrides all of these. |
-| 2026-11-05 | Novel fixture quotes (M3 step 8c): `tests/fixtures/fetch_novel.py` drops a detached `"` at a paragraph end when the paragraph's quotes are unpaired (11 paragraphs) and attaches it when they are paired (1). Pushkin's spellings such as «твердостию» stay. |
-| 2026-11-05 | Novel fixture charset (M3 step 8c): lib.ru now serves `windows-1251` to the script, which assumed koi8-r and failed its SHA-256 check. The book is unchanged: recoded to koi8-r it matches the existing pin, so the pin stays and the script decodes by the response charset and hashes the koi8-r form. Fixture rebuilt: exactly the 12 expected paragraphs changed. |
+| 2026-11-05 | `ru` pack lexicon (M3 step 8b, FR-13): exact forms with both е and ё spellings for Пугачёв (and пугачёвский, пугачёвщина), Гринёв, Зурин, Нижнеозёрная; «небо» forms, «уже» → уж+е, «кругом» → круг+ом. The core lexicon now keeps the capital of a capitalized word when the reading is in the same script (a lowercase «уж+е» after «и т. д.» would have cost the sentence its dot, step 8a) and leaves a word the author stressed with U+0301. **Known limits:** ирис, хлопок, косой, острота, воды are true homographs left to RUAccent; the pack forces «уже» (never comparative у́же) and «кругом» (never кру́гом), and «небо» spelled without ё is never read as the palate; a user or book lexicon, or a mark in the text, overrides all of these. | Decided |
+| 2026-11-05 | Novel fixture quotes (M3 step 8c): `tests/fixtures/fetch_novel.py` drops a detached `"` at a paragraph end when the paragraph's quotes are unpaired (11 paragraphs) and attaches it when they are paired (1). Pushkin's spellings such as «твердостию» stay. | Decided |
+| 2026-11-05 | Novel fixture charset (M3 step 8c): lib.ru now serves `windows-1251` to the script, which assumed koi8-r and failed its SHA-256 check. The book is unchanged: recoded to koi8-r it matches the existing pin, so the pin stays and the script decodes by the response charset and hashes the koi8-r form. Fixture rebuilt: exactly the 12 expected paragraphs changed. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

@@ -148,6 +148,7 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
     overrides = config.lang.get(lang, {})
     notes: list[str] = []
     wanted = tier or config.synthesis.tier
+    wanted = wanted or prof.default_tier
     order: list[Tier] = [wanted] if wanted else ["expressive", "fast"]
     chosen: tuple[Tier, TierRoute, Any, Any, Any] | None = None
     for t in order:

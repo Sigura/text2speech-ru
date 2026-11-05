@@ -34,6 +34,7 @@ PROFILE = LanguageProfile(
     front_matter=(r"(?:содержание|оглавление)\.?",),
     normalizer="ru",
     g2p="ruaccent",
+    default_tier="fast",  # owner's blind test, §13.1
     tiers={
         "fast": TierRoute(backend="silero"),
         # §6.6.6: Silero → Chatterbox VC; segments with Latin words read by Chatterbox.

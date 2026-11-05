@@ -193,6 +193,8 @@ class LanguageProfile(BaseModel):
     normalizer: str | None = None  # entry point in `text2audio.normalizers`
     g2p: str | None = None  # entry point in `text2audio.g2p` (stress / phonemes)
     tiers: dict[Tier, TierRoute] = {}
+    # Tier when neither the CLI nor the config names one; None = expressive if a GPU fits.
+    default_tier: Tier | None = None
     # Voice role → backend → backend voice id, e.g. {"narrator": {"silero": "xenia"}}.
     voices: dict[str, dict[str, str]] = {}
     pauses_ms: dict[str, int] = {}  # overrides of the core's structural pauses

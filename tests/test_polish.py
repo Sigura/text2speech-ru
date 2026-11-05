@@ -13,15 +13,18 @@ from typing import Any
 import pytest
 
 from text2audio import api
+from text2audio.core import synthesize as synth
 from text2audio.core.config import load_config
 from text2audio.core.journal import Journal
+from text2audio.core.resources import ResourcePlan
+from text2audio.core.workspace import BookFolder
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ru"
 TARGET = "ch01-s0004"  # a long narration segment
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
 
 
-def config(tier: str, **qa: int) -> Any:
+def config(tier: str | None, **qa: int) -> Any:
     lang = {
         "backend": {"fast": "sine", "expressive": "sine"},
         "polish": {"expressive": "sine-polish"},
@@ -150,3 +153,33 @@ def test_polish_batches_reuse_one_worker_pool(
     # One sine pool for the source audio and one sine-polish pool for every batch.
     sine = [x for x in loads.read_text("utf-8").splitlines() if x.startswith("sine")]
     assert len(sine) == report["synthesis"]["workers"] + report["polish"]["workers"]
+
+
+def on_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The sine backends are CPU-only, so a fake GPU alone would not make them expressive.
+    monkeypatch.setattr(synth.res, "plan", lambda *_a, **_k: ResourcePlan("expressive", [], []))
+
+
+def test_pack_default_tier_wins_over_a_free_gpu(
+    book: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_gpu(monkeypatch)
+    plan = synth.make_plan(BookFolder(book), config(None))
+    assert plan.tier == "fast" and plan.polisher is None and plan.foreign is None
+
+
+def test_expressive_can_still_be_asked_for(book: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    on_gpu(monkeypatch)
+    plan = synth.make_plan(BookFolder(book), config(None), tier="expressive")
+    assert plan.tier == "expressive" and plan.route.polish == "sine-polish"
+
+
+def test_pack_without_a_default_takes_expressive_when_a_gpu_fits(
+    book: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_gpu(monkeypatch)
+    prof = synth.language_profile("ru")
+    assert prof is not None
+    neutral = prof.model_copy(update={"default_tier": None})
+    monkeypatch.setattr(synth, "language_profile", lambda _lang: neutral)
+    assert synth.make_plan(BookFolder(book), config(None)).tier == "expressive"

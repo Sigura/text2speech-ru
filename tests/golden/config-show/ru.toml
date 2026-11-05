@@ -2,7 +2,7 @@
 expression = "E1"  # core
 language = "ru"  # metadata
 seed = 1234  # core
-# tier = (auto)  # core: resource plan at run time
+tier = "fast"  # profile:ru
 
 [output]
 formats = ["mp3", "m4b"]  # core
