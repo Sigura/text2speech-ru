@@ -74,9 +74,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 8b full gate with real models and espeak-ng: 399 passed;
     - [x] 8c stray `"` at paragraph ends in the novel fixture script;
     - [x] 8c local fixture rebuilt; the script follows the charset lib.ru sends.
+  - [x] carried over: new lexicon stress («Зурин», «небо», «уже», «кругом», ё in names)
+    sounds right to the owner;
   - [ ] carried over: rerun the `slow` full-book renders (`pytest -m slow`) with the new
-    lexicon and tier default; listen to «Зурин», «небо», «уже»; `espeak-ng` in the devbox
-    image.
+    lexicon and tier default; `espeak-ng` in the devbox image.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and
