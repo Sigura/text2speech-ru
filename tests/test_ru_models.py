@@ -26,6 +26,8 @@ from text2audio.core.envs import plugin_env
 from text2audio.models.lock import assets_for
 from text2audio.models.store import ModelStore
 from text2audio.qa.wer import wer
+from text2audio.text.lexicon import Lexicon
+from text2audio.text.stress import merge_marks, strip_marks
 from text2audio.workers.backend import Worker, WorkerBackend
 
 pytestmark = pytest.mark.models
@@ -67,6 +69,19 @@ def test_ruaccent_stress_and_yo_offline() -> None:
     assert out[0] == "Вс+ё б+ыло хорош+о."
     assert "ё" in out[1].lower() and "+" in out[1]
     assert out[2] == ""
+
+
+@needs_ruaccent
+def test_pack_lexicon_wins_over_ruaccent() -> None:
+    assert PROFILE.lexicon is not None
+    lexicon = Lexicon.layered(Path(PROFILE.lexicon))
+    marked = lexicon.apply("Пугачев посмотрел на небо. Зурин уже ушел кругом.")
+    with Worker(RuAccent(), STORE.root) as w:
+        w.load(assets=STORE.payload(assets_for("g2p:ruaccent")))
+        stressed = w.call("process", texts=[strip_marks(marked)])["texts"][0]
+    merged = merge_marks(marked, stressed)
+    for word in ("Пугач+ёв", "н+ебо", "З+урин", "уж+е", "круг+ом"):
+        assert word in merged, merged
 
 
 @needs_silero

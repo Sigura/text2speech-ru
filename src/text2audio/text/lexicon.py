@@ -4,7 +4,9 @@ The language pack's list → user-global `~/.config/text2audio/lexicon/<lang>.ts
 per-book `_work/lexicon.tsv`. Each line is `word<TAB>replacement`; `#` starts a comment.
 Entries match whole words, ignoring case, and are applied **before** normalization so
 they can name source spellings (*США*, *Docker*); stress in a replacement is written
-`+` before the vowel or with U+0301 and is kept by the stress stage. A native ending
+`+` before the vowel or with U+0301 and is kept by the stress stage. A word the author
+stressed is left alone, and a capitalized word keeps its capital in a same-script
+reading (*Уже* → «Уж+е»; the normalizer reads sentence starts from it). A native ending
 after an apostrophe joins the replacement (*iPhone'а* → «айфо́на», FR-24).
 """
 
@@ -16,6 +18,9 @@ from pathlib import Path
 import platformdirs
 
 from text2audio.core.languages import script_of
+from text2audio.text.stress import strip_marks
+
+_LETTER = re.compile(r"[^\W\d_]")
 
 
 def user_lexicon(lang: str) -> Path:
@@ -59,11 +64,13 @@ class Lexicon:
             words = sorted(self.entries, key=len, reverse=True)
             alts = "|".join(re.escape(w) for w in words)
             self._pattern = re.compile(
-                rf"(?<![\w+])({alts})(?![\w+])(?:(['’])(?=([^\W\d_])))?", re.IGNORECASE
+                rf"(?<![\w+])({alts})(?![\w+\u0301])(?:(['’])(?=([^\W\d_])))?", re.IGNORECASE
             )
 
         def repl(m: re.Match[str]) -> str:
             out = self.entries[m[1].lower()]
+            if m[1].istitle() and script_of(m[1][0]) == script_of(strip_marks(out)[0]):
+                out = _LETTER.sub(lambda c: c[0].upper(), out, count=1)
             if m[2] and script_of(m[1][-1]) == script_of(m[3]):
                 out += m[2]  # "Docker's": the apostrophe belongs to the word
             return out

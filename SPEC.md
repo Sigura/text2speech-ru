@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 2.10-M3 |
+| Document version | 2.11-M3 |
 | Status | **M3 in progress** (open decisions in §13.1) |
-| Last updated | 2026-10-27 |
+| Last updated | 2026-11-05 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
@@ -56,6 +56,7 @@
 | 2.8-M3 | 2026-10-27 | M3 step 6 — **E2 deferred** (owner): reasons, revisit conditions and the owner's "second pass" design recorded in §6.7; `expression = "E2"` is rejected until built (§13.1). |
 | 2.9-M3 | 2026-10-27 | M3 step 5 result — **E1 confirmed** by the owner's blind test (11 of 18 decided pairs, 61 %); M3 step 7 — **Qwen3-TTS not integrated** for dialogue, the hybrid won 10 of 10 pairs (§6.7, §13.1). |
 | 2.10-M3 | 2026-10-27 | M3 step 8a — `ru` normalization: numbers take the accusative after a transitive verb or an accusative-only noun, days after «сегодня/завтра» are named in the nominative, a closing abbreviation keeps the sentence's dot (§6.6.5, §13.1). |
+| 2.11-M3 | 2026-11-05 | M3 step 8b — `ru` pack lexicon: stress and ё in the novel's names, «небо», «уже», «кругом»; a lexicon replacement keeps a sentence-initial capital and skips a word the author stressed; remaining homograph misses recorded as known limits (§13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1513,6 +1514,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-27 | **E1 stays the default** (M3 exit criterion, §6.7): owner's blind test `scripts/listen_ab.py`, 30 pairs E1 vs E0 on T0 — 12 "same", 18 decided, E1 preferred in 11 (61 % ≥ 60 %). The margin is small: on the `ru` route E1 differs from E0 only by the dialogue/remark split and its short pauses, since dialogue uses the narrator's voice. | Decided |
 | 2026-10-27 | **Qwen3-TTS not integrated** (M3 step 7, `spikes/qwen3-dialogue/FINDINGS.md`): blind pairs Qwen3-TTS 1.7B Base (batched, cloned from `xenia`) vs the T1 hybrid on dialogue lines — hybrid 10 of 10, owner stopped early. RTF bf16 2.44 per line, 0.24 batched (18 GB). T1 dialogue stays on the hybrid. | Decided |
 | 2026-10-27 | `ru` number case from context (M3 step 8a): the accusative after a transitive verb (pymorphy3 `tran`, most probable reading) or before a noun read only as accusative («прочитал 21 страницу», «заплатил 1000»); nominative days after сегодня/завтра/вчера; «и т. д.», «и др.», «до н. э.» keep their dot at the end of the text or before a capital (`т. е.` never). Seven fragment cases in `normalization.tsv` now end with the dot. | Decided |
+| 2026-11-05 | `ru` pack lexicon (M3 step 8b, FR-13): exact forms with both е and ё spellings for Пугачёв (and пугачёвский, пугачёвщина), Гринёв, Зурин, Нижнеозёрная; «небо» forms, «уже» → уж+е, «кругом» → круг+ом. The core lexicon now keeps the capital of a capitalized word when the reading is in the same script (a lowercase «уж+е» after «и т. д.» would have cost the sentence its dot, step 8a) and leaves a word the author stressed with U+0301. **Known limits:** ирис, хлопок, косой, острота, воды are true homographs left to RUAccent; the pack forces «уже» (never comparative у́же) and «кругом» (never кру́гом), and «небо» spelled without ё is never read as the palate; a user or book lexicon, or a mark in the text, overrides all of these. |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

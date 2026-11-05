@@ -206,6 +206,9 @@ All notable changes to this project are documented here. The format follows
 - M3 step 8a — `ru` numbers agree with transitive verbs and accusative nouns,
   named days after «завтра», sentence-final «и т. д.» / «до н. э.» keep the dot
   (SPEC 2.10-M3).
+- M3 step 8b — `ru` pack lexicon: Пугачёв, Гринёв, Зурин, Нижнеозёрная, «небо»,
+  «уже», «кругом»; lexicon replacements keep a capital and skip author-stressed
+  words (SPEC 2.11-M3).
 
 ### Changed
 
