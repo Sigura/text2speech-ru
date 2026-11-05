@@ -209,6 +209,7 @@ All notable changes to this project are documented here. The format follows
 - M3 step 8b — `ru` pack lexicon: Пугачёв, Гринёв, Зурин, Нижнеозёрная, «небо»,
   «уже», «кругом»; lexicon replacements keep a capital and skip author-stressed
   words (SPEC 2.11-M3).
+- M3 step 8c — novel fixture script: no stray `"` at paragraph ends (SPEC 2.12-M3).
 
 ### Changed
 

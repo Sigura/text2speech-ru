@@ -72,7 +72,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [x] 8b pack lexicon (ё in names, «небо», «Зурин»; other homographs are known limits);
     - [ ] 8b check on the host: `test_pack_lexicon_wins_over_ruaccent` and the espeak-ng
       tests have not run yet (no model store or espeak-ng in the container);
-    - [ ] 8c stray `"` at paragraph ends in the novel fixture.
+    - [x] 8c stray `"` at paragraph ends in the novel fixture script;
+    - [ ] 8c rebuild the local fixture: `uv run --python 3.11 python
+      tests/fixtures/fetch_novel.py --force` (network, not run yet).
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and

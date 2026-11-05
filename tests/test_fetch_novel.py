@@ -16,3 +16,17 @@ def test_latin1_byte_in_koi8r_original_is_restored() -> None:
     koi8 = "приехал в Россию ".encode("koi8-r") + "pour \xeatre outchitel".encode("latin-1")
     text = fetch_novel.clean(koi8.decode("koi8-r"))
     assert text == "приехал в Россию pour être outchitel"
+
+
+def test_detached_quote_at_paragraph_end_is_dropped_when_unpaired() -> None:
+    assert fetch_novel.clean('— отвечал я с твердостию. "') == "— отвечал я с твердостию."
+    assert fetch_novel.clean('Секретарь продолжал: "') == "Секретарь продолжал:"
+
+
+def test_detached_closing_quote_is_attached_when_paired() -> None:
+    assert fetch_novel.clean('"Шуба лисья, 40 рублей. "') == '"Шуба лисья, 40 рублей."'
+
+
+def test_attached_quotes_are_kept() -> None:
+    assert fetch_novel.clean('"Мы поспорили".') == '"Мы поспорили".'
+    assert fetch_novel.clean('Отец твой А. Г."') == 'Отец твой А. Г."'

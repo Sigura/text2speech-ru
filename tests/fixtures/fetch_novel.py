@@ -6,9 +6,9 @@ Pushkin, «Капитанская дочка» (1836), from lib.ru (koi8-r text 
 pinned by SHA-256 and rewritten as a Markdown book (§6.4.1) in
 `tests/fixtures/ru/large/kapitanskaya-dochka.md`. Network use: this script only
 (test data, like `models pull`). lib.ru typography is cleaned up for reading aloud:
-justification spaces collapsed, ` - ` dashes made em dashes, the editors' note markers
-`(1)` and the notes themselves (`(сноска 1) …`, variant readings of the draft chapter)
-dropped.
+justification spaces collapsed, ` - ` dashes made em dashes, detached `"` at paragraph
+ends closed up or dropped, the editors' note markers `(1)` and the notes themselves
+(`(сноска 1) …`, variant readings of the draft chapter) dropped.
 """
 
 from __future__ import annotations
@@ -41,7 +41,10 @@ def clean(text: str) -> str:
     text = text.replace("pour Йtre", "pour être")
     text = re.sub(r"\(\d+\)", "", text)  # editors' note markers
     text = re.sub(r"(^|\s)-(?=\s)", r"\1—", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    if text.endswith(' "'):  # the OCR detaches closing quotes and leaves unpaired ones
+        text = text[:-2] + ('"' if text.count('"') % 2 == 0 else "")
+    return text
 
 
 def to_markdown(raw: str) -> str:
