@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -17,6 +17,7 @@ members = [
     "text2audio-backend-sine",
     "text2audio-cover-sd-webui",
     "text2audio-g2p-ruaccent",
+    "text2audio-lang-en",
     "text2audio-lang-ru",
     "text2audio-mt-opus",
     "text2audio-tagger-wd14",
@@ -1811,6 +1812,7 @@ wheels = [
 name = "text2audio"
 version = "0.1.0.dev0"
 source = { editable = "." }
+default-groups = ["covers", "dev", "langs"]
 dependencies = [
     { name = "charset-normalizer" },
     { name = "defusedxml" },
@@ -1849,6 +1851,7 @@ langs = [
     { name = "text2audio-backend-chatterbox" },
     { name = "text2audio-backend-silero" },
     { name = "text2audio-g2p-ruaccent" },
+    { name = "text2audio-lang-en" },
     { name = "text2audio-lang-ru" },
     { name = "text2audio-mt-opus" },
 ]
@@ -1891,6 +1894,7 @@ langs = [
     { name = "text2audio-backend-chatterbox", editable = "plugins/backend-chatterbox" },
     { name = "text2audio-backend-silero", editable = "plugins/backend-silero" },
     { name = "text2audio-g2p-ruaccent", editable = "plugins/g2p-ruaccent" },
+    { name = "text2audio-lang-en", editable = "plugins/lang-en" },
     { name = "text2audio-lang-ru", editable = "plugins/lang-ru" },
     { name = "text2audio-mt-opus", editable = "plugins/mt-opus" },
 ]
@@ -1954,6 +1958,17 @@ requires-dist = [{ name = "text2audio", editable = "." }]
 name = "text2audio-g2p-ruaccent"
 version = "0.1.0"
 source = { editable = "plugins/g2p-ruaccent" }
+dependencies = [
+    { name = "text2audio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "text2audio", editable = "." }]
+
+[[package]]
+name = "text2audio-lang-en"
+version = "0.1.0"
+source = { editable = "plugins/lang-en" }
 dependencies = [
     { name = "text2audio" },
 ]

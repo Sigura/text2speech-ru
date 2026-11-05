@@ -215,6 +215,7 @@ All notable changes to this project are documented here. The format follows
   every machine after T1 won 27 % of decided blind pairs (SPEC 2.14-M3).
 - M3 closed against every SPEC §11 exit criterion; end-to-end test that dialogue
   renders at its own pitch; TODO carry-overs for M4 (SPEC 3.0-M4).
+- M4 step 0 — `plugins/lang-en` generated from the template and registered (SPEC 3.1-M4).
 
 ### Changed
 

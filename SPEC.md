@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| Document version | 3.0-M4 |
-| Status | **M3 closed, M4 next** (open decisions in §13.1) |
+| Document version | 3.1-M4 |
+| Status | **M4 in progress** (open decisions in §13.1) |
 | Last updated | 2026-11-05 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
@@ -61,6 +61,7 @@
 | 2.13-M3 | 2026-11-05 | M3 step 8c — novel fixture script follows the charset lib.ru sends; the SHA-256 pin is of the koi8-r form and is unchanged (§13.1). |
 | 2.14-M3 | 2026-11-05 | M3 step 5 result — **Decision (owner):** `ru` defaults to the fast tier on every machine (T1 won 4 of 15 decided pairs, 27 %); `LanguageProfile.default_tier` (§6.6.5, §6.7, §9, §13.1). |
 | 3.0-M4 | 2026-11-05 | **M3 closed**: every §11 exit criterion met (§13.1); open items carried to M4 in `TODO.md`. |
+| 3.1-M4 | 2026-11-05 | M4 step 0 — `plugins/lang-en` generated from the template and registered; plan decisions: rule-based normalizer, G2P inside the Kokoro worker, QA model by device, one-word `dialogue` contract change (§11, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1525,6 +1526,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-05 | Novel fixture quotes (M3 step 8c): `tests/fixtures/fetch_novel.py` drops a detached `"` at a paragraph end when the paragraph's quotes are unpaired (11 paragraphs) and attaches it when they are paired (1). Pushkin's spellings such as «твердостию» stay. | Decided |
 | 2026-11-05 | Novel fixture charset (M3 step 8c): lib.ru now serves `windows-1251` to the script, which assumed koi8-r and failed its SHA-256 check. The book is unchanged: recoded to koi8-r it matches the existing pin, so the pin stays and the script decodes by the response charset and hashes the koi8-r form. Fixture rebuilt: exactly the 12 expected paragraphs changed. | Decided |
 | 2026-11-05 | **M3 closed** against §11: E1 confirmed by the blind test (61 %, §6.7); E2 deferred and documented (§6.7). Plan criteria: dialogue and remarks by `plugins/lang-ru/tests/dialogue.tsv`, the novel golden roles and `test_dialogue_is_rendered_in_its_own_voice`; E3 by `tests/test_directives.py`. Full gate on 2026-11-05: 403 tests and 68 pack tests passed with real models, none skipped; the 4 `slow` full-book renders were not rerun. Carried to M4: rerun the `slow` renders, listen to the new lexicon stress, `espeak-ng` in the devbox image. | Decided |
+| 2026-11-05 | **M4 approach** (owner approved the plan): `en` normalizer is pure-Python rules, not NeMo TN, because normalizers run in the core environment (NeMo needs pynini). G2P stays inside the Kokoro worker (`g2p=None`): misaki output is Kokoro's own input and Chatterbox takes plain text. `asr-whisper` picks `small` on CPU and `large-v3-turbo` on GPU in its worker. **Exception to "zero diff in `core/`" (owner):** quote dialogue adds `"quote"` to `LanguageProfile.dialogue` in `core/contracts.py`, so that criterion will be reported as not strictly met. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

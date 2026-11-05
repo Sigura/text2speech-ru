@@ -79,7 +79,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] carried over: rerun the `slow` full-book renders (`pytest -m slow`) with the new
     lexicon and tier default; `espeak-ng` in the devbox image.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
-  - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
+  - [x] generate `plugins/lang-en` from the template, no change to `core/` (one approved
+    exception for quote dialogue is planned, SPEC §13.1);
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and
     ordinals, Roman numerals;
   - [ ] components: misaki + espeak-ng G2P, NeMo TN or rules, faster-whisper QA;

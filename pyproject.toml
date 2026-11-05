@@ -31,6 +31,7 @@ text2audio = "text2audio.cli:main"
 # Language packs run in the core environment (text rules, no heavy deps); one per language.
 langs = [
     "text2audio-lang-ru",
+    "text2audio-lang-en",
     "text2audio-g2p-ruaccent",
     "text2audio-backend-silero",
     "text2audio-asr-gigaam",
@@ -60,6 +61,7 @@ exclude = ["spikes/*", "plugins/*/src/*/env"]
 [tool.uv.sources]
 text2audio-backend-sine = { workspace = true }
 text2audio-lang-ru = { workspace = true }
+text2audio-lang-en = { workspace = true }
 text2audio-g2p-ruaccent = { workspace = true }
 text2audio-backend-silero = { workspace = true }
 text2audio-asr-gigaam = { workspace = true }

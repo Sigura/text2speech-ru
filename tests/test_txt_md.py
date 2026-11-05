@@ -81,7 +81,7 @@ def test_decode_russian_encodings(codec: str) -> None:
 
 def test_language_guess_by_script() -> None:
     assert guess_language("Глава 1. Привет") == "ru"
-    assert guess_language("Chapter 1. Hello") is None  # no English pack installed yet
+    assert guess_language("Chapter 1. Hello") == "en"
 
 
 @pytest.mark.parametrize(
