@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).parent / "fixtures" / "fetch_novel.py"
 spec = importlib.util.spec_from_file_location("fetch_novel", SCRIPT)
@@ -30,3 +33,11 @@ def test_detached_closing_quote_is_attached_when_paired() -> None:
 def test_attached_quotes_are_kept() -> None:
     assert fetch_novel.clean('"Мы поспорили".') == '"Мы поспорили".'
     assert fetch_novel.clean('Отец твой А. Г."') == 'Отец твой А. Г."'
+
+
+@pytest.mark.parametrize("charset", ["koi8-r", "windows-1251"])
+def test_digest_does_not_depend_on_the_charset_the_server_sends(charset: str) -> None:
+    page = "<h2>Капитанская дочка</h2>\n"
+    served = (page + fetch_novel.FOOTER + ": 60").encode(charset)
+    assert fetch_novel.book_text(served, charset) == page
+    assert fetch_novel.book_digest(page) == hashlib.sha256(page.encode("koi8-r")).hexdigest()

@@ -73,8 +73,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - [ ] 8b check on the host: `test_pack_lexicon_wins_over_ruaccent` and the espeak-ng
       tests have not run yet (no model store or espeak-ng in the container);
     - [x] 8c stray `"` at paragraph ends in the novel fixture script;
-    - [ ] 8c rebuild the local fixture: `uv run --python 3.11 python
-      tests/fixtures/fetch_novel.py --force` (network, not run yet).
+    - [x] 8c local fixture rebuilt; the script follows the charset lib.ru sends.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [ ] generate `plugins/lang-en` from the template, **with no change to `core/`**;
   - [ ] profile: "Chapter", curly quotes, abbreviations (*Mr., St., e.g.*), years and

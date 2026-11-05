@@ -2,8 +2,8 @@
 
     uv run python tests/fixtures/fetch_novel.py
 
-Pushkin, «Капитанская дочка» (1836), from lib.ru (koi8-r text with HTML headings),
-pinned by SHA-256 and rewritten as a Markdown book (§6.4.1) in
+Pushkin, «Капитанская дочка» (1836), from lib.ru (text with HTML headings), pinned by
+the SHA-256 of its koi8-r form and rewritten as a Markdown book (§6.4.1) in
 `tests/fixtures/ru/large/kapitanskaya-dochka.md`. Network use: this script only
 (test data, like `models pull`). lib.ru typography is cleaned up for reading aloud:
 justification spaces collapsed, ` - ` dashes made em dashes, detached `"` at paragraph
@@ -21,11 +21,20 @@ import urllib.request
 from pathlib import Path
 
 URL = "http://lib.ru/LITRA/PUSHKIN/kapitan.txt"
-# Of the book text: the page footer below it carries a view counter that changes.
+# Of the book text in koi8-r: the footer below it carries a view counter that changes.
 SHA256 = "0cf756a5c1d97933a69535664fc08a21efd1002fcca13ffe5f8eff8005f98952"
-FOOTER = "<pre><hr noshade><small>Популярность".encode("koi8-r")
+FOOTER = "<pre><hr noshade><small>Популярность"
 OUT = Path(__file__).parent / "ru" / "large" / "kapitanskaya-dochka.md"
 TITLE = "Александр Пушкин. Капитанская дочка"
+
+
+def book_text(data: bytes, charset: str) -> str:
+    return data.decode(charset).split(FOOTER)[0]
+
+
+def book_digest(text: str) -> str:
+    # lib.ru picks the charset per client, so the pin is of one fixed encoding.
+    return hashlib.sha256(text.encode("koi8-r")).hexdigest()
 
 
 def chapter_title(text: str) -> str:
@@ -83,17 +92,15 @@ def main() -> int:
     if OUT.is_file() and "--force" not in sys.argv:
         print(f"{OUT} exists (--force to rebuild)")
         return 0
-    # lib.ru recodes by client; this User-Agent gets the original koi8-r bytes.
     request = urllib.request.Request(URL, headers={"User-Agent": "curl/8.5.0"})
     with urllib.request.urlopen(request, timeout=120) as resp:
-        data = resp.read()
-    data = data.split(FOOTER)[0]
-    digest = hashlib.sha256(data).hexdigest()
+        text = book_text(resp.read(), resp.headers.get_content_charset("koi8-r"))
+    digest = book_digest(text)
     if digest != SHA256:
         print(f"SHA-256 mismatch: {digest}", file=sys.stderr)
         return 1
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(to_markdown(data.decode("koi8-r")), encoding="utf-8")
+    OUT.write_text(to_markdown(text), encoding="utf-8")
     print(OUT)
     return 0
 
