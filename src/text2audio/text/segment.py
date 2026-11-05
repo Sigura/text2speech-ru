@@ -37,7 +37,7 @@ from text2audio.readers.document import (
 )
 from text2audio.readers.markdown import parse_markdown
 from text2audio.text import directives
-from text2audio.text.dialogue import split_dialogue
+from text2audio.text.dialogue import split_dialogue, split_quoted
 from text2audio.text.sentences import pack, split_sentences
 
 DEFAULT_MAX_CHARS = 300
@@ -83,7 +83,7 @@ class _Builder:
     ):
         self.lang = lang
         self.abbreviations = profile.abbreviations if profile else ()
-        self.dialogue = profile is not None and profile.dialogue == "dash" and expression != "E0"
+        self.dialogue = profile.dialogue if profile and expression != "E0" else "none"
         self.remark_words = profile.remark_words if profile else ()
         overrides = profile.pauses_ms if profile else {}
         unknown = sorted(set(overrides) - set(PAUSE_MS))
@@ -235,7 +235,12 @@ class _Builder:
                 self.set_pause(pause)
 
     def paragraph(self, text: str) -> None:
-        parts = split_dialogue(text, self.remark_words) if self.dialogue else [("narration", text)]
+        if self.dialogue == "dash":
+            parts = split_dialogue(text, self.remark_words)
+        elif self.dialogue == "quote":
+            parts = split_quoted(text)
+        else:
+            parts = [("narration", text)]
         for n, (role, part) in enumerate(parts):
             self.prose(part, role, "paragraph" if n == len(parts) - 1 else "remark")
 

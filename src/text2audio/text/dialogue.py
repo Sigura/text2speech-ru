@@ -15,6 +15,9 @@ speech only when the remark ends with punctuation («— сказал он, — 
 — …») or a quotation opens after it («— отвечал он — "слава богу…"»), so «сказал он —
 и вышел» stays one remark. Every part keeps its dash, so
 subtitles show the book's text.
+
+The quote convention (English): quoted speech is dialogue and the words around it are
+the author's, in straight or curly double quotes.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ _DASH = re.compile(r"\s+(?=[—–]\s)")
 _OPENS = re.compile(r"^[—–]\s")
 _PUNCT_END = re.compile(r"[,.!?…:;][»\"”’)]*$")
 _QUOTES = ("«", '"', "„", "“")
+_OPENING = re.compile(r'["“]')
+_CLOSING = {'"': '"', "“": "”"}
+_SPEECH_END = re.compile(r"[,.!?…;:]$")
 
 
 def split_dialogue(text: str, remark_words: tuple[str, ...] = ()) -> list[tuple[str, str]]:
@@ -46,3 +52,40 @@ def split_dialogue(text: str, remark_words: tuple[str, ...] = ()) -> list[tuple[
         else:
             parts[-1] = (role, f"{prev} {piece}")
     return parts
+
+
+def split_quoted(text: str) -> list[tuple[str, str]]:
+    """`(role, text)` parts of a paragraph in the quote convention: quoted speech is
+    `dialogue`, the words around it `remark`, or one `narration` without speech."""
+    parts: list[tuple[str, str]] = []
+    position = 0
+    for start, end in _quoted_spans(text):
+        before = text[position:start].strip()
+        if before:
+            parts.append(("remark", before))
+        parts.append(("dialogue", text[start:end].strip()))
+        position = end
+    after = text[position:].strip()
+    if after:
+        parts.append(("remark", after))
+    if all(role == "remark" for role, _ in parts):
+        return [("narration", text)]
+    return parts
+
+
+def _quoted_spans(text: str) -> list[tuple[int, int]]:
+    """Spans of speech. An unclosed quote runs to the end: long speech over several
+    paragraphs opens each one and closes only the last. Scare quotes are not speech."""
+    spans = []
+    position = 0
+    while (match := _OPENING.search(text, position)) is not None:
+        close = text.find(_CLOSING[match[0]], match.end())
+        end = close + 1 if close >= 0 else len(text)
+        if close < 0 or not _is_scare_quote(text[match.end() : close]):
+            spans.append((match.start(), end))
+        position = end
+    return spans
+
+
+def _is_scare_quote(inner: str) -> bool:
+    return len(inner.split()) <= 2 and not _SPEECH_END.search(inner)

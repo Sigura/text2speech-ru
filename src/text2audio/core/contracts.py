@@ -200,7 +200,7 @@ class LanguageProfile(BaseModel):
     pauses_ms: dict[str, int] = {}  # overrides of the core's structural pauses
     # Dialogue convention (§6.7 E1): "dash" = paragraphs opening with a dash, with the
     # author's remarks after inner dashes (text/dialogue.py); "none" = not detected.
-    dialogue: Literal["none", "dash"] = "none"
+    dialogue: Literal["none", "dash", "quote"] = "none"
     # Lowercase word starts that open a remark after a dash without punctuation.
     remark_words: tuple[str, ...] = ()
     qa: QaProfile = QaProfile()

@@ -1,0 +1,19 @@
+# paragraph	expected parts: D = dialogue, R = author's remark, N = narration; " | " between parts
+“Who is there?” she asked.	D:“Who is there?” | R:she asked.
+"Who is there?" she asked.	D:"Who is there?" | R:she asked.
+“Stay,” said Alice, “and tell me.”	D:“Stay,” | R:said Alice, | D:“and tell me.”
+"Stay," said Alice, "and tell me."	D:"Stay," | R:said Alice, | D:"and tell me."
+She sighed and said, “Not again.”	R:She sighed and said, | D:“Not again.”
+“Not again.”	D:“Not again.”
+“Not again!” “Why not?”	D:“Not again!” | D:“Why not?”
+Alice sighed. “Who is it?” she asked. Nobody answered.	R:Alice sighed. | D:“Who is it?” | R:she asked. Nobody answered.
+“I don’t know,” Alice said. “It isn’t mine.”	D:“I don’t know,” | R:Alice said. | D:“It isn’t mine.”
+“He said ‘never’ to me,” she cried.	D:“He said ‘never’ to me,” | R:she cried.
+It was nothing but rain all day.	N:It was nothing but rain all day.
+Alice’s cat didn’t care.	N:Alice’s cat didn’t care.
+They called it a “rabbit-hole” in those days.	N:They called it a “rabbit-hole” in those days.
+The so-called "great house" stood empty.	N:The so-called "great house" stood empty.
+“This goes on and on	D:“This goes on and on
+He began, "This goes on and on	R:He began, | D:"This goes on and on
+“Oh!” she said.	D:“Oh!” | R:she said.
+“and what is the use of a book,” thought Alice “without pictures or conversations?”	D:“and what is the use of a book,” | R:thought Alice | D:“without pictures or conversations?”

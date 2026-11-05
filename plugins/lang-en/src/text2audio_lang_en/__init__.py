@@ -66,6 +66,7 @@ PROFILE = LanguageProfile(
     tiers={},
     voices={},
     pauses_ms={},
+    dialogue="quote",
     qa=QaProfile(asr=None, wer_threshold=0.12, chars_per_sec=(10.0, 22.0)),
     translator=None,  # English needs no translation for cover prompts
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
