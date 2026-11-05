@@ -67,11 +67,11 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] step 6 — E2 deferral documented in §6.7;
   - [x] step 7 — Qwen3-TTS dialogue spike: the hybrid won 10 of 10 blind pairs, not
     integrated ([findings](spikes/qwen3-dialogue/FINDINGS.md));
-  - [ ] step 8 — `ru` text gaps from the benchmark and the listening test:
+  - [x] step 8 — `ru` text gaps from the benchmark and the listening test:
     - [x] 8a number case and abbreviation dots;
     - [x] 8b pack lexicon (ё in names, «небо», «Зурин»; other homographs are known limits);
     - [x] 8b `test_pack_lexicon_wins_over_ruaccent` passes on real RUAccent;
-    - [ ] 8b the tests that need espeak-ng have not run since (not in the container);
+    - [x] 8b full gate with real models and espeak-ng: 399 passed;
     - [x] 8c stray `"` at paragraph ends in the novel fixture script;
     - [x] 8c local fixture rebuilt; the script follows the charset lib.ru sends.
 - [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
