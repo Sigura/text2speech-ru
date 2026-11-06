@@ -87,7 +87,7 @@ def translate(
     output: Path | None = None,
     *,
     source_lang: str | None = None,
-    target_lang: str = "en",
+    target_lang: str | None = None,
     store: Path | None = None,
     progress: Progress | None = None,
 ) -> TranslateResult:
@@ -114,10 +114,14 @@ def cover(
 
 
 def models_list(
-    lang: str | None = None, tier: Tier | None = None, lock: Path | None = None
+    lang: str | None = None,
+    tier: Tier | None = None,
+    lock: Path | None = None,
+    features: tuple[str, ...] = (),
 ) -> list[ModelAsset]:
+    """Assets for the languages and tier; opt-in `features` ("translate") add theirs."""
     langs = lang.split(",") if lang else [None]
-    return [a for a in load_lock(lock) if any(a.wanted(x, tier) for x in langs)]
+    return [a for a in load_lock(lock) if any(a.wanted(x, tier, features) for x in langs)]
 
 
 def models_verify(
@@ -125,8 +129,9 @@ def models_verify(
     tier: Tier | None = None,
     store: Path | None = None,
     lock: Path | None = None,
+    features: tuple[str, ...] = (),
 ) -> list[AssetProblem]:
-    return ModelStore(store).verify(models_list(lang, tier, lock))
+    return ModelStore(store).verify(models_list(lang, tier, lock, features))
 
 
 def models_pull(
@@ -134,9 +139,10 @@ def models_pull(
     tier: Tier | None = None,
     store: Path | None = None,
     lock: Path | None = None,
+    features: tuple[str, ...] = (),
 ) -> list[Path]:
     """Download pinned assets. Uses the network; never call this from runtime code."""
-    return pull(models_list(lang, tier, lock), ModelStore(store))
+    return pull(models_list(lang, tier, lock, features), ModelStore(store))
 
 
 def synthesize(

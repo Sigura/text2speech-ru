@@ -59,6 +59,9 @@ class ModelAsset(BaseModel):
     component: str | None = None  # e.g. "g2p:ruaccent", "asr:gigaam"
     langs: tuple[str, ...] = ()  # empty = needed for every language
     tiers: tuple[Tier, ...] = ()  # empty = needed for every tier
+    # An opt-in feature ("translate"): pulled and verified only when asked for, so the
+    # large translation models stay out of a plain language install.
+    feature: str | None = None
 
     @field_validator("revision")
     @classmethod
@@ -91,10 +94,11 @@ class ModelAsset(BaseModel):
     def owner(self) -> str:
         return self.backend or self.component or self.source
 
-    def wanted(self, lang: str | None, tier: Tier | None) -> bool:
+    def wanted(self, lang: str | None, tier: Tier | None, features: tuple[str, ...] = ()) -> bool:
         lang_ok = lang is None or not self.langs or lang in self.langs
         tier_ok = tier is None or not self.tiers or tier in self.tiers
-        return lang_ok and tier_ok
+        feature_ok = self.feature is None or self.feature in features
+        return lang_ok and tier_ok and feature_ok
 
 
 class Span(BaseModel):
@@ -213,9 +217,10 @@ class LanguageProfile(BaseModel):
     lexicon: str | None = None  # path of the pack's lexicon TSV (FR-13)
     # Title of a long section split at paragraph boundaries (§6.8.1).
     part_title: str = "{title} (part {n} of {total})"
-    # Machine translation into English for cover prompts (§6.8.2); entry point in
-    # `text2audio.translators`.
-    translator: str | None = None
+    # Machine translation from this language (§6.11, cover prompts §6.8.2): target
+    # language → entry points in `text2audio.translators`, in order of preference; the
+    # first that can run translates, the next re-translates what fails the checks.
+    translators: dict[str, tuple[str, ...]] = {}
 
 
 class NormResult(BaseModel):

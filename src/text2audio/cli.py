@@ -38,6 +38,10 @@ LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code(s), e
 TierOpt = Annotated[str | None, typer.Option("--tier", help="fast | expressive")]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output.")]
 LockOpt = Annotated[Path | None, typer.Option("--lock", help="Path to models.lock.")]
+FeatureOpt = Annotated[
+    list[str] | None,
+    typer.Option("--feature", help="Opt-in assets too, e.g. translate (repeatable)."),
+]
 
 
 @app.callback()
@@ -141,20 +145,24 @@ def plugins() -> None:
 
 
 @models_app.command("list")
-def models_list(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_list(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """List pinned assets from models.lock."""
     from text2audio import api
 
-    for a in api.models_list(lang, _tier(tier), lock):
+    for a in api.models_list(lang, _tier(tier), lock, tuple(feature or ())):
         typer.echo(f"{a.owner}\t{a.source}\t{len(a.files)} file(s)\t{a.license}")
 
 
 @models_app.command("verify")
-def models_verify(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_verify(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """Verify SHA-256 of every pinned asset in the store."""
     from text2audio import api
 
-    problems = api.models_verify(lang, _tier(tier), lock=lock)
+    problems = api.models_verify(lang, _tier(tier), lock=lock, features=tuple(feature or ()))
     for p in problems:
         typer.echo(str(p), err=True)
     if problems:
@@ -163,13 +171,15 @@ def models_verify(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = No
 
 
 @models_app.command("pull")
-def models_pull(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_pull(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """Download pinned assets (uses the network)."""
     from text2audio import api
     from text2audio.models.pull import PullError
 
     try:
-        fetched = api.models_pull(lang, _tier(tier), lock=lock)
+        fetched = api.models_pull(lang, _tier(tier), lock=lock, features=tuple(feature or ()))
     except PullError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.MISSING_ASSET) from exc
@@ -232,7 +242,9 @@ OutputOpt = Annotated[
 ]
 
 
-def _translate(source: Path, output: Path | None, source_lang: str | None, target: str) -> None:
+def _translate(
+    source: Path, output: Path | None, source_lang: str | None, target: str | None
+) -> None:
     from text2audio import api
     from text2audio.core.envs import EnvMissing
     from text2audio.core.translate import TranslateError
@@ -249,17 +261,27 @@ def _translate(source: Path, output: Path | None, source_lang: str | None, targe
         except (EnvMissing, WorkerError) as exc:
             ui.print(f"[red]error:[/] {escape(str(exc))}")
             raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+        s = r.stats
+        extra = [f"{n} by {name}" for name, n in s.by.items() if name != r.translator]
+        if s.placeholders:
+            extra.append(f"{s.placeholders} redone to keep abbreviations")
         ui.result(
-            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator} on {r.device}, "
-            f"{r.sentences} sentences"
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator} on {r.device}: "
+            f"{s.pieces} pieces, {s.translated} translated now, {s.cached} cached"
+            + (f" ({'; '.join(extra)})" if extra else "")
         )
+        for w in s.warnings:
+            ui.warn(w)
 
 
 @app.command()
 def translate(
     source: SourceArg,
     output: OutputOpt = None,
-    to: Annotated[str, typer.Option("--to", help="Target language.")] = "en",
+    to: Annotated[
+        str | None,
+        typer.Option("--to", help="Target language (default: the first the source has)."),
+    ] = None,
     source_lang: Annotated[
         str | None, typer.Option("--from", help="Source language (default: guessed).")
     ] = None,
@@ -272,6 +294,12 @@ def translate(
 def ru2en(source: SourceArg, output: OutputOpt = None) -> None:
     """Same as `translate --from ru --to en`."""
     _translate(source, output, "ru", "en")
+
+
+@app.command(hidden=True)
+def en2ru(source: SourceArg, output: OutputOpt = None) -> None:
+    """Same as `translate --from en --to ru`."""
+    _translate(source, output, "en", "ru")
 
 
 _COVER_MODES = ("auto", "embedded-only", "generate", "typographic")

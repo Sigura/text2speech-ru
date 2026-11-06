@@ -47,6 +47,12 @@ def test_wanted_filters_by_language(make_asset: Callable[..., ModelAsset]) -> No
     assert not asset.wanted("en", None)
 
 
+def test_feature_assets_only_when_asked_for(make_asset: Callable[..., ModelAsset]) -> None:
+    mt = make_asset().model_copy(update={"feature": "translate", "langs": ("en", "ru")})
+    assert not mt.wanted("en", None) and not mt.wanted(None, None)
+    assert mt.wanted("en", None, ("translate",)) and not mt.wanted("de", None, ("translate",))
+
+
 def test_verify_reports_missing_and_corrupt(
     store: ModelStore, make_asset: Callable[..., ModelAsset]
 ) -> None:

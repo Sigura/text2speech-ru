@@ -113,9 +113,20 @@ def run_doctor(
         report.add("models.lock", "fail", str(exc))
         assets = []
     else:
+        optional = [a for a in assets if a.feature]
+        assets = [a for a in assets if not a.feature]
         problems = store.verify(assets)
         for problem in problems:
             report.add("asset", "fail", str(problem))
+        for feature in sorted({str(a.feature) for a in optional}):
+            missing = store.verify([a for a in optional if a.feature == feature])
+            report.add(
+                f"feature {feature}",
+                "warn" if missing else "ok",
+                f"not installed (text2audio models pull --feature {feature})"
+                if missing
+                else "installed",
+            )
         n_files = sum(len(a.files) for a in assets)
         report.add(
             "models.lock",

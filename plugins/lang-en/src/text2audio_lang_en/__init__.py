@@ -83,7 +83,8 @@ PROFILE = LanguageProfile(
     qa=QaProfile(
         asr="whisper", wer_threshold=0.12, chars_per_sec=(7.0, 22.0), normalize_heard=True
     ),
-    translator=None,  # English needs no translation for cover prompts
+    # LLM by paragraph, NLLB by sentence for what fails the checks (§13.1).
+    translators={"ru": ("seedx-7b", "nllb-3.3b")},
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",
 )

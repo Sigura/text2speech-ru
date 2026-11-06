@@ -21,6 +21,7 @@ members = [
     "text2audio-g2p-ruaccent",
     "text2audio-lang-en",
     "text2audio-lang-ru",
+    "text2audio-mt-hf",
     "text2audio-mt-opus",
     "text2audio-tagger-wd14",
 ]
@@ -1857,6 +1858,7 @@ langs = [
     { name = "text2audio-g2p-ruaccent" },
     { name = "text2audio-lang-en" },
     { name = "text2audio-lang-ru" },
+    { name = "text2audio-mt-hf" },
     { name = "text2audio-mt-opus" },
 ]
 
@@ -1902,6 +1904,7 @@ langs = [
     { name = "text2audio-g2p-ruaccent", editable = "plugins/g2p-ruaccent" },
     { name = "text2audio-lang-en", editable = "plugins/lang-en" },
     { name = "text2audio-lang-ru", editable = "plugins/lang-ru" },
+    { name = "text2audio-mt-hf", editable = "plugins/mt-hf" },
     { name = "text2audio-mt-opus", editable = "plugins/mt-opus" },
 ]
 
@@ -2022,6 +2025,17 @@ requires-dist = [
     { name = "pymorphy3-dicts-ru", specifier = ">=2.4" },
     { name = "text2audio", editable = "." },
 ]
+
+[[package]]
+name = "text2audio-mt-hf"
+version = "0.1.0"
+source = { editable = "plugins/mt-hf" }
+dependencies = [
+    { name = "text2audio" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "text2audio", editable = "." }]
 
 [[package]]
 name = "text2audio-mt-opus"

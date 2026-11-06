@@ -2,7 +2,8 @@
 
 Stable Diffusion understands English only. FB2 genre codes and EPUB subjects map to
 English style keywords here; the title and the start of the annotation come in
-already translated (the language's `translator` component), or are left out.
+already translated (the language's first `translators` entry for English), or are
+left out.
 """
 
 from __future__ import annotations

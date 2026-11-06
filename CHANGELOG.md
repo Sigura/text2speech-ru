@@ -237,6 +237,9 @@ All notable changes to this project are documented here. The format follows
   folder>… [--mode …]` chooses a cover again without re-conversion (SPEC 4.9-M5).
 - The translator runs on a GPU when one has room, else on CPU: a whole novel in 1 min
   14 s instead of 72 min (SPEC 4.11-M5).
+- en→ru book translation (`translate --to ru`, `en2ru`): Seed-X-PPO-7B by paragraph,
+  checked, with NLLB-200 3.3B by sentence for failed pieces; Latin abbreviations kept;
+  resumable; weights via `models pull --feature translate` (ADR-0011, SPEC 4.14-M5).
 
 ### Changed
 

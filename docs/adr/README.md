@@ -17,5 +17,6 @@ Every ADR also appears in the SPEC.md decision log (§13.1).
 | [0008](0008-russian-first-language.md) | Russian as the first language | Accepted |
 | [0009](0009-covers-and-local-services.md) | Book covers: extract first, generate with a local Stable Diffusion service | Accepted |
 | [0010](0010-plugin-worker-environments.md) | Plugin worker environments and the worker runtime | Accepted |
+| [0011](0011-book-translation-pipeline.md) | Book translation: an LLM by paragraph, checked, with a sentence-level fallback | Accepted |
 
 New ADR: copy [template.md](template.md), take the next number, open a PR.

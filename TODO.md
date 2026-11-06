@@ -146,8 +146,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] owner's blind reading → ru→en = Seed-X-PPO-7B, NLLB-3.3B fallback (SPEC 4.13-M5);
   - [ ] **last stage (owner):** Seed-X / NLLB-3.3B translator plugins for ru→en — whole
     paragraphs for the LLM, as asked; mixed-script sentences re-translated by NLLB.
-  - [ ] **first:** en→ru — benchmark running (`MT_BENCH_PAIR=en-ru`), then the owner's
-    reading, a translator contract with language pairs and the en→ru plugin.
+  - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
+    pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
+  - [ ] owner's blind reading of the en→ru samples (sent 2026-11-06) — may change the
+    `en` pack's order.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;
