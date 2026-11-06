@@ -49,22 +49,21 @@ def main() -> None:
     order = list(itertools.permutations(keys, 2))
     flat = comet_scores([(src[i], hyps[a][i], hyps[b][i]) for a, b in order for i in range(n)])
     util_comet = {(a, b): flat[j * n : (j + 1) * n] for j, (a, b) in enumerate(order)}
-    picks: dict[str, list[str]] = {}
-    for name in ("chrf", "comet"):
-        chosen = []
-        for i in range(n):
 
-            def score(a: str) -> float:
-                if name == "comet":
-                    return sum(util_comet[(a, b)][i] for b in keys if b != a)
-                return sum(
-                    sacrebleu.sentence_chrf(hyps[a][i], [hyps[b][i]], word_order=2).score
-                    for b in keys
-                    if b != a
-                )
+    def utility(name: str, a: str, i: int) -> float:
+        if name == "comet":
+            return sum(util_comet[(a, b)][i] for b in keys if b != a)
+        return sum(
+            sacrebleu.sentence_chrf(hyps[a][i], [hyps[b][i]], word_order=2).score
+            for b in keys
+            if b != a
+        )
 
-            chosen.append(hyps[max(keys, key=score)][i])
-        picks[f"mbr-{name}"] = chosen
+    def best(name: str, i: int) -> str:
+        scores = {a: utility(name, a, i) for a in keys}
+        return hyps[max(scores, key=scores.__getitem__)][i]
+
+    picks = {f"mbr-{name}": [best(name, i) for i in range(n)] for name in ("chrf", "comet")}
     rows = []
     for label, hyp in [*hyps.items(), *picks.items()]:
         cm = sum(comet_scores(list(zip(src, hyp, ref, strict=True)))) / n
