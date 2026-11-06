@@ -1,17 +1,18 @@
-"""Blind A/B listening test for M3 (SPEC §6.7): E1 vs E0, and T1 vs T0 on narration.
+"""Blind A/B listening test (SPEC §6.7): E1 vs E0, and T1 vs T0 on narration, per language.
 
-    uv run --python 3.11 python scripts/listen_ab.py build e1 [--out DIR] [--pairs 30]
-    uv run --python 3.11 python scripts/listen_ab.py build t1 [--out DIR] [--pairs 20]
+    uv run --python 3.11 python scripts/listen_ab.py build e1 [--lang ru] [--out DIR] [--pairs 30]
+    uv run --python 3.11 python scripts/listen_ab.py build t1 [--lang ru] [--out DIR] [--pairs 20]
     uv run --python 3.11 python scripts/listen_ab.py score [--out DIR]
 
-`build` picks paragraphs of the full novel (fetch it once with
-`tests/fixtures/fetch_novel.py`) and renders them through the real pipeline, no QA, at
-most 100 segments per call. `e1` takes paragraphs that E0 and E1 segment differently
-(dialogue with an author's remark), both on T0; `t1` takes narration paragraphs and
-renders them on T0 and T1 (needs a GPU). Each pair is one MP3: the 1.5 s lead-in,
-side A, 1.5 s of silence, side B. The sides are drawn at random and written to
-DIR/key.json — do not open it before scoring. Answers go in DIR/answers.tsv, one line per pair, e.g.
-`e01 A` (A, B, or `=` / `same` for no preference; `E01: b, note` works too).
+`build` picks paragraphs of the language's full novel (fetch it once with
+`tests/fixtures/fetch_novel.py` for `ru`, `fetch_novel_en.py` for `en`) and renders them
+through the real pipeline, no QA, at most 100 segments per call. `e1` takes paragraphs
+that E0 and E1 segment differently (dialogue with an author's remark), both on T0; `t1`
+takes narration paragraphs and renders them on T0 and T1 (needs a GPU). Each pair is one
+MP3: the 1.5 s lead-in, side A, 1.5 s of silence, side B. The sides are drawn at random
+and written to DIR/key.json — do not open it before scoring. Answers go in
+DIR/answers.tsv, one line per pair, e.g. `e01 A` (A, B, or `=` / `same` for no
+preference; `E01: b, note` works too).
 
 `score` prints, per comparison, how many decided pairs the new side (E1, T1) won; it
 becomes the default at ≥ 60 % of decided pairs, with at least 30 pairs for E1
@@ -35,11 +36,19 @@ from text2audio.core.config import load_config
 from text2audio.core.contracts import Segment, Tier
 from text2audio.core.languages import profile
 from text2audio.core.synthesize import render_selection, write_clip
-from text2audio.text.dialogue import split_dialogue
 from text2audio.text.segment import segment_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
-NOVEL = ROOT / "tests" / "fixtures" / "ru" / "large" / "kapitanskaya-dochka.md"
+FIXTURES = ROOT / "tests" / "fixtures"
+# lang → (novel, the script that fetches it, title of the listening book)
+NOVELS = {
+    "ru": (FIXTURES / "ru/large/kapitanskaya-dochka.md", "fetch_novel.py", "Проверка на слух"),
+    "en": (
+        FIXTURES / "en/large/adventures-of-sherlock-holmes.md",
+        "fetch_novel_en.py",
+        "Listening test",
+    ),
+}
 OUT = ROOT / "output" / "listen-ab"
 BUDGET = 100  # segments rendered per `build` call (owner's test-run limit)
 MAX_CHARS = 320  # per passage: short clips, small budget
@@ -167,23 +176,23 @@ def report(scores: list[Score]) -> str:
 # --------------------------------------------------------------------------- build
 
 
-def _segments(text: str, expression: str) -> list[Segment]:
-    return segment_markdown(text, "ru", profile("ru"), expression=expression)
+def _segments(text: str, expression: str, lang: str) -> list[Segment]:
+    return segment_markdown(text, lang, profile(lang), expression=expression)
 
 
-def _candidates(kind: str, paras: list[str]) -> list[Passage]:
+def _candidates(kind: str, paras: list[str], lang: str = "ru") -> list[Passage]:
     out = []
     for text in paras:
         if len(text) > MAX_CHARS:
             continue
-        e1 = _segments(text, "E1")
+        e1 = _segments(text, "E1", lang)
         if kind == "e1":
-            e0 = _segments(text, "E0")
+            e0 = _segments(text, "E0", lang)
             if [(s.text, s.pause_after_ms) for s in e0] == [(s.text, s.pause_after_ms) for s in e1]:
                 continue
             seen = {s.text for s in e1}
             out.append(Passage(text, len(e1) + sum(s.text not in seen for s in e0)))
-        elif len(text) >= MIN_NARRATION and all(r == "narration" for r, _ in split_dialogue(text)):
+        elif len(text) >= MIN_NARRATION and all(s.role == "narration" for s in e1):
             out.append(Passage(text, len(e1)))
     return out
 
@@ -196,11 +205,13 @@ def _text_only(segments: list[Segment]) -> list[Segment]:
     return [s for s in segments if s.heading_level is None]
 
 
-def build(kind: str, out: Path, pairs: int) -> None:
-    if not NOVEL.is_file():
-        raise SystemExit(f"{NOVEL} missing: run `uv run python tests/fixtures/fetch_novel.py`")
-    print(f"1/4 picking {pairs} {kind} passages")
-    chosen = pick(_candidates(kind, paragraphs(NOVEL.read_text(encoding="utf-8"))), pairs, BUDGET)
+def build(kind: str, out: Path, pairs: int, lang: str = "ru") -> None:
+    novel, fetcher, title = NOVELS[lang]
+    if not novel.is_file():
+        raise SystemExit(f"{novel} missing: run `uv run python tests/fixtures/{fetcher}`")
+    print(f"1/4 picking {pairs} {kind} passages ({lang})")
+    paras = paragraphs(novel.read_text(encoding="utf-8"))
+    chosen = pick(_candidates(kind, paras, lang), pairs, BUDGET)
     if len(chosen) < pairs:
         print(f"  only {len(chosen)} passages fit the {BUDGET}-segment budget")
     print(f"  {len(chosen)} passages, {sum(p.cost for p in chosen)} segments to render")
@@ -210,8 +221,8 @@ def build(kind: str, out: Path, pairs: int) -> None:
     work.mkdir(parents=True)
     source = work / "listen.md"
     body = "".join(f"## {n}\n\n{p.text}\n\n" for n, p in enumerate(chosen, 1))
-    source.write_text(f"# Проверка на слух\n\n{body}", encoding="utf-8")
-    [converted] = api.convert([source], work / "out", lang="ru", overwrite=True)
+    source.write_text(f"# {title}\n\n{body}", encoding="utf-8")
+    [converted] = api.convert([source], work / "out", lang=lang, overwrite=True)
     if converted.folder is None:
         raise SystemExit(f"convert failed: {converted.error}")
     folder = converted.folder
@@ -250,13 +261,14 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("kind", choices=sorted(SIDES))
+    b.add_argument("--lang", choices=sorted(NOVELS), default="ru")
     b.add_argument("--out", type=Path, default=OUT)
     b.add_argument("--pairs", type=int)
     s = sub.add_parser("score")
     s.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args(argv)
     if args.cmd == "build":
-        build(args.kind, args.out, args.pairs or {"e1": 30, "t1": 20}[args.kind])
+        build(args.kind, args.out, args.pairs or {"e1": 30, "t1": 20}[args.kind], args.lang)
         return 0
     key = json.loads((args.out / "key.json").read_text(encoding="utf-8"))
     answers = read_answers((args.out / "answers.tsv").read_text(encoding="utf-8"))

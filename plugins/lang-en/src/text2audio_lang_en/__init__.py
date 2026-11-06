@@ -64,17 +64,19 @@ PROFILE = LanguageProfile(
     ),
     normalizer="en",
     g2p=None,  # misaki runs inside the Kokoro worker; Chatterbox reads plain text (§13.1)
+    default_tier="fast",  # owner's blind test, §13.1
     tiers={"fast": TierRoute(backend="kokoro"), "expressive": TierRoute(backend="chatterbox")},
-    # Provisional until the owner's listening test (M4 step 8): a female narrator and a
-    # contrasting dialogue voice. Chatterbox clones the Kokoro voice from a clip it read
-    # (`spikes/en-voices/make_refs.py`), so both tiers keep the same narrator.
+    # Chosen by the owner by ear (M4 step 8, `spikes/en-voices/samples.py`). Chatterbox
+    # clones the Kokoro voice from a clip it read (`spikes/en-voices/make_refs.py`), so
+    # both tiers keep the same narrator.
     voices={
-        "narrator": {"kokoro": "af_heart", "chatterbox": str(_VOICES / "ref-af_heart.wav")},
+        "narrator": {"kokoro": "af_nicole", "chatterbox": str(_VOICES / "ref-af_nicole.wav")},
         "dialogue": {"kokoro": "am_michael", "chatterbox": str(_VOICES / "ref-am_michael.wav")},
     },
     pauses_ms={},
     dialogue="quote",
-    qa=QaProfile(asr="whisper", wer_threshold=0.12, chars_per_sec=(10.0, 22.0)),
+    # af_nicole reads slowly: 8.3–13.6 letters/s on the benchmark sentences (§13.1).
+    qa=QaProfile(asr="whisper", wer_threshold=0.12, chars_per_sec=(7.0, 22.0)),
     translator=None,  # English needs no translation for cover prompts
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",

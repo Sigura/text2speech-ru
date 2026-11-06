@@ -28,6 +28,12 @@ def test_profile_and_hooks() -> None:
     assert Path(PROFILE.lexicon or "").is_file()
 
 
+def test_owner_choices() -> None:
+    assert PROFILE.default_tier == "fast"
+    assert PROFILE.voices["narrator"]["kokoro"] == "af_nicole"
+    assert PROFILE.voices["dialogue"]["kokoro"] == "am_michael"
+
+
 def test_set_is_large_enough() -> None:
     assert len(CASES) >= 300
 

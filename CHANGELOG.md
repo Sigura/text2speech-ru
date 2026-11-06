@@ -226,6 +226,9 @@ All notable changes to this project are documented here. The format follows
 - M4 step 7 — `en` benchmark spike (`spikes/en-bench/`): Kokoro, Chatterbox and
   IndexTTS-2 on 100 segments of a Project Gutenberg novel
   (`tests/fixtures/fetch_novel_en.py`) (SPEC 3.6-M4).
+- M4 step 8 — `en` voices chosen by ear (narrator `af_nicole`, dialogue `am_michael`),
+  fast tier by default after the blind test, QA rate floor 7 letters/s;
+  `scripts/listen_ab.py --lang` (SPEC 3.7-M4).
 
 ### Changed
 

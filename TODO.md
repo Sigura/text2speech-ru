@@ -97,8 +97,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [ ] `en` text gaps from the benchmark: *St.* before a name after a capitalized
     word («Avenue, St. John’s Wood» → Street), pre-decimal money («2s. 6d.»);
   - [x] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
-  - [ ] female narrator + contrasting dialogue voice; listening test; record in
-    SPEC §13.1.
+  - [x] female narrator + contrasting dialogue voice (owner: `af_nicole`, `am_michael`);
+  - [x] blind T1-vs-T0 test for `en`: T1 preferred in 6/20, fast tier by default;
+  - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for
+    English (benchmark challenger, not in the blind test);
 - [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that
   there are two packs: misaki G2P / Kokoro for English words in Russian text (FR-24,
   instead of espeak-ng transliteration), the quote splitter for «» dialogue in Russian

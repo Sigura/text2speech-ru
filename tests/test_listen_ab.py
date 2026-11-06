@@ -43,6 +43,21 @@ def test_t1_candidates_are_long_narration_only() -> None:
     assert (found.text, found.cost) == (long, 1)
 
 
+EN_DIALOGUE = "“Wedlock suits you,” he remarked. “I think, Watson, that you have put on weight.”"
+EN_NARRATION = (
+    "He chuckled to himself and rubbed his long, nervous hands together. The stout gentleman"
+    " half rose from his chair and gave a bob of greeting, with a quick little glance."
+)
+
+
+def test_candidates_follow_the_language() -> None:
+    [found] = listen_ab._candidates("e1", [EN_NARRATION, EN_DIALOGUE], "en")
+    assert found.text == EN_DIALOGUE
+    [narration] = listen_ab._candidates("t1", [EN_NARRATION, EN_DIALOGUE], "en")
+    assert narration.text == EN_NARRATION
+    assert set(listen_ab.NOVELS) >= {"ru", "en"}
+
+
 def test_pick_stays_within_the_budget() -> None:
     candidates = [listen_ab.Passage(f"p{n}", cost) for n, cost in enumerate([3, 4, 2, 5, 3, 1])]
     chosen = listen_ab.pick(candidates, pairs=10, budget=9)
