@@ -368,7 +368,9 @@ _TEXT_RULES: list[Rule] = [
 
 _NUMBER_RULES: list[Rule] = [
     (
-        re.compile(rf"([$£€])\s?({_READABLE})(?:\s+(thousand|million|billion|trillion))?(?![\d,])"),
+        re.compile(
+            rf"([$£€])\s?({_READABLE})(?:\s+(thousand|million|billion|trillion))?(?!\d|[.,]\d)"
+        ),
         _money,
     ),
     (

@@ -272,3 +272,8 @@ All notable changes to this project are documented here. The format follows
   encoder (10 min of audio: 36.8 s → 15.8 s); SPEC.md 4.7-M5.
 - `ru` reads quoted speech outside dash paragraphs as dialogue (`«…», — сказал он`,
   `"Кто там?" спросила`); titles and terms in quotes stay narration; SPEC.md 4.8-M5.
+
+### Fixed
+
+- `en` normalization read an amount followed by a comma, such as «$5.20, and», as
+  «five dollars.20»: the money rule backed off to the whole units.
