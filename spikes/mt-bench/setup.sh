@@ -19,9 +19,10 @@ for tool in uv curl tar; do
 done
 mkdir -p "$HOME_DIR"
 
+# Managed Python: Triton (pulled in by the LLMs) compiles a helper against Python.h.
 if want env; then
   echo "== uv env"
-  UV_PROJECT_ENVIRONMENT="$HOME_DIR/venv" uv sync --python 3.12 --project "$HERE/env"
+  UV_PROJECT_ENVIRONMENT="$HOME_DIR/venv" uv sync --python 3.12 --managed-python --project "$HERE/env"
 fi
 
 if want data; then
