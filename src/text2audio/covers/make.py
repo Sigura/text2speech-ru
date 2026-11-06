@@ -28,6 +28,7 @@ from text2audio.core.errors import CoverError
 from text2audio.core.languages import profile
 from text2audio.core.plugins import discover
 from text2audio.core.pool import cpu_slots
+from text2audio.core.translate import open_translator
 from text2audio.core.workspace import BookFolder, write_json
 from text2audio.covers import prompt, typographic
 from text2audio.models.lock import assets_for, load_lock
@@ -333,13 +334,6 @@ def _translate(books: list[_Book], store: ModelStore) -> dict[int, tuple[str | N
 
 
 def _run_translator(found: Any, texts: list[str], store: ModelStore) -> dict[str, str]:
-    caps = found.capabilities
-    [slot] = cpu_slots(caps.threads, caps.ram_mb, 1)
-    worker = Worker(found, store.root, slot)
-    try:
-        worker.load(assets=store.payload(assets_for(found.component, load_lock())))
+    with open_translator(found, store) as translate:
         unique = list(dict.fromkeys(texts))
-        reply = worker.call("translate", texts=unique)
-        return dict(zip(unique, (str(t) for t in reply["texts"]), strict=True))
-    finally:
-        worker.close()
+        return dict(zip(unique, translate(unique), strict=True))

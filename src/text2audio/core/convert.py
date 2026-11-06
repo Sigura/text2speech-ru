@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from text2audio import __version__, readers
 from text2audio.core.config import Config, CoverConfig
@@ -25,8 +25,8 @@ from text2audio.core.workspace import (
 )
 from text2audio.covers.make import make_covers
 from text2audio.models.store import ModelStore
-from text2audio.readers.detect import detect
-from text2audio.readers.document import Document, Heading, Inline
+from text2audio.readers.detect import Format, detect
+from text2audio.readers.document import Cover, Document, Heading, Inline
 from text2audio.readers.markdown import to_markdown
 from text2audio.readers.safety import InputError, read_input
 from text2audio.text.segment import segment_markdown, write_manifest
@@ -84,6 +84,24 @@ def _metadata(doc: Document, fmt: str, reader: str, src: Path, data: bytes) -> d
     }
 
 
+def place_cover(
+    folder: BookFolder, embedded: Cover | None, previous: dict[str, Any], mode: str
+) -> dict[str, Any] | None:
+    """The book's cover entry before `make_covers`: the embedded picture when the mode
+    allows it, else a previous generated or typographic cover, else none."""
+    if embedded is not None and mode in ("auto", "embedded-only"):
+        for old in folder.work.glob("cover.*"):
+            old.unlink()
+        cover = folder.work / f"cover.{embedded.extension}"
+        cover.write_bytes(embedded.data)
+        return {"file": cover.name, "origin": "embedded", "type": embedded.media_type}
+    if previous.get("origin") in ("generated", "typographic"):
+        return previous  # make_covers keeps or replaces it
+    for old in folder.work.glob("cover.*"):
+        old.unlink()
+    return None
+
+
 def convert_one(
     src: Path,
     root: Path,
@@ -130,17 +148,7 @@ def convert_one(
             target.write_bytes(data)
         previous = (folder.metadata() or {}).get("cover") or {} if resumed else {}
         meta = _metadata(doc, fmt, reader, src_name, data)
-        if doc.cover is not None and cover_mode in ("auto", "embedded-only"):
-            for old in folder.work.glob("cover.*"):
-                old.unlink()
-            cover = folder.work / f"cover.{doc.cover.extension}"
-            cover.write_bytes(doc.cover.data)
-            meta["cover"] = {"file": cover.name, "origin": "embedded", "type": doc.cover.media_type}
-        elif previous.get("origin") in ("generated", "typographic"):
-            meta["cover"] = previous  # make_covers keeps or replaces it
-        else:
-            for old in folder.work.glob("cover.*"):
-                old.unlink()
+        meta["cover"] = place_cover(folder, doc.cover, previous, cover_mode)
         if overwrite and not resumed and folder.markdown.exists():
             folder.markdown.unlink()
             folder.converted.unlink(missing_ok=True)
@@ -204,4 +212,57 @@ def convert(
         )
         for r in done:
             r.warnings += found.get(str(r.folder), [])
+    return results
+
+
+# Formats whose readers find an embedded cover.
+_COVER_FORMATS: tuple[Format, ...] = ("fb2", "fb2.zip", "epub")
+
+
+@dataclass
+class CoverResult:
+    folder: Path
+    origin: str | None = None
+    file: Path | None = None
+    note: str | None = None
+    warnings: list[str] = field(default_factory=list)
+    error: str | None = None
+
+
+def remake_covers(books: list[tuple[Path, Config]], store: ModelStore) -> list[CoverResult]:
+    """Choose the cover of converted books again (§6.8.2), each with its own `[cover]`
+    settings, without touching their Markdown; the embedded picture is read from the
+    stored source. Books with equal settings share one generator session."""
+    results: list[CoverResult] = []
+    groups: dict[str, tuple[Config, list[BookFolder]]] = {}
+    for path, config in books:
+        folder = BookFolder(path)
+        meta, stored = folder.metadata(), folder.source()
+        if meta is None or stored is None:
+            results.append(CoverResult(path, error=f"not a book folder (no {WORK}/source.*)"))
+            continue
+        embedded = None
+        try:
+            data = read_input(stored)
+            fmt = detect(data, str((meta.get("source") or {}).get("name") or stored.name))
+            if fmt in _COVER_FORMATS:
+                embedded = readers.read(fmt, data, meta.get("language"))[1].cover
+        except InputError as exc:
+            results.append(CoverResult(path, error=str(exc)))
+            continue
+        meta["cover"] = place_cover(folder, embedded, meta.get("cover") or {}, config.cover.mode)
+        write_json(folder.metadata_path, meta)
+        results.append(CoverResult(path))
+        groups.setdefault(config.cover.model_dump_json(), (config, []))[1].append(folder)
+    warnings: dict[str, list[str]] = {}
+    for config, folders in groups.values():
+        warnings |= make_covers(folders, config, store)
+    for r in results:
+        if r.error is not None:
+            continue
+        folder = BookFolder(r.folder)
+        cover = (folder.metadata() or {}).get("cover") or {}
+        r.origin, r.note = cover.get("origin"), cover.get("note")
+        r.file = folder.work / str(cover["file"]) if cover.get("file") else None
+        r.warnings = warnings.get(str(r.folder), [])
     return results

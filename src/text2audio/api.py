@@ -10,8 +10,9 @@ from text2audio import __version__
 from text2audio.core import resources as res
 from text2audio.core.config import Config, load_config
 from text2audio.core.contracts import Capabilities, ModelAsset, Tier
-from text2audio.core.convert import ConvertResult
+from text2audio.core.convert import ConvertResult, CoverResult
 from text2audio.core.convert import convert as _convert
+from text2audio.core.convert import remake_covers as _remake_covers
 from text2audio.core.doctor import DoctorReport, run_doctor
 from text2audio.core.effective import View, Voices, effective_config
 from text2audio.core.effective import voices as _voices
@@ -21,6 +22,8 @@ from text2audio.core.plugins import Discovery, discover
 from text2audio.core.synthesize import Progress, SynthesisReport
 from text2audio.core.synthesize import preview as _preview
 from text2audio.core.synthesize import synthesize as _synthesize
+from text2audio.core.translate import TranslateResult
+from text2audio.core.translate import translate_file as _translate
 from text2audio.models.lock import load_lock
 from text2audio.models.pull import pull
 from text2audio.models.store import AssetProblem, ModelStore
@@ -77,6 +80,37 @@ def convert(
     return _convert(
         inputs, root, name=name, overwrite=overwrite, reconvert=reconvert, lang=lang, config=config
     )
+
+
+def translate(
+    source: Path,
+    output: Path | None = None,
+    *,
+    source_lang: str | None = None,
+    target_lang: str = "en",
+    store: Path | None = None,
+    progress: Progress | None = None,
+) -> TranslateResult:
+    """A Markdown file or a book folder's `<book>.md` into another language, offline;
+    the Markdown structure is kept (default output `<name>.<target>.md`)."""
+    return _translate(
+        source,
+        output,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        store=ModelStore(store),
+        progress=progress,
+    )
+
+
+def cover(
+    folders: list[Path], *, mode: str | None = None, store: Path | None = None
+) -> list[CoverResult]:
+    """Choose the cover of converted books again (§6.8.2) under each book's `[cover]`
+    settings, `mode` overriding `[cover] mode`; the Markdown is not touched."""
+    overrides = {"cover": {"mode": mode}} if mode else None
+    books = [(f, load_config(_book_config_files(f), overrides)) for f in folders]
+    return _remake_covers(books, ModelStore(store))
 
 
 def models_list(

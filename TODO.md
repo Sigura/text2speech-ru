@@ -138,6 +138,12 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   paragraph, Markdown structure kept; benchmark a stronger offline MT than Opus-MT for
   whole books, e.g. NLLB / MADLAD) and `text2audio cover <book> [--mode …]` to remake a
   cover without re-conversion.
+  - [x] `text2audio cover <book folder>… [--mode …]` (SPEC 4.9-M5);
+  - [x] `text2audio translate` / `ru2en` with Opus-MT, sentence by sentence (Marian
+    reads ≤ 512 tokens, so whole paragraphs would be cut), structure kept (SPEC 4.9-M5);
+  - [ ] benchmark (`spikes/mt-bench/`: Opus-MT, NLLB 1.3B / 3.3B, MADLAD-3B, Tower-Plus-9B,
+    Seed-X-PPO-7B, Qwen3-8B on FLORES-200 + a literary excerpt), then adopt the winner
+    as a translator plugin — an LLM gets whole paragraphs, as asked.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;

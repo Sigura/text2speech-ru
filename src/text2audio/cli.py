@@ -226,6 +226,86 @@ def convert(
         raise typer.Exit(ExitCode.INPUT)
 
 
+SourceArg = Annotated[Path, typer.Argument(help="A Markdown file or a book folder.")]
+OutputOpt = Annotated[
+    Path | None, typer.Option("-o", "--output", help="Output file (default <name>.<lang>.md).")
+]
+
+
+def _translate(source: Path, output: Path | None, source_lang: str | None, target: str) -> None:
+    from text2audio import api
+    from text2audio.core.envs import EnvMissing
+    from text2audio.core.translate import TranslateError
+    from text2audio.workers.process import WorkerError
+
+    with StageProgress() as ui:
+        try:
+            r = api.translate(
+                source, output, source_lang=source_lang, target_lang=target, progress=ui
+            )
+        except TranslateError as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.INPUT) from exc
+        except (EnvMissing, WorkerError) as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+        ui.result(
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator}, "
+            f"{r.sentences} sentences"
+        )
+
+
+@app.command()
+def translate(
+    source: SourceArg,
+    output: OutputOpt = None,
+    to: Annotated[str, typer.Option("--to", help="Target language.")] = "en",
+    source_lang: Annotated[
+        str | None, typer.Option("--from", help="Source language (default: guessed).")
+    ] = None,
+) -> None:
+    """Translate a book's Markdown offline, keeping its structure."""
+    _translate(source, output, source_lang, to)
+
+
+@app.command(hidden=True)
+def ru2en(source: SourceArg, output: OutputOpt = None) -> None:
+    """Same as `translate --from ru --to en`."""
+    _translate(source, output, "ru", "en")
+
+
+_COVER_MODES = ("auto", "embedded-only", "generate", "typographic")
+
+
+@app.command()
+def cover(
+    folders: Annotated[list[Path], typer.Argument(help="Book folders made by convert.")],
+    mode: Annotated[
+        str | None,
+        typer.Option("--mode", help="auto | embedded-only | generate | typographic"),
+    ] = None,
+) -> None:
+    """Choose a book's cover again without re-converting it (§6.8.2)."""
+    from text2audio import api
+
+    if mode is not None and mode not in _COVER_MODES:
+        typer.echo(f"error: --mode must be one of: {', '.join(_COVER_MODES)}", err=True)
+        raise typer.Exit(ExitCode.USAGE)
+    results = api.cover(folders, mode=mode)
+    for r in results:
+        if r.error is not None:
+            typer.echo(f"FAILED {r.folder}: {r.error}", err=True)
+            continue
+        note = f" ({r.note})" if r.note else ""
+        typer.echo(f"{r.file or r.folder} — {r.origin or 'no cover'}{note}")
+        for w in r.warnings:
+            typer.echo(f"  warning: {w}")
+        if (r.folder / "_work" / "parts.json").is_file():
+            typer.echo(f"  run `text2audio synthesize {r.folder}` to put it into the audio files")
+    if any(r.error is not None for r in results):
+        raise typer.Exit(ExitCode.INPUT)
+
+
 @envs_app.command("list")
 def envs_list() -> None:
     """List plugin environments and whether they are installed."""

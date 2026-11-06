@@ -36,6 +36,7 @@ _DIALOGUE = re.compile(r"^[-\u2012\u2013\u2014\u2015]\s+")  # - ‒ – — ―
 _ESCAPE = re.compile(r"([\\`*_\[\]<])")
 _WORDLIKE = re.compile(r"\w")
 _SPACE_BEFORE_STOP = re.compile(r"^ +([,.])")
+_VERBATIM = ("note", "directive")  # span kinds whose text is an id or a directive body
 _LINE_START = re.compile(r"^(#|>|[+*-] |\d+[.)] |=+$|-{3,}$)")
 
 
@@ -47,14 +48,14 @@ def normalize_inlines(inlines: list[Inline]) -> list[Inline]:
     """Clean spaces, merge neighbours, keep emphasis free of edge whitespace."""
     merged: list[Inline] = []
     for item in inlines:
-        text = item.text if item.kind == "note" else _SPACES.sub(" ", item.text)
+        text = item.text if item.kind in _VERBATIM else _SPACES.sub(" ", item.text)
         if not text:
             continue
         if item.kind in ("emph", "strong") and not _WORDLIKE.search(text):
             item = Inline("text", text)  # emphasised spaces or a lone dash mean nothing
         else:
             item = Inline(item.kind, text)
-        if merged and merged[-1].kind == item.kind and item.kind != "note":
+        if merged and merged[-1].kind == item.kind and item.kind not in _VERBATIM:
             merged[-1] = Inline(item.kind, merged[-1].text + item.text)
         else:
             merged.append(item)
@@ -86,11 +87,11 @@ def normalize_inlines(inlines: list[Inline]) -> list[Inline]:
         else:
             final.append(item)
     for i, item in enumerate(final):
-        if item.kind != "note":
+        if item.kind not in _VERBATIM:
             final[i] = Inline(item.kind, _MULTI_SPACE.sub(" ", item.text))
-    if final and final[0].kind != "note":
+    if final and final[0].kind not in _VERBATIM:
         final[0] = Inline(final[0].kind, final[0].text.lstrip())
-    if final and final[-1].kind != "note":
+    if final and final[-1].kind not in _VERBATIM:
         final[-1] = Inline(final[-1].kind, final[-1].text.rstrip())
     return [i for i in final if i.text]
 
@@ -106,6 +107,8 @@ class _Writer:
             if item.kind == "note":
                 number = self.note_numbers.setdefault(item.text, len(self.note_numbers) + 1)
                 parts.append(f"[^{number}]")
+            elif item.kind == "directive":
+                parts.append(f"<!-- t2a:{item.text}-->")
             elif item.kind == "emph":
                 parts.append(f"*{_escape(item.text)}*")
             elif item.kind == "strong":
@@ -126,6 +129,8 @@ class _Writer:
             return self.inline(block.inlines)
         if isinstance(block, SceneBreak):
             return "* * *"
+        if isinstance(block, Directive):
+            return f"<!-- t2a:{block.body}-->"
         if isinstance(block, Quote):
             inner = [self.block(b) for b in block.blocks]
             if block.author:

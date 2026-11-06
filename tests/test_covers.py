@@ -212,6 +212,42 @@ def test_embedded_only_leaves_a_book_without_cover(tmp_path: Path) -> None:
     assert r.folder is not None and not list((r.folder / "_work").glob("cover.*"))
 
 
+def test_cover_command_rechooses_without_reconverting(tmp_path: Path, real_size: None) -> None:
+    from typer.testing import CliRunner
+
+    from text2audio.cli import app
+
+    [r] = convert(
+        [FIXTURES / "kapitanskaya-dochka.fb2"], tmp_path / "out", config=_config(tmp_path)
+    )
+    assert r.folder is not None and _meta(r.folder)["cover"]["origin"] == "embedded"
+    stamp = r.folder.joinpath(f"{r.folder.name}.md").stat().st_mtime_ns
+    runner = CliRunner()
+
+    out = runner.invoke(app, ["cover", str(r.folder), "--mode", "typographic"])
+    assert out.exit_code == 0, out.output
+    assert "cover.jpg — typographic" in out.output
+    assert [p.name for p in (r.folder / "_work").glob("cover.*")] == ["cover.jpg"]
+
+    # Back to the embedded picture, read again from the stored source.
+    out = runner.invoke(app, ["cover", str(r.folder)])
+    assert out.exit_code == 0, out.output
+    assert _meta(r.folder)["cover"]["origin"] == "embedded"
+
+    # The book's own [cover] settings apply; the CLI's --mode wins over them.
+    (r.folder / "_work" / "text2audio.toml").write_text('[cover]\nmode = "typographic"\n')
+    runner.invoke(app, ["cover", str(r.folder)])
+    assert _meta(r.folder)["cover"]["origin"] == "typographic"
+    runner.invoke(app, ["cover", str(r.folder), "--mode", "auto"])
+    assert _meta(r.folder)["cover"]["origin"] == "embedded"
+    assert r.folder.joinpath(f"{r.folder.name}.md").stat().st_mtime_ns == stamp
+
+    out = runner.invoke(app, ["cover", str(tmp_path)])
+    assert out.exit_code == 2 and "not a book folder" in out.output
+    out = runner.invoke(app, ["cover", str(r.folder), "--mode", "sketch"])
+    assert out.exit_code == 1
+
+
 # --------------------------------------------------------------------------- sd-webui
 
 
