@@ -65,7 +65,11 @@ PROFILE = LanguageProfile(
     normalizer="en",
     g2p=None,  # misaki runs inside the Kokoro worker; Chatterbox reads plain text (§13.1)
     default_tier="fast",  # owner's blind test, §13.1
-    tiers={"fast": TierRoute(backend="kokoro"), "expressive": TierRoute(backend="chatterbox")},
+    tiers={
+        "fast": TierRoute(backend="kokoro"),
+        # Chatterbox garbles headings and short pieces; Kokoro reads its reference voices.
+        "expressive": TierRoute(backend="chatterbox", short="kokoro"),
+    },
     # Chosen by the owner by ear (M4 step 8, `spikes/en-voices/samples.py`). Chatterbox
     # clones the Kokoro voice from a clip it read (`spikes/en-voices/make_refs.py`), so
     # both tiers keep the same narrator.

@@ -216,7 +216,8 @@ def test_chatterbox_tts_and_vc_offline_pass_qa(tmp_path: Path) -> None:
 )
 def test_codeswitch_loses_no_word_on_t1(tmp_path: Path) -> None:
     # FR-24 acceptance on T1: segments with transliterated words are read by Chatterbox
-    # in their own script, the rest is Silero → Chatterbox VC; nothing flagged.
+    # in their own script, headings and short pieces stay Silero, the rest is Silero →
+    # Chatterbox VC; nothing flagged.
     [converted] = api.convert([FIXTURES / "ru" / "codeswitch.md"], tmp_path / "out")
     assert converted.folder is not None
     cfg = load_config([], {"synthesis": {"tier": "expressive"}})
@@ -226,7 +227,7 @@ def test_codeswitch_loses_no_word_on_t1(tmp_path: Path) -> None:
         for x in (converted.folder / "_work/segments.jsonl").read_text("utf-8").splitlines()
     ]
     assert report["tier"] == "expressive"
-    assert {s["route"] for s in segs} == {"silero>chatterbox", "chatterbox"}
+    assert {s["route"] for s in segs} == {"silero>chatterbox", "chatterbox", "silero"}
     assert report["foreign_spans"] and all(
         s["resolution"] != "unresolved" for s in report["foreign_spans"]
     )

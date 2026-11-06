@@ -24,11 +24,12 @@ TARGET = "ch01-s0004"  # a long narration segment
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
 
 
-def config(tier: str | None, **qa: int) -> Any:
+def config(tier: str | None, short: str = "", foreign: str = "sine-polish", **qa: int) -> Any:
     lang = {
         "backend": {"fast": "sine", "expressive": "sine"},
         "polish": {"expressive": "sine-polish"},
-        "foreign": {"expressive": "sine-polish"},
+        "foreign": {"expressive": foreign},
+        "short": {"expressive": short},
         "g2p": "backend",
         "asr": "sine-echo",
     }
@@ -75,6 +76,45 @@ def test_polish_route_reuses_fast_tier_audio_as_source(book: Path, tmp_path: Pat
         assert entry is not None and entry["source"] == fast[s["id"]] != s["hash"]
     assert report["qa"]["flagged"] == report["qa"]["unpolished"] == 0
     assert "then `sine-polish`" in (book / "report.md").read_text("utf-8")
+
+
+def _short(seg: dict[str, Any]) -> bool:
+    letters = sum(c.isalpha() for c in seg["text_norm"])
+    return seg["role"] in ("heading", "title") or letters < synth.SHORT_LETTERS
+
+
+def test_short_pieces_skip_polish_when_short_is_the_backend(book: Path, tmp_path: Path) -> None:
+    run(book, tmp_path, "fast")
+    fast = {s["id"]: s["hash"] for s in manifest(book)}
+    cfg = config("expressive", short="sine")
+    report = api.synthesize(book, config=cfg, store=tmp_path / "store").report
+    every = manifest(book)
+    short = [s for s in every if _short(s) and s["route"] != "sine-polish"]
+    assert any(s["role"] == "heading" for s in short)
+    assert all(s["route"] == "sine" and s["hash"] == fast[s["id"]] for s in short)
+    assert all(s["route"] != "sine" for s in every if not _short(s))
+    assert report["segments"]["routes"]["sine"] == len(short)
+    assert report["segments"]["failed"] == report["qa"]["flagged"] == 0
+
+
+def test_short_pieces_go_to_the_short_backend(book: Path, tmp_path: Path) -> None:
+    cfg = config("expressive", short="sine-polish", foreign="")
+    report = api.synthesize(book, config=cfg, store=tmp_path / "store").report
+    every = manifest(book)
+    assert {s["route"] for s in every if _short(s)} == {"sine-polish"}
+    assert {s["route"] for s in every if not _short(s)} == {"sine>sine-polish"}
+    journal = Journal(book / "_work/render.jsonl")
+    for s in every:
+        entry = journal.get(s["hash"])
+        assert entry is not None and ("source" in entry) == (not _short(s))
+    assert report["segments"]["failed"] == report["qa"]["flagged"] == 0
+    assert report["route"]["short"] == "sine-polish"
+
+
+def test_short_and_foreign_must_differ(book: Path, tmp_path: Path) -> None:
+    cfg = config("expressive", short="sine-polish")
+    with pytest.raises(synth.SynthesisError, match="short and foreign"):
+        api.synthesize(book, config=cfg, store=tmp_path / "store")
 
 
 def test_edit_repolishes_only_the_edited_segment(book: Path, tmp_path: Path) -> None:

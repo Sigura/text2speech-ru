@@ -38,7 +38,9 @@ PROFILE = LanguageProfile(
     tiers={
         "fast": TierRoute(backend="silero"),
         # §6.6.6: Silero → Chatterbox VC; segments with Latin words read by Chatterbox.
-        "expressive": TierRoute(backend="silero", polish="chatterbox", foreign="chatterbox"),
+        "expressive": TierRoute(
+            backend="silero", polish="chatterbox", foreign="chatterbox", short="silero"
+        ),
     },
     voices={
         "narrator": {"silero": "xenia", "chatterbox": str(_VOICES / "ref-xenia.wav")},

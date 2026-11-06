@@ -54,6 +54,9 @@ asr = "whisper"  # profile:en
 expressive = "chatterbox"  # profile:en
 fast = "kokoro"  # profile:en
 
+[lang.en.short]
+expressive = "kokoro"  # profile:en
+
 # Language profile en (English), from the pack:
 #   voice narrator: kokoro: af_nicole, chatterbox: ref-af_nicole.wav
 #   voice dialogue: kokoro: am_michael, chatterbox: ref-am_michael.wav

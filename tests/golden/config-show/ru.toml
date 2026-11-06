@@ -61,6 +61,9 @@ expressive = "chatterbox"  # profile:ru
 [lang.ru.polish]
 expressive = "chatterbox"  # profile:ru
 
+[lang.ru.short]
+expressive = "silero"  # profile:ru
+
 # Language profile ru (Русский), from the pack:
 #   voice narrator: silero: xenia, chatterbox: ref-xenia.wav
 #   voice dialogue: silero: xenia, chatterbox: ref-xenia.wav

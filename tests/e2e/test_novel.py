@@ -167,6 +167,11 @@ def test_t1(tmp_path: Path) -> None:
     limits = _limits(",".join(map(str, near)), "16G")
     report = _run(limits, env, tmp_path / "out", tier="expressive")  # fast is the default
     assert report["tier"] == "expressive"
-    assert report["route"] == {"backend": "silero", "polish": "chatterbox", "foreign": "chatterbox"}
+    assert report["route"] == {
+        "backend": "silero",
+        "polish": "chatterbox",
+        "foreign": "chatterbox",
+        "short": "silero",
+    }
     assert report["polish"]["workers"] >= 1
     assert report["polish"]["device"].startswith("cuda")

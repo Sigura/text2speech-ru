@@ -170,6 +170,9 @@ class TierRoute(BaseModel):
     backend: str
     polish: str | None = None  # entry point in `text2audio.polishers`
     foreign: str | None = None  # backend for segments with unresolved foreign script
+    # Backend for headings and very short pieces, which cloned backends garble; when it
+    # is `backend` itself, those pieces are just not polished.
+    short: str | None = None
 
 
 class LanguageProfile(BaseModel):

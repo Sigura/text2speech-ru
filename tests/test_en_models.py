@@ -188,6 +188,7 @@ def test_english_book_passes_the_qa_gate_on_t0(tmp_path: Path) -> None:
 def test_english_book_passes_the_qa_gate_on_t1(tmp_path: Path) -> None:
     report, segs = render(tmp_path, "expressive")
     assert report["tier"] == "expressive"
+    assert {s["route"] for s in segs if s["role"] == "heading"} == {"kokoro"}
     flagged = {s["text_norm"]: s["flags"] for s in segs if s["status"] != "done"}
     assert not flagged, flagged
     assert report["qa"]["flagged"] == 0

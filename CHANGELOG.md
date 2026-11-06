@@ -252,3 +252,6 @@ All notable changes to this project are documented here. The format follows
 - `en` normalization: *St.* after a comma reads Saint, pre-decimal shillings and pence
   are read, an abbreviation's dot ends the sentence before a closing quote, and a
   Roman numeral opening a heading is read as a number.
+- Tier routes take an optional `short` backend: headings and pieces under 15 letters
+  skip the cloned backend (`en` expressive → Kokoro, `ru` expressive → unpolished
+  Silero); SPEC.md 4.3-M5.

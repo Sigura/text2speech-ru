@@ -65,6 +65,7 @@ HASH_VERSION = 1  # bump when the meaning of a segment hash changes
 DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
 SEGMENTS_PER_WORKER = 25  # don't start a worker for fewer pending segments than this
+SHORT_LETTERS = 15  # pieces with fewer letters take the tier's short route
 _FOREIGN = ("transliterated", "unresolved")  # span resolutions that go to the foreign backend
 _CORE_ROLES = ("narrator", "dialogue")  # voice roles the segmenter assigns itself
 
@@ -106,6 +107,7 @@ class Plan:
     notes: list[str] = field(default_factory=list)
     polisher: BackendDescriptor | None = None  # re-voices the backend's audio (§6.6.6)
     foreign: BackendDescriptor | None = None  # reads segments with foreign words (FR-24)
+    short: BackendDescriptor | None = None  # reads headings and very short pieces
 
 
 @dataclass
@@ -150,7 +152,7 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
     wanted = tier or config.synthesis.tier
     wanted = wanted or prof.default_tier
     order: list[Tier] = [wanted] if wanted else ["expressive", "fast"]
-    chosen: tuple[Tier, TierRoute, Any, Any, Any] | None = None
+    chosen: tuple[Tier, TierRoute, Any, Any, Any, Any] | None = None
     for t in order:
         route = prof.tiers.get(t)
         if route is None:
@@ -159,19 +161,28 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
         # [lang.ru] backend.fast = "…", polish.expressive = "…", foreign.expressive = "…"
         names = {
             key: _override(overrides.get(key), t, getattr(route, key))
-            for key in ("backend", "polish", "foreign")
+            for key in ("backend", "polish", "foreign", "short")
         }
         backend = found.get("backends", names["backend"] or "")
         polisher = found.get("polishers", names["polish"]) if names["polish"] else None
         foreign = found.get("backends", names["foreign"]) if names["foreign"] else None
+        short = found.get("backends", names["short"]) if names["short"] else None
         missing = [
             f"{key} {names[key]!r}"
-            for key, d in (("backend", backend), ("polish", polisher), ("foreign", foreign))
+            for key, d in (
+                ("backend", backend),
+                ("polish", polisher),
+                ("foreign", foreign),
+                ("short", short),
+            )
             if (names[key] or key == "backend") and d is None
         ]
         if missing:
             notes.append(f"tier {t}: {', '.join(missing)} not installed")
             continue
+        if short is not None and foreign is not None and short.name == foreign.name:
+            # Routes are told apart by backend name.
+            raise SynthesisError(f"tier {t}: short and foreign routes both name {short.name!r}")
         if t == "expressive" and not wanted:
             # The GPU stage decides: the polisher / foreign backend, else the backend.
             gpu = next(
@@ -181,11 +192,11 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
             if res.plan(res.probe(), gpu.capabilities).tier != "expressive":
                 notes.append("tier expressive: no GPU with enough free VRAM")
                 continue
-        chosen = (t, route.model_copy(update=names), backend, polisher, foreign)
+        chosen = (t, route.model_copy(update=names), backend, polisher, foreign, short)
         break
     if chosen is None:
         raise SynthesisError("no usable synthesis route: " + "; ".join(notes))
-    t, route, backend, polisher, foreign = chosen
+    t, route, backend, polisher, foreign, short = chosen
     normalizer = found.get("normalizers", prof.normalizer) if prof.normalizer else None
     if prof.normalizer and normalizer is None:
         raise SynthesisError(f"normalizer {prof.normalizer!r} of the {lang!r} pack is missing")
@@ -195,7 +206,7 @@ def make_plan(folder: BookFolder, config: Config, tier: Tier | None = None) -> P
         g2p = found.get("g2p", g2p_name)
         if g2p is None:
             raise SynthesisError(f"stress component {g2p_name!r} is not installed")
-    return Plan(lang, prof, t, route, backend, normalizer, g2p, notes, polisher, foreign)
+    return Plan(lang, prof, t, route, backend, normalizer, g2p, notes, polisher, foreign, short)
 
 
 def _override(value: Any, tier: Tier, default: str | None) -> str | None:
@@ -347,7 +358,8 @@ def prepare(
     ignored: dict[tuple[str, str], list[str]] = {}
     for seg in segments:
         foreign = plan.foreign is not None and seg.id in foreign_ids
-        target = plan.foreign if foreign and plan.foreign is not None else plan.backend
+        short = plan.short if not foreign and _is_short(seg) else None
+        target = plan.foreign if foreign and plan.foreign is not None else short or plan.backend
         if seg.emotion and target.capabilities.emotion == "none":
             ignored.setdefault((seg.emotion, target.name), []).append(seg.id)
             seg.emotion, seg.intensity = None, 0.0
@@ -364,6 +376,10 @@ def prepare(
                 if span.resolution in _FOREIGN:
                     span.resolution = "foreign"
             seg.hash = segment_hash(seg, voice_key(seg, seg.backend), _model_id(seg.backend, lock))
+            continue
+        if short is not None:
+            seg.backend = seg.route = short.name
+            seg.hash = segment_hash(seg, _voice(prof, seg, short.name), _model_id(short.name, lock))
             continue
         seg.backend = seg.route = backend
         seg.hash = segment_hash(seg, _voice(prof, seg, backend), model)
@@ -384,6 +400,19 @@ def prepare(
             }
         )
     return segments, uncertain, sources, notes
+
+
+def _is_short(seg: Segment) -> bool:
+    letters = sum(c.isalpha() for c in seg.text_norm or seg.text)
+    return seg.role in ("heading", "title") or letters < SHORT_LETTERS
+
+
+def _short_route(plan: Plan, segments: list[Segment]) -> list[Segment]:
+    """Segments the short backend renders, when it is not the tier's backend."""
+    short = plan.short
+    if short is None or short.name == plan.route.backend:
+        return []
+    return [s for s in segments if s.route == short.name]
 
 
 def _directive_voices(
@@ -755,6 +784,9 @@ def rerenderer(
         runs: list[tuple[BackendDescriptor, Tier, list[Segment], dict[str, Segment]]] = []
         if own:
             runs.append((plan.backend, plan.tier, own, {}))
+        short = _short_route(plan, segments)
+        if short and plan.short is not None:
+            runs.append((plan.short, "fast", short, {}))
         runs += [(d, "expressive", segs, sources) for d, segs in groups.values()]
         for backend, tier, segs, srcs in runs:
             _render_pool(
@@ -1119,6 +1151,23 @@ def synthesize(
             progress,
             max_workers,
         )
+        short = _short_route(plan, segments)
+        if short and plan.short is not None:
+            part = render(
+                folder,
+                plan.short,
+                "fast",
+                short,
+                _job(plan, plan.short.name, {}, audio_dir),
+                config,
+                store,
+                journal,
+                progress,
+                max_workers,
+                stage="short",
+            )
+            _add_stats(stats, part)
+            stats.setdefault("failures", []).extend(part.get("failures", []))
     retry_warnings: list[dict[str, str]] = []
     pools = Pools(config, store, max_workers)
     qa = gate.Gate(
@@ -1268,6 +1317,21 @@ def render_selection(
         progress,
         max_workers,
     )
+    short = _short_route(plan, segments)
+    if short and plan.short is not None:
+        render(
+            folder,
+            plan.short,
+            "fast",
+            short,
+            _job(plan, plan.short.name, {}, audio_dir),
+            config,
+            store,
+            journal,
+            progress,
+            max_workers,
+            stage="short",
+        )
     for backend, segs in _gpu_groups(plan, _ready(segments, sources, journal), sources).values():
         render(
             folder,
@@ -1360,15 +1424,15 @@ def _report(
     ]
     synth_ms = sum(spoken)
     audio_ms = synth_ms + sum(s.pause_after_ms for s in segments)
-    backend = plan.route.backend
+    first = {plan.route.backend, plan.short.name if plan.short else ""}  # synthesize stage
     own = [
         journal.get(sources[s.hash].hash or "") if s.hash in sources else e
         for s, e in zip(segments, entries, strict=True)
-        if s.hash in sources or s.route == backend
+        if s.hash in sources or s.route in first
     ]
     own_ms = sum(int(e["duration_ms"]) for e in own if e)
     elapsed = sum(int(e.get("elapsed_ms", 0)) for e in own if e)
-    gpu = [e for s, e in zip(segments, entries, strict=True) if e and s.route != backend]
+    gpu = [e for s, e in zip(segments, entries, strict=True) if e and s.route not in first]
     gpu_ms = sum(int(e["duration_ms"]) for e in gpu)
     gpu_elapsed = sum(int(e.get("elapsed_ms", 0)) for e in gpu)
     chapters: dict[int, int] = {}

@@ -77,7 +77,7 @@ def _profile_layer(prof: LanguageProfile) -> dict[str, Any]:
     if prof.default_tier:
         out["synthesis.tier"] = prof.default_tier
     for tier, route in prof.tiers.items():
-        for key in ("backend", "polish", "foreign"):
+        for key in ("backend", "polish", "foreign", "short"):
             value = getattr(route, key)
             if value:
                 out[f"lang.{c}.{key}.{tier}"] = value

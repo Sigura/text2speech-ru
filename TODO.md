@@ -93,8 +93,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     IndexTTS-2 runs offline in the spike and is the T1 challenger until listening;
   - [ ] Kokoro misses NFR-05 on T0 (RTF 1.01 on 4 cores): try Kokoro ONNX / int8 or
     Piper for `en` T0;
-  - [ ] Chatterbox hallucinates on quote pieces under ~15 characters («“Holmes,”»):
-    join short remarks to their line, or a minimum split length, for cloned backends;
+  - [x] Chatterbox hallucinates on quote pieces under ~15 characters («“Holmes,”»):
+    headings and pieces under 15 letters take the tier's `short` route (`en` → Kokoro,
+    `ru` → unpolished Silero);
   - [x] `en` text gaps from the benchmark: *St.* before a name after a capitalized
     word («Avenue, St. John’s Wood» → Saint), pre-decimal money («2s. 6d.» → two
     shillings and six pence), the sentence dot before a closing quote, «I.» / «II.»

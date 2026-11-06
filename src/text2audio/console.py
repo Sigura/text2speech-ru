@@ -32,6 +32,7 @@ LABELS = {
     "normalize": "Normalize",
     "stress": "Stress",
     "synthesize": "Synthesize",
+    "short": "Short",
     "qa": "QA",
     "assemble": "Encode",
 }
@@ -40,6 +41,7 @@ WIDTH = max(len(v) for v in LABELS.values())
 STARTING = {
     "stress": "loading stress model",
     "synthesize": "loading voices",
+    "short": "loading voices",
     "qa": "loading ASR model",
 }
 

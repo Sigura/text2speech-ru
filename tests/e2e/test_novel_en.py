@@ -68,3 +68,4 @@ def test_t1(tmp_path: Path) -> None:
     report = _run(limits, env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, "expressive")
     assert report["language"] == "en" and report["tier"] == "expressive"
     assert report["route"]["backend"] == "chatterbox"
+    assert report["segments"]["routes"]["kokoro"] > 0  # headings and short pieces

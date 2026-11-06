@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.2-M5 |
+| Document version | 4.3-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-06 |
 | Primary language | Python 3.11+ |
@@ -71,6 +71,7 @@
 | 4.0-M5 | 2026-11-06 | **M4 closed**: §11 exit criteria met with the one approved core change (§13.1); `docs/adding-a-language.md` final; open items carried in `TODO.md`. |
 | 4.1-M5 | 2026-11-06 | The novel e2e tests render an excerpt of ≤ 100 segments (every chapter heading with its first paragraphs), per the owner's test limit; their T0 run uses every core and no memory limit (owner) (§13.1). |
 | 4.2-M5 | 2026-11-06 | M4 carry-over — `en` text gaps from the benchmark: *St.* after a word with a comma, pre-decimal shillings and pence, Roman numerals opening a heading (§13.1). |
+| 4.3-M5 | 2026-11-06 | M4 carry-over — `TierRoute.short`: headings and pieces under 15 letters skip the cloned backend (`en` → Kokoro, `ru` → unpolished Silero) (§6.6.6, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -844,6 +845,13 @@ As built (M2 step 3b):
   Latin words kept (`text_stress`), while `text_norm` keeps the transliteration as the
   QA reference; `report.json` labels such spans `foreign`, and the QA gate treats them
   as unverifiable like transliterations (§6.9).
+- Optional `short` (M4 carry-over, §13.1): headings, titles and pieces with fewer than
+  15 letters (`SHORT_LETTERS`) take this route instead, because cloned backends crash
+  or hallucinate on them («One.», «“My dear fellow,”»). When it names the tier's own
+  backend, such pieces are not polished (`ru` expressive: `silero`); otherwise its
+  workers render them in a `short` stage after `synthesize` and on QA retries (`en`
+  expressive: `kokoro`, whose voices Chatterbox clones). `short` and `foreign` must
+  name different backends.
 - Hashes: the source of a polished segment is the segment as the backend alone would
   render it, with the **same hash as on the fast tier**, so fast-tier audio is reused
   as VC source; the polished hash covers the source hash, polisher, its model and the
@@ -1545,6 +1553,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-06 | **M4 closed** against §11. **Zero diff in `core/`: not strictly met, as approved:** `git diff 2ee11e3..HEAD -- src/text2audio/core/` is one line, `dialogue: Literal["none", "dash", "quote"]` in `contracts.py`. **≤ 3 developer-days:** the pack's code commits run from step 0 (2026-11-05 20:43) to steps 4–6 (2026-11-06 00:10); benchmark and listening followed the same day. **Golden tests and QA gate:** `tests/test_readers_golden.py` `en/*`, 119 pack tests (`plugins/lang-en`, `plugins/lang-ru`), FR-11 323/324; `tests/test_en_models.py` renders `qa-check.md` on T0 and T1 with no segment flagged, offline. **Zero-config:** `config show` golden `tests/golden/config-show/en.toml`. **Dialogue voice:** `dialogue.tsv` and `test_english_quote_dialogue_is_rendered_in_its_own_voice`. **Defaults by measurement:** benchmark and listening rows above. **FR-06 full book:** `tests/e2e/test_novel_en.py` (T0, T1; `slow`, owner runs it, ≈ 11 h of audio); T0 is expected to fail its NFR-05 assertion (Kokoro RTF ≈ 1.0) until that TODO is fixed. Full gate on 2026-11-06: 479 passed with real models. Carried to TODO: Kokoro on T0 (NFR-05), short quote pieces for cloned backends, the `en` text gaps, IndexTTS-2 by ear, reusing `en` components for `ru`. | Decided |
 | 2026-11-06 | **Novel e2e tests synthesize at most 100 segments** (owner, applying the 2026-10-26 test limit): `tests/e2e/test_novel.py` and `test_novel_en.py` render an excerpt — every chapter heading with its first paragraphs (`ru` 4 per chapter → 93 segments, `en` 1 per story → 64) — and assert `segments.total ≤ 100`, so the one-MP3-per-chapter, QA and RTF checks still run; the full-novel runs that closed M2 stay on record. **T0 in these tests uses every core and no memory limit** (owner, 2026-11-06): no GPU as before, but no `taskset` and no 8 GB scope (with 8 GB only 3 Kokoro workers fit, `rtf_wall` 1.12), so their RTF check no longer measures NFR-05 on the §9 T0 reference (4 cores, 8 GB); §9 is unchanged. The T1 tests pass `--tier expressive`: both packs default to the fast tier since the owner's blind tests, so without it T1 rendered Kokoro / Silero only. | Decided |
 | 2026-11-06 | `en` text gaps closed (M4 carry-over, benchmark finding 6): *St.* reads Saint when the word before it ends in punctuation («Serpentine Avenue, St. John’s Wood»); pre-decimal money «Ns.» / «Md.» / «Ns. Md.» reads «N shillings and M pence» (shillings ≤ 19 and pence ≤ 11, so «1960s.» stays a decade); an abbreviation's dot also ends the sentence before a closing quote or bracket; a heading or title that opens with a Roman numeral and a dot reads it as a number («I. A Scandal in Bohemia» → «One. …», «II.» → «Two.», found by the novel excerpt, where 6 of 64 QA flags were such headings). FR-11 set 336 of 337 (99.7 %). | Decided |
+| 2026-11-06 | **Short pieces off the cloned backend** (owner chose the route over joining in segmentation, M4 carry-over): `TierRoute.short` — headings, titles and pieces with fewer than 15 letters go to that backend; `en` expressive `short = "kokoro"` (Chatterbox clones `af_nicole` / `am_michael`, which Kokoro reads, so the voice matches), `ru` expressive `short = "silero"` (not polished). Found on the `en` novel excerpt on T1: Chatterbox crashed on «One.» (`IndexError` in `max()`, empty generation), repeated «Three.» and «“My dear fellow,”» and dropped «One.» before a heading title. Core change: one optional field in `contracts.py`, routing in `synthesize.py`; `[lang.<code>] short.<tier>` overrides it, `""` turns it off. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

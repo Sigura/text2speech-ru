@@ -53,7 +53,7 @@ core reads. Any field you leave out falls back to the generic implementation.
 | `normalizer` | `"ru"` | `"en"` | `text2audio.normalizers` entry point: `normalize(text, role) → NormResult` |
 | `g2p` | `"ruaccent"` | `None` | `text2audio.g2p` component (a worker); `None` when the backend does its own G2P (misaki inside Kokoro) |
 | `default_tier` | `"fast"` | `"fast"` | tier when the user names none; set by the blind test |
-| `tiers` | `fast`: silero; `expressive`: silero → chatterbox polish | `fast`: kokoro; `expressive`: chatterbox | backend (+ polish, foreign-text backend) per tier |
+| `tiers` | `fast`: silero; `expressive`: silero → chatterbox polish, short: silero | `fast`: kokoro; `expressive`: chatterbox, short: kokoro | backend (+ polish, foreign-text backend, short-piece backend) per tier |
 | `voices` | narrator `xenia` | narrator `af_nicole`, dialogue `am_michael` | role → backend → voice id or reference clip |
 | `dialogue` | `"dash"` | `"quote"` | dialogue convention: `—` lines or quoted speech with attribution |
 | `pauses_ms` | `{"paragraph": 800}` | `{}` | overrides of the core's structural pauses |
