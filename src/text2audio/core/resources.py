@@ -24,6 +24,8 @@ MIN_EXPRESSIVE_VRAM_MB = 8 * 1024
 # Headroom left free on each GPU and in RAM for the core, ASR and the OS.
 GPU_HEADROOM_MB = 1024
 RAM_HEADROOM_MB = 2048
+CPU_SHARE = 3  # one run plans its CPU workers within usable CPUs ÷ this (owner)
+MIN_CPU_BUDGET = 4
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _CPU_LIST = re.compile(r"^\d+(-\d+)?(,\d+(-\d+)?)*$")
@@ -301,6 +303,13 @@ def _cpu_blocks(res: Resources, threads: int, n: int) -> list[frozenset[int] | N
     return blocks
 
 
+def cpu_budget(res: Resources) -> int:
+    """CPUs one text2audio run may keep busy: a share of the usable ones, as the machine
+    is shared with other jobs, but at least one worker's worth, so a small or
+    cgroup-limited machine (the 4-core T0 reference) keeps all its CPUs (§9.1)."""
+    return max(res.usable_cpus // CPU_SHARE, min(res.usable_cpus, MIN_CPU_BUDGET))
+
+
 def plan(
     res: Resources,
     caps: Capabilities | None = None,
@@ -351,12 +360,15 @@ def plan(
                     remaining -= pick
                 slots.append(WorkerSlot(f"cuda:{g.index}", threads, pick, g.uuid))
     elif cpu_allowed:
-        threads = threads_per_worker or min(caps.threads, res.usable_cpus)
-        by_cpu = max(1, res.usable_cpus // threads)
+        # An explicit max_workers is the owner's choice: it may use every usable CPU.
+        budget = res.usable_cpus if max_workers else cpu_budget(res)
+        threads = threads_per_worker or min(caps.threads, budget)
+        by_cpu = max(1, budget // threads)
         by_ram = max(1, (res.ram_available_mb - RAM_HEADROOM_MB) // max(1, caps.ram_mb))
         n = min(by_cpu, by_ram)
         reasons.append(
-            f"{n} CPU worker(s) × {threads} threads (CPU allows {by_cpu}, RAM allows {by_ram})"
+            f"{n} CPU worker(s) × {threads} threads (CPU allows {by_cpu} within "
+            f"{budget} of {res.usable_cpus} CPUs, RAM allows {by_ram})"
         )
         for pick in _cpu_blocks(res, threads, n):
             slots.append(WorkerSlot("cpu", threads, pick))

@@ -149,7 +149,25 @@ def test_cpu_workers_spread_over_numa_nodes() -> None:
 
 def test_cpu_workers_without_numa_info_take_cpus_in_order() -> None:
     caps = Capabilities(languages=("en",), threads=4)
-    slots = res.plan(resources(cpus=16), caps, tier="fast").slots
+    slots = res.plan(resources(cpus=48), caps, tier="fast").slots  # budget 48 // 3 = 16
     assert [sorted(s.cpu_affinity or ()) for s in slots] == [
         list(range(i, i + 4)) for i in range(0, 16, 4)
     ]
+
+
+def test_cpu_workers_stay_within_a_third_unless_capped_explicitly() -> None:
+    caps = Capabilities(languages=("en",), threads=4)
+    found = resources(cpus=128)
+    assert res.cpu_budget(found) == 42
+    assert [res.cpu_budget(resources(cpus=n)) for n in (2, 4, 12, 13)] == [2, 4, 4, 4]
+    assert len(res.plan(found, caps, tier="fast").slots) == 10  # 42 // 4
+    assert len(res.plan(found, caps, tier="fast", max_workers=20).slots) == 20
+
+
+def test_worker_count_from_slots_work_and_cap() -> None:
+    from text2audio.core.pool import worker_count
+
+    assert worker_count(slots=10, pending=60, per_worker=25) == 3
+    assert worker_count(slots=2, pending=600, per_worker=25) == 2
+    assert worker_count(slots=10, pending=0, per_worker=25) == 1
+    assert worker_count(slots=10, pending=5, per_worker=25, cap=6) == 6

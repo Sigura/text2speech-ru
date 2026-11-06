@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.11-M5 |
+| Document version | 4.12-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-06 |
 | Primary language | Python 3.11+ |
@@ -80,6 +80,7 @@
 | 4.9-M5 | 2026-11-06 | After-M4 standalone commands: `translate` (alias `ru2en`) — a book's Markdown into English through the language's `translator` component, structure kept — and `cover`, which chooses a converted book's cover again without re-conversion (§6.8.2, §6.11, §13.1). |
 | 4.10-M5 | 2026-11-06 | `en` normalization also reads ASR-style lowercase dates and titles (`march 5th 1984`, `mr smith`), so the QA gate's heard side matches the reference (§6.9, §13.1). |
 | 4.11-M5 | 2026-11-06 | The translator worker runs on the first GPU with room (Opus-MT 1.5 GB), else on CPU (§6.11, §13.1). |
+| 4.12-M5 | 2026-11-06 | Worker counts from resources and work: CPU stages plan within a third of the usable CPUs (at least 4), each stage takes one worker per its minimum of pending work, the fixed caps of 8 workers (synthesis, stress, assembly) and the QA gate's 2 GPU / 8 CPU are gone; assembly runs one FFmpeg job per CPU of that budget (§6.8, §9.1, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -946,7 +947,7 @@ above.
 
 | Item | Default | Notes |
 |---|---|---|
-| Container / codec | **MP3** (LAME, 64 kbps CBR, mono, 44.1 kHz) and **M4B** (AAC-LC 64 kbps mono, with chapters and cover) | M4B is one file for the whole book, next to the MP3s (`formats`, default `["mp3", "m4b"]`), loudness-normalized in up to 8 pieces of ≥ 1 min cut between segments (like the MP3 parts, each on its own) and encoded as one AAC stream; tags as for MP3, the narrator in the `composer` tag that audiobook players read. Optional: Opus (32–48 kbps), WAV (PCM 24-bit) — not implemented yet. The `acx` profile switches MP3 to 192 kbps CBR as ACX requires. |
+| Container / codec | **MP3** (LAME, 64 kbps CBR, mono, 44.1 kHz) and **M4B** (AAC-LC 64 kbps mono, with chapters and cover) | M4B is one file for the whole book, next to the MP3s (`formats`, default `["mp3", "m4b"]`), loudness-normalized in pieces of ≥ 1 min cut between segments, one per CPU of the run's CPU budget (§9.1), (like the MP3 parts, each on its own) and encoded as one AAC stream; tags as for MP3, the narrator in the `composer` tag that audiobook players read. Optional: Opus (32–48 kbps), WAV (PCM 24-bit) — not implemented yet. The `acx` profile switches MP3 to 192 kbps CBR as ACX requires. |
 | File layout | One MP3 per section, or a single MP3 | Decided by the split plan (§6.8.1). Files are named `NN - <Section title>.mp3` (zero-padded, filesystem-safe), with an `.m3u` playlist in reading order. |
 | Lead-in | **1.5 s of silence** at the start of every audio file: MP3 parts, the M4B, previews and listening-test clips (owner, §13.1) | Many players start playback late and clip the first words; subtitles and chapter marks are shifted by the lead-in. |
 | Subtitles | A SubRip `.srt` next to every MP3 (`output.subtitles`, default on) | One cue per segment with the **book's text** (not the normalized reading), timed from the assembly itself (lead-in, trimmed speech, generated pauses); long segments are cut at word boundaries into cues of ≤ 2 lines × 42 characters, timed by their share of characters. Written whenever the MP3 is, and on its own when only the `.srt` is missing. |
@@ -1414,7 +1415,9 @@ Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`
 2. GPU slots: as many workers per GPU as its free VRAM allows (one when undeclared),
    each pinned to CPUs on that GPU's NUMA node and given that GPU alone as
    `CUDA_VISIBLE_DEVICES` (the worker sees `cuda:0`).
-3. CPU slots: `min(usable CPUs ÷ threads, (available RAM − 2 GiB) ÷ ram_mb)` workers,
+3. CPU slots: `min(CPU budget ÷ threads, (available RAM − 2 GiB) ÷ ram_mb)` workers,
+   where the CPU budget is a third of the usable CPUs, at least min(usable, 4) (the
+   machine is shared), or every usable CPU with an explicit `max_workers`;
    each with disjoint CPUs and `OMP/MKL/OPENBLAS/TORCH_NUM_THREADS` set. Each worker's
    CPUs come from the NUMA node with the most usable CPUs left
    (`/sys/devices/system/node`), so workers spread over nodes instead of sharing one
@@ -1425,11 +1428,11 @@ Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`
 5. One-off GPU services (the cover generator) take the first GPU in nvidia-smi order
    with enough free VRAM.
 6. A backend declares the devices it may use: Silero is CPU-only (≈ 12× real time on 4
-   cores), so the GPUs stay free for heavier models and other jobs. Without
-   `[resources] max_workers` (or `--workers`), at most **8** workers run per stage, and
-   never more than one per 25 pending segments — the machine is shared. An explicit
-   limit is taken as the worker count, capped only by the planned slots (and the QA
-   gate's 2 GPU / 8 CPU workers).
+   cores), so the GPUs stay free for heavier models and other jobs. Each stage runs
+   `min(planned slots, ⌈pending ÷ minimum per worker⌉)` workers — 25 segments for TTS
+   and QA, 8 batches for stress, 1 job for FFmpeg — so a worker always earns its model
+   load. An explicit `[resources] max_workers` (or `--workers` for TTS) is taken as the
+   worker count, capped only by the planned slots.
 
 Free VRAM changes while other jobs run, so the plan is computed right before workers
 start, not cached.
@@ -1592,6 +1595,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-06 | **Standalone `translate` and `cover`** (owner's after-M4 item, §6.11). `translate` parses the Markdown into the reader's `Document` and writes it back with the same writer (which now also writes `<!-- t2a: … -->` directives), so structure survives; each distinct sentence is translated once, in batches of 32, through the language's `translator` worker (the cover prompt's Opus-MT; `open_translator` is shared with covers). **Sentence, not paragraph, as the unit** for now: Marian reads ≤ 512 tokens and *Капитанская дочка* has paragraphs of 2.7 k characters; a paragraph unit comes with an LLM translator if the MT benchmark (`spikes/mt-bench/`) picks one. Footnote references and inline directives move to the end of their sentence; emphasis is dropped. Only into English (the `translator` contract); `ru2en` is a hidden alias in the owner's form. `cover` re-reads only the stored source's embedded picture (FB2, EPUB), places it as `convert` does (`place_cover`) and runs `make_covers` per group of equal `[cover]` settings, the book's own `text2audio.toml` included. | Decided |
 | 2026-11-06 | **`en` normalizer reads ASR-style text** (owner chose the normalizer over the Whisper `spoken()` step): the T1 QA e2e test flagged *On March 5, 1984, Mr. Smith … $5.20, …* — first `$5.20,` read «five dollars.20» (money rule backed off before a comma; fixed), then Whisper heard Chatterbox's reading as lowercase, unpunctuated `on march 5th 1984 mr smith … 7 30 a.m`, which `normalize_heard` left as «five one thousand nine hundred eighty-four … mr» (WER 0.158 > 0.12). A month name before a day number is now a date in lowercase too (not *may*, a verb), and lowercase `mr` / `mrs` before a word read Mister / Missus; the transcript then scores WER 0. | Decided |
 | 2026-11-06 | **Translator on a GPU when one has room** (owner): *Капитанская дочка* (3065 sentences) took 71 min 47 s with Opus-MT on 4 CPU threads and 1 min 14 s on an RTX 4090 (same text but 8 tokens of 41 k). `translator_slot` plans the plugin like a backend (`vram_mb` 1500) and takes the first GPU slot, else one CPU slot; covers use the same worker. | Decided |
+| 2026-11-06 | **Workers from resources and tasks** (owner: "calculate workers from resources and tasks", a third of the CPUs, encoding included): `worker_count(slots, pending, per_worker, cap)` = min(planned slots, ⌈pending ÷ per_worker⌉), an explicit `max_workers` replacing the task limit; per-worker minimums 25 segments (TTS, QA), 8 stress batches, 1 FFmpeg job. `cpu_budget` = usable CPUs ÷ 3, but ≥ min(usable, 4) so the 4-core T0 reference keeps all four; an explicit `max_workers` may use every usable CPU. GPUs stay planned from free VRAM. Measured on *Выбор оружия* (9 h, 18 parts, cached segments): parts 7 min 32 s with 8 FFmpeg jobs → 3 min 44 s with 32 (÷ 4), assembly 10 min 23 s → 8 min 35 s; the M4B's one AAC stream is now most of the rest. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

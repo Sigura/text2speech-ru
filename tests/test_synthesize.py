@@ -164,6 +164,34 @@ def test_m4b_normalized_in_pieces_streams_one_book(
     assert abs(float(info["format"]["duration"]) - (mp3_s - lead_s)) < 0.5
 
 
+def test_assembly_runs_one_encoder_per_cpu_of_the_budget(
+    book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dataclasses
+
+    from text2audio.core import resources as res
+    from text2audio.core import synthesize
+
+    twelve = dataclasses.replace(res.probe(), cpus=frozenset(range(12)), gpus=(), numa_nodes=())
+    monkeypatch.setattr(res, "probe", lambda *a, **k: twelve)
+    monkeypatch.setattr(synthesize, "M4B_PIECE_MS", 1000)
+    details: list[dict[str, Any]] = []
+
+    class Spy:
+        def __call__(self, stage: str, done: int, total: int) -> None:
+            pass
+
+        def detail(self, stage: str, **fields: Any) -> None:
+            if stage == "assemble" and "threads" in fields:
+                details.append(fields)
+
+    api.synthesize(
+        book, config=config(min_part_minutes=0.2), store=tmp_path / "store", progress=Spy()
+    )
+    [found_detail] = details
+    assert found_detail["threads"] == 4 and found_detail["m4b_pieces"] == 4  # 12 CPUs // 3
+
+
 def test_report(book: Path, tmp_path: Path) -> None:
     result = run(book, tmp_path / "store")
     report = json.loads((book / "report.json").read_text("utf-8"))

@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-import math
 import shutil
 import threading
 import time
@@ -56,7 +55,7 @@ from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.languages import profile as language_profile
 from text2audio.core.plugins import discover
-from text2audio.core.pool import Pool, cpu_slots, parallel
+from text2audio.core.pool import Pool, cpu_slots, parallel, worker_count
 from text2audio.core.workspace import BookFolder, sanitize_name, write_json
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
@@ -71,9 +70,9 @@ __all__ = ["SynthesisError", "synthesize"]
 
 M4B_PIECE_MS = 60_000  # shortest M4B piece loudness-normalized on its own (§6.8)
 HASH_VERSION = 1  # bump when the meaning of a segment hash changes
-DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
 SEGMENTS_PER_WORKER = 25  # without max_workers: no worker for fewer pending segments
+BATCHES_PER_STRESS_WORKER = 8
 SHORT_LETTERS = 15  # pieces with fewer letters take the tier's short route
 _FOREIGN = ("transliterated", "unresolved")  # span resolutions that go to the foreign backend
 _CORE_ROLES = ("narrator", "dialogue")  # voice roles the segmenter assigns itself
@@ -495,9 +494,7 @@ def _stress(
         payload = store.payload(assets_for(owner, load_lock()))
         batches = [todo[i : i + STRESS_BATCH] for i in range(0, len(todo), STRESS_BATCH)]
         threads = getattr(plan.g2p, "threads", 2)
-        slots = cpu_slots(
-            threads, ram_mb=1500, count=max(1, min(DEFAULT_MAX_WORKERS, len(batches) // 8))
-        )
+        slots = cpu_slots(threads, 1500, len(batches), BATCHES_PER_STRESS_WORKER)
         done = [0]
         lock = threading.Lock()
         _detail(progress, "stress", workers=len(slots))
@@ -581,10 +578,9 @@ def _slots(
     ).slots
     if not slots:
         raise SynthesisError(f"no device to run {backend.name!r} on")
-    cap = max_workers or rc.max_workers
-    if not cap:
-        cap = min(DEFAULT_MAX_WORKERS, math.ceil(pending / SEGMENTS_PER_WORKER))
-    return slots[: max(1, min(len(slots), cap))]
+    return slots[
+        : worker_count(len(slots), pending, SEGMENTS_PER_WORKER, max_workers or rc.max_workers)
+    ]
 
 
 class Pools:
@@ -1064,11 +1060,11 @@ def assemble(
     # Parts are independent and FFmpeg's loudnorm is single-threaded: encode in parallel.
     # The M4B is normalized in pieces in the same pool and streamed, in order, to one AAC
     # encoder, so its loudnorm passes run in parallel without seams in the AAC stream.
-    cpus = res.probe().usable_cpus
+    encoders = res.cpu_budget(res.probe())  # one single-threaded FFmpeg job per CPU
     pieces: list[tuple[int, int]] = []
     if m4b_job is not None:
         total_ms = sum(i.duration_ms for i in items)
-        pieces = _pieces(items, min(cpus, DEFAULT_MAX_WORKERS, total_ms // M4B_PIECE_MS))
+        pieces = _pieces(items, min(encoders, total_ms // M4B_PIECE_MS))
 
     def book_piece(k: int) -> Path:
         start, end = pieces[k]
@@ -1080,7 +1076,7 @@ def assemble(
         wav.unlink()
         return pcm
 
-    threads = max(1, min(len(jobs) + len(pieces), cpus, DEFAULT_MAX_WORKERS))
+    threads = max(1, min(len(jobs) + len(pieces), encoders))
     unchanged = len(split.parts) - len(jobs)
     _detail(
         progress,

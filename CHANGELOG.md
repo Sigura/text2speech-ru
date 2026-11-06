@@ -274,6 +274,9 @@ All notable changes to this project are documented here. The format follows
   encoder (10 min of audio: 36.8 s → 15.8 s); SPEC.md 4.7-M5.
 - `ru` reads quoted speech outside dash paragraphs as dialogue (`«…», — сказал он`,
   `"Кто там?" спросила`); titles and terms in quotes stay narration; SPEC.md 4.8-M5.
+- Worker counts follow resources and work instead of fixed caps of 8: CPU stages plan
+  within a third of the usable CPUs (at least 4), assembly runs one FFmpeg job per CPU of
+  that budget (9 h book: parts 7 min 32 s → 3 min 44 s); SPEC.md 4.12-M5.
 
 ### Fixed
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import queue
 import threading
 from collections.abc import Callable
@@ -13,10 +14,20 @@ from text2audio.core.errors import SynthesisError
 from text2audio.workers.process import WorkerError
 
 
-def cpu_slots(threads: int, ram_mb: int, count: int) -> list[res.WorkerSlot]:
+def worker_count(slots: int, pending: int, per_worker: int, cap: int | None = None) -> int:
+    """Workers for a stage (§9.1): as many as the planned slots allow, but no more than
+    one per `per_worker` pending items (a worker must earn its model load); an explicit
+    `cap` replaces the task limit."""
+    wanted = cap if cap else math.ceil(pending / max(1, per_worker))
+    return max(1, min(slots, wanted))
+
+
+def cpu_slots(
+    threads: int, ram_mb: int, pending: int = 1, per_worker: int = 1
+) -> list[res.WorkerSlot]:
     caps = Capabilities(languages=("*",), threads=threads, ram_mb=ram_mb)
-    plan = res.plan(res.probe(), caps, tier="fast")
-    return plan.slots[: max(1, count)]
+    slots = res.plan(res.probe(), caps, tier="fast").slots
+    return slots[: worker_count(len(slots), pending, per_worker)]
 
 
 class Pool:

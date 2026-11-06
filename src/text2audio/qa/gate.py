@@ -12,7 +12,6 @@ rerun checks only segments that changed.
 
 from __future__ import annotations
 
-import math
 import threading
 import time
 from collections import Counter
@@ -27,7 +26,7 @@ from text2audio.core.contracts import LanguageProfile, Normalizer, Segment
 from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.plugins import discover
-from text2audio.core.pool import Pool
+from text2audio.core.pool import Pool, worker_count
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
 from text2audio.qa.checks import check_file
@@ -36,8 +35,6 @@ from text2audio.workers.backend import Worker
 
 MAX_ATTEMPTS = 3
 ASR_BATCH = 16
-MAX_GPU_WORKERS = 2  # GPUs are shared with other jobs (§9.1)
-MAX_CPU_WORKERS = 8
 SEGMENTS_PER_WORKER = 25
 # FR-24 readings the QA ASR may be unable to write (GigaAM: Cyrillic letters only, §13.1)
 UNVERIFIABLE = frozenset({"acronym", "transliterated", "foreign"})
@@ -156,12 +153,7 @@ def asr_slots(asr: Any, config: Config, pending: int) -> list[res.WorkerSlot]:
     """GPU slots if a GPU has room for the ASR model, else CPU slots (planned now)."""
     rc = config.resources
     plan = res.plan(res.probe(), asr.capabilities, devices=rc.devices)
-    cap = MAX_GPU_WORKERS if plan.tier == "expressive" else MAX_CPU_WORKERS
-    if rc.max_workers:
-        cap = min(cap, rc.max_workers)
-    else:
-        cap = min(cap, math.ceil(pending / SEGMENTS_PER_WORKER))
-    return plan.slots[: max(1, min(len(plan.slots), cap))]
+    return plan.slots[: worker_count(len(plan.slots), pending, SEGMENTS_PER_WORKER, rc.max_workers)]
 
 
 def _evaluate(ctx: _Context, seg: Segment, path: Path, heard: str, attempt: int) -> Attempt:
