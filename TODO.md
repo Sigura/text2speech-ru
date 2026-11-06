@@ -78,7 +78,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     sounds right to the owner;
   - [ ] carried over: rerun the `slow` full-book renders (`pytest -m slow`) with the new
     lexicon and tier default; `espeak-ng` in the devbox image.
-- [ ] **M4 — English** (the recipe for any new language, [guide](docs/adding-a-language.md)):
+- [x] **M4 — English** (closed 2026-11-06, SPEC 4.0-M5; open items below are carried
+  over; the recipe for any new language, [guide](docs/adding-a-language.md)):
   - [x] generate `plugins/lang-en` from the template, no change to `core/` (one approved
     exception for quote dialogue is planned, SPEC §13.1);
   - [x] profile: "Chapter", abbreviations (*Mr., St., e.g.*), fixtures per format;
@@ -99,6 +100,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [x] female narrator + contrasting dialogue voice (owner: `af_nicole`, `am_michael`);
   - [x] blind T1-vs-T0 test for `en`: T1 preferred in 6/20, fast tier by default;
+  - [ ] carried over (owner): `pytest -m "models and slow" tests/e2e/test_novel_en.py`,
+    the full English book on T0 and T1 (T0 will fail NFR-05 until Kokoro is faster);
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for
     English (benchmark challenger, not in the blind test);
 - [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that

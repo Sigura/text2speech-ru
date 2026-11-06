@@ -28,6 +28,13 @@ def test_zero_config_snapshot_ru(tmp_path: Path) -> None:
     assert_golden(GOLDEN / "config-show" / "ru.toml", render(view))
 
 
+def test_zero_config_snapshot_en(tmp_path: Path) -> None:
+    folder = book(tmp_path, FIXTURES / "en" / "alice.epub")
+    view = effective_config(folder, user_file=tmp_path / "none.toml")
+    assert view.get("synthesis.language").source == "metadata"
+    assert_golden(GOLDEN / "config-show" / "en.toml", render(view))
+
+
 def test_zero_config_snapshot_without_pack(tmp_path: Path) -> None:
     source = tmp_path / "buch.md"
     source.write_text("# Kapitel 1\n\nEs war einmal ein König.\n", encoding="utf-8")

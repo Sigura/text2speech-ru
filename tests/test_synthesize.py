@@ -273,6 +273,29 @@ def test_dialogue_is_rendered_in_its_own_voice(book: Path, tmp_path: Path) -> No
     assert all(329 <= hz <= 341 for hz in heard["dialogue"])
 
 
+def test_english_quote_dialogue_is_rendered_in_its_own_voice(tmp_path: Path) -> None:
+    # §11 M4 exit criterion: quote dialogue gets the dialogue voice, the attribution
+    # stays with the narrator (sine pitches as above).
+    [converted] = api.convert([FIXTURE.parents[1] / "en" / "qa-check.md"], tmp_path / "out")
+    assert converted.folder is not None
+    cfg = load_config(
+        [],
+        {
+            "lang": {"en": {"backend": {"fast": "sine"}, "asr": "sine-echo"}},
+            "synthesis": {"tier": "fast"},
+        },
+    )
+    api.synthesize(converted.folder, config=cfg, store=tmp_path / "store")
+    lines = (converted.folder / "_work" / "segments.jsonl").read_text("utf-8").splitlines()
+    audio = converted.folder / "_work" / "audio" / "segments"
+    heard: dict[str, list[float]] = {"narrator": [], "dialogue": []}
+    for seg in map(json.loads, lines):
+        heard[seg["voice"]].append(dominant_hz(wav_path(audio, seg["hash"])))
+    assert heard["dialogue"] and heard["narrator"]
+    assert all(219 <= hz <= 231 for hz in heard["narrator"])
+    assert all(329 <= hz <= 341 for hz in heard["dialogue"])
+
+
 def test_journal_ignores_torn_last_line(tmp_path: Path) -> None:
     path = tmp_path / "render.jsonl"
     path.write_text('{"hash": "a", "duration_ms": 1}\n{"hash": "b", "dur', "utf-8")

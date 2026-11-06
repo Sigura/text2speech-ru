@@ -79,11 +79,17 @@ def _limits(cpus: str, memory: str) -> list[str]:
     return cmd
 
 
-def _run(limits: list[str], env: dict[str, str], out: Path) -> dict[str, Any]:
+def _run(
+    limits: list[str],
+    env: dict[str, str],
+    out: Path,
+    novel: Path = NOVEL,
+    chapters: int = CHAPTERS,
+) -> dict[str, Any]:
     # Stage lines are streamed, so a long stage does not look like a hang.
     tail: deque[str] = deque(maxlen=60)
     with subprocess.Popen(
-        [*limits, str(CLI), "run", str(NOVEL), "-o", str(out)],
+        [*limits, str(CLI), "run", str(novel), "-o", str(out)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -102,7 +108,7 @@ def _run(limits: list[str], env: dict[str, str], out: Path) -> dict[str, Any]:
     print(json.dumps(report.get("polish")))
     print({k: v for k, v in report["qa"].items() if k not in ("segments", "flagged_list")})
     parts = sorted(book.glob("*.mp3"))
-    assert len(parts) >= CHAPTERS  # one MP3 per chapter (long ones may be split)
+    assert len(parts) >= chapters  # one MP3 per chapter (long ones may be split)
     assert all(m.with_suffix(".srt").is_file() for m in parts)
     assert (book / "report.md").is_file()
     assert report["segments"]["failed"] == 0

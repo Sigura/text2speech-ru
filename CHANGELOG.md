@@ -229,6 +229,8 @@ All notable changes to this project are documented here. The format follows
 - M4 step 8 — `en` voices chosen by ear (narrator `af_nicole`, dialogue `am_michael`),
   fast tier by default after the blind test, QA rate floor 7 letters/s;
   `scripts/listen_ab.py --lang` (SPEC 3.7-M4).
+- M4 closed: English e2e and `config show` tests, quote-dialogue pitch test; the language
+  guide is final (SPEC 4.0-M5).
 
 ### Changed
 
