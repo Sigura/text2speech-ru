@@ -4,8 +4,9 @@
 `uv run python tests/fixtures/fetch_novel.py`. Tests synthesize at most 100 segments
 (owner, SPEC §13.1), so the run takes every chapter heading with its first paragraphs.
 Each run is a real `text2audio run` in a subprocess: T0 = no GPU
-(`CUDA_VISIBLE_DEVICES=""`), every core, no memory limit and `max_workers = 8` (owner,
-SPEC §13.1); T1 = the GPU with the most free memory, 8 cores near it (`taskset`), 16 GB.
+(`CUDA_VISIBLE_DEVICES=""`), every core and no memory limit (owner, SPEC §13.1); T1 =
+the GPU with the most free memory, 8 cores near it (`taskset`), 16 GB; both set
+`max_workers = 8`.
 Memory limits use a systemd user scope, when available.
 
     uv run pytest -m "models and slow" tests/e2e/test_novel.py -s [-k t1]
@@ -38,8 +39,9 @@ CLI = Path(sys.executable).parent / "text2audio"
 CHAPTERS = 15  # I–XIV and the appendix (the omitted chapter)
 PARAGRAPHS = 4  # per chapter: 93 segments
 SEGMENTS = 100
-# An excerpt is too short for the planner's one worker per 25 segments; T0 asks for 8.
-T0_WORKERS = 8
+# An excerpt is too short for the planner's one worker per 25 segments, so the tests
+# ask for 8; on a GPU free VRAM still decides.
+WORKERS = 8
 pytestmark = [pytest.mark.models, pytest.mark.slow]
 
 
@@ -157,7 +159,7 @@ def _run(
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run([], env, tmp_path / "out", workers=T0_WORKERS)
+    report = _run([], env, tmp_path / "out", workers=WORKERS)
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 
 
@@ -169,7 +171,8 @@ def test_t1(tmp_path: Path) -> None:
     near = sorted(gpu.cpu_affinity or range(os.cpu_count() or 8))[:8]
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": gpu.uuid}
     limits = _limits(",".join(map(str, near)), "16G")
-    report = _run(limits, env, tmp_path / "out", tier="expressive")  # fast is the default
+    # fast is the default
+    report = _run(limits, env, tmp_path / "out", tier="expressive", workers=WORKERS)
     assert report["tier"] == "expressive"
     assert report["route"] == {
         "backend": "silero",

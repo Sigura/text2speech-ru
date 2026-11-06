@@ -109,9 +109,13 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
       longer suppresses digits, the transcript goes through the pack's normalizer
       (T1 flags 7 → 1 of 64, T0 3 of 64);
     - [x] explicit `max_workers` lifts the one-per-25-segments floor; T0 tests set 8;
-    - [ ] `rtf_wall` still over 0.5: T0 0.507 (8 Kokoro workers each slowed to RTF 2.4,
-      two per NUMA die — try one worker per NUMA node), T1 0.70 (2 Chatterbox workers
-      from the floor — let the T1 test set `max_workers`, VRAM still caps it);
+    - [x] CPU workers spread over NUMA nodes (Kokoro RTF per worker 2.62 → 1.02 with
+      8 workers); the T1 tests set `max_workers = 8` too;
+    - [x] after both changes: `en` T0 `rtf_wall` 0.34 (was 0.507), `ru` T0 0.22, `ru`
+      T1 0.31 — pass;
+    - [ ] `en` T1 `rtf_wall` 0.528 (> 0.5): 4 Chatterbox workers on one GPU (free VRAM),
+      synthesis 3 m 19 s for 9 m of audio, QA 57 s, assembly ~45 s; expressive is not
+      the `en` default tier;
   - [x] `ru` novel excerpt re-run after the excerpt and short-route changes: T0
     `rtf_wall` 0.30, 4 / 93 flagged; T1 0.31, 3 / 93 flagged;
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for

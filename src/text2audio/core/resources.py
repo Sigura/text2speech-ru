@@ -54,6 +54,7 @@ class Resources:
     ram_available_mb: int  # min(MemAvailable, cgroup limit - usage)
     gpus: tuple[Gpu, ...] = ()
     notes: tuple[str, ...] = ()
+    numa_nodes: tuple[frozenset[int], ...] = ()  # usable CPUs per NUMA node
 
     @property
     def usable_cpus(self) -> int:
@@ -224,6 +225,18 @@ def probe_gpus(
     return visible, [note] if note else []
 
 
+def _numa_nodes(root: Path, cpus: frozenset[int]) -> tuple[frozenset[int], ...]:
+    nodes = []
+    for path in sorted(
+        (root / "sys/devices/system/node").glob("node[0-9]*/cpulist"),
+        key=lambda p: int(p.parent.name.removeprefix("node")),
+    ):
+        node = parse_cpu_list(path.read_text()) & cpus
+        if node:
+            nodes.append(node)
+    return tuple(nodes)
+
+
 def probe(
     root: Path = Path("/"),
     env: Mapping[str, str] | None = None,
@@ -244,7 +257,8 @@ def probe(
         notes.append(f"CPU limited by cgroup cpu.max to {quota:g} CPUs")
     gpus, gpu_notes = probe_gpus(nvidia_smi, env.get("CUDA_VISIBLE_DEVICES"))
     notes.extend(gpu_notes)
-    return Resources(affinity, quota, total, available, tuple(gpus), tuple(notes))
+    numa = _numa_nodes(root, affinity)
+    return Resources(affinity, quota, total, available, tuple(gpus), tuple(notes), numa)
 
 
 # --------------------------------------------------------------------------- plan
@@ -263,6 +277,28 @@ def first_gpu_with(res: Resources, need_mb: int) -> Gpu | None:
         ),
         None,
     )
+
+
+def _cpu_blocks(res: Resources, threads: int, n: int) -> list[frozenset[int] | None]:
+    """`n` blocks of `threads` CPUs, each from the NUMA node with most CPUs left.
+
+    Workers packed onto one node share its memory channels: on the EPYC 7601 (8 nodes)
+    8 Kokoro workers on CPUs 0-31 ran 2.6x slower per worker than one per node (§13.1).
+    """
+    covered = frozenset().union(*res.numa_nodes)
+    nodes = [sorted(n) for n in res.numa_nodes]
+    if res.cpus - covered:
+        nodes.append(sorted(res.cpus - covered))
+    blocks: list[frozenset[int] | None] = []
+    for _ in range(n):
+        node = max(nodes, key=len)
+        if len(node) < threads:
+            node = [c for nd in nodes for c in nd]
+        pick = node[:threads]
+        for nd in nodes:
+            nd[:] = [c for c in nd if c not in pick]
+        blocks.append(frozenset(pick) or None)
+    return blocks
 
 
 def plan(
@@ -322,9 +358,7 @@ def plan(
         reasons.append(
             f"{n} CPU worker(s) × {threads} threads (CPU allows {by_cpu}, RAM allows {by_ram})"
         )
-        ordered = sorted(res.cpus)
-        for i in range(n):
-            pick = frozenset(ordered[i * threads : (i + 1) * threads]) or None
+        for pick in _cpu_blocks(res, threads, n):
             slots.append(WorkerSlot("cpu", threads, pick))
     else:
         reasons.append("no usable device: CPU excluded by config and no usable GPU")

@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_novel import T0_WORKERS, _gpu, _limits, _run
+from test_novel import WORKERS, _gpu, _limits, _run
 from text2audio_asr_whisper.descriptor import Whisper
 from text2audio_backend_chatterbox.descriptor import ChatterboxBackend
 from text2audio_backend_kokoro.descriptor import KokoroBackend
@@ -52,7 +52,7 @@ def _missing_t1() -> str | None:
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run([], env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, workers=T0_WORKERS)
+    report = _run([], env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, workers=WORKERS)
     assert report["language"] == "en"
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 
@@ -65,7 +65,7 @@ def test_t1(tmp_path: Path) -> None:
     near = sorted(gpu.cpu_affinity or range(os.cpu_count() or 8))[:8]
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": gpu.uuid}
     limits = _limits(",".join(map(str, near)), "16G")
-    report = _run(limits, env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, "expressive")
+    report = _run(limits, env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, "expressive", WORKERS)
     assert report["language"] == "en" and report["tier"] == "expressive"
     assert report["route"]["backend"] == "chatterbox"
     assert report["segments"]["routes"]["kokoro"] > 0  # headings and short pieces

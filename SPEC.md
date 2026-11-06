@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.4-M5 |
+| Document version | 4.5-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-06 |
 | Primary language | Python 3.11+ |
@@ -73,6 +73,7 @@
 | 4.2-M5 | 2026-11-06 | M4 carry-over — `en` text gaps from the benchmark: *St.* after a word with a comma, pre-decimal shillings and pence, Roman numerals opening a heading (§13.1). |
 | 4.3-M5 | 2026-11-06 | M4 carry-over — `TierRoute.short`: headings and pieces under 15 letters skip the cloned backend (`en` → Kokoro, `ru` → unpolished Silero) (§6.6.6, §13.1). |
 | 4.4-M5 | 2026-11-06 | M4 carry-over — `en` QA no longer suppresses digit tokens; `QaProfile.normalize_heard` passes the transcript through the pack's normalizer (§6.9). An explicit `max_workers` lifts the one-worker-per-25-segments floor; the T0 e2e tests set 8 (§9, §13.1). |
+| 4.5-M5 | 2026-11-06 | M4 carry-over — CPU worker slots spread over NUMA nodes; the T1 novel e2e tests also set `max_workers = 8` (§9.1, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1396,7 +1397,10 @@ Planning for a backend uses its declared needs (`Capabilities.vram_mb`, `ram_mb`
    each pinned to CPUs on that GPU's NUMA node and given that GPU alone as
    `CUDA_VISIBLE_DEVICES` (the worker sees `cuda:0`).
 3. CPU slots: `min(usable CPUs ÷ threads, (available RAM − 2 GiB) ÷ ram_mb)` workers,
-   each with disjoint CPUs and `OMP/MKL/OPENBLAS/TORCH_NUM_THREADS` set.
+   each with disjoint CPUs and `OMP/MKL/OPENBLAS/TORCH_NUM_THREADS` set. Each worker's
+   CPUs come from the NUMA node with the most usable CPUs left
+   (`/sys/devices/system/node`), so workers spread over nodes instead of sharing one
+   node's memory channels (§13.1).
 4. `[resources]` config (`devices`, `max_workers`, `threads_per_worker`) and
    `[synthesis] tier` override the automatic choice. The reasons are reported. A pack's
    `default_tier` replaces the choice between tiers, not the worker plan (§6.6.6).
@@ -1563,6 +1567,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-06 | **Short pieces off the cloned backend** (owner chose the route over joining in segmentation, M4 carry-over): `TierRoute.short` — headings, titles and pieces with fewer than 15 letters go to that backend; `en` expressive `short = "kokoro"` (Chatterbox clones `af_nicole` / `am_michael`, which Kokoro reads, so the voice matches), `ru` expressive `short = "silero"` (not polished). Found on the `en` novel excerpt on T1: Chatterbox crashed on «One.» (`IndexError` in `max()`, empty generation), repeated «Three.» and «“My dear fellow,”» and dropped «One.» before a heading title. Core change: one optional field in `contracts.py`, routing in `synthesize.py`; `[lang.<code>] short.<tier>` overrides it, `""` turns it off. | Decided |
 | 2026-11-06 | **`en` QA reads numbers again** (owner, M4 carry-over): the T1 novel excerpt flagged 7 of 64 segments, 6 of them headings such as «Three. A Case of Identity» heard as «A Case of Identity». Kokoro says the number: the saved audio transcribed without suppression reads «3. A Case of Identity»; suppressing digit tokens made Whisper drop it. Owner chose normalizing the transcript over spelling digits in the worker: `QaProfile.normalize_heard` (`en` on, `ru` off — GigaAM writes words) runs the pack's normalizer on the transcript before WER, and the whisper worker no longer suppresses tokens. Re-scored on the same 63 rendered segments: 7 → 1 flagged («Four. The Boscombe…» heard «for the Boscoom…»), no other score changed. | Decided |
 | 2026-11-06 | **Explicit `max_workers` lifts the 25-segment floor** (owner, M4 carry-over): the `en` T0 excerpt (64 segments) ran 3 Kokoro workers (RTF ≈ 1 each), `rtf_wall` 0.62. `[resources] max_workers` / `--workers` is now the worker count for synthesis and QA, capped by the planned slots and the QA gate's own limits; without it the one-per-25 rule stays (§9). The novel e2e T0 tests set `max_workers = 8`. Russian excerpt re-run after the excerpt and short-route changes: T0 `rtf_wall` 0.30, 4 of 93 flagged; T1 0.31, 3 of 93 flagged, routes `silero` 27 / `silero>chatterbox` 66 (all flags are epigraph words GigaAM misheard). `en` excerpt after both changes: T0 (8 Kokoro workers) 3 of 64 flagged, `rtf_wall` 0.507; T1 1 of 64 flagged, `rtf_wall` 0.70 — both still over 0.5. On T0 each Kokoro worker slowed from RTF ≈ 1.0 (3 workers) to 2.4 (8 workers, cores 0–31 of the EPYC 7601, two per NUMA die; long segments 3–4×), not yet explained; on T1 the 45 Chatterbox segments got 2 GPU workers (the floor, no `max_workers` in that test), RTF ≈ 1 each. Open (TODO). | Decided |
+| 2026-11-06 | **CPU workers spread over NUMA nodes** (owner: "try spreading T0 CPU workers one per NUMA node", M4 carry-over): the planner gave CPU worker *k* CPUs `4k…4k+3`, so 8 Kokoro workers filled CPUs 0–31, two per NUMA node of the EPYC 7601 (8 nodes, 2 memory channels each). Same 64-segment `en` excerpt, 8 workers, QA off: CPUs 0–31 → RTF 2.62 per worker, synthesis 301 s; one 4-core block per node (`taskset`) → RTF 1.02, 131 s. Each CPU slot now takes its CPUs from the node with the most usable CPUs left (§9.1); without NUMA information the old order stays. The T1 novel tests also set `max_workers = 8` (Chatterbox got 2 GPU workers from the 25-segment floor; free VRAM still caps them). Novel excerpts after this: `ru` T0 `rtf_wall` 0.22, T1 0.31; `en` T0 0.34 (was 0.507), T1 0.528 with 4 Chatterbox workers — still over 0.5, open. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

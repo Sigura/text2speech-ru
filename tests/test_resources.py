@@ -122,3 +122,34 @@ def test_worker_slot_env_pins_gpu_and_threads() -> None:
     assert env["OMP_NUM_THREADS"] == "4"
     assert slot.worker_device == "cuda:0"
     assert res.WorkerSlot("cpu", 2).env()["CUDA_VISIBLE_DEVICES"] == ""
+
+
+def test_probe_reads_numa_nodes_within_affinity(tmp_path: Path) -> None:
+    root = fake_root(tmp_path)
+    for i, cpus in enumerate(["0-3,8-11", "4-7,12-15", ""]):
+        (root / f"sys/devices/system/node/node{i}").mkdir(parents=True)
+        (root / f"sys/devices/system/node/node{i}/cpulist").write_text(cpus + "\n")
+    found = res.probe(root, env={}, nvidia_smi=fake_smi, affinity=frozenset(range(6)))
+    assert found.numa_nodes == (frozenset({0, 1, 2, 3}), frozenset({4, 5}))
+
+
+def test_cpu_workers_spread_over_numa_nodes() -> None:
+    # EPYC 7601: 8 nodes of 8 cores + their SMT siblings.
+    nodes = tuple(
+        frozenset(range(8 * i, 8 * i + 8)) | frozenset(range(64 + 8 * i, 72 + 8 * i))
+        for i in range(8)
+    )
+    found = res.Resources(frozenset(range(128)), None, 300 * 1024, 300 * 1024, numa_nodes=nodes)
+    caps = Capabilities(languages=("en",), threads=4)
+    slots = res.plan(found, caps, tier="fast", max_workers=10).slots
+    picks = [sorted(s.cpu_affinity or ()) for s in slots]
+    assert picks[:8] == [list(range(8 * i, 8 * i + 4)) for i in range(8)]
+    assert picks[8:] == [[4, 5, 6, 7], [12, 13, 14, 15]]  # then the nodes' other cores
+
+
+def test_cpu_workers_without_numa_info_take_cpus_in_order() -> None:
+    caps = Capabilities(languages=("en",), threads=4)
+    slots = res.plan(resources(cpus=16), caps, tier="fast").slots
+    assert [sorted(s.cpu_affinity or ()) for s in slots] == [
+        list(range(i, i + 4)) for i in range(0, 16, 4)
+    ]

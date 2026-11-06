@@ -259,3 +259,5 @@ All notable changes to this project are documented here. The format follows
   numbers such as «Three.» in headings); `QaProfile.normalize_heard` runs the pack's
   normalizer on the transcript before WER. An explicit `max_workers` / `--workers` is
   the worker count, without the one-per-25-segments floor; SPEC.md 4.4-M5.
+- CPU worker slots spread over NUMA nodes (8 Kokoro workers packed on CPUs 0–31 ran
+  2.6× slower each); SPEC.md 4.5-M5.
