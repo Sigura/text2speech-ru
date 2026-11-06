@@ -121,10 +121,17 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     `rtf_wall` 0.30, 4 / 93 flagged; T1 0.31, 3 / 93 flagged;
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for
     English (benchmark challenger, not in the blind test);
-- [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that
+- [x] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that
   there are two packs: misaki G2P / Kokoro for English words in Russian text (FR-24,
   instead of espeak-ng transliteration), the quote splitter for «» dialogue in Russian
-  books; refactor only where both packs use it.
+  books; refactor only where both packs use it (SPEC 4.8-M5):
+  - [x] quoted speech outside dash paragraphs is dialogue in `ru` (`«…», — сказал он`,
+    `"Кто там?" спросила`), sharing the quote-span code with `en`;
+  - [x] misaki not adopted: same Cyrillic as espeak-ng on 25 of 34 terms, better on 2,
+    worse on 2, for a Kokoro env load in every Russian run; English spans in Kokoro's
+    voice belong to FR-18;
+  - [ ] optional: `ru` lexicon entries for what espeak-ng misreads — *Kubernetes*
+    «кубер+нетис», *Sherlock* «ш+ерлок» (espeak: «к+юбернитс», «ш+ёлок»).
 - [ ] **After M4 (owner, 2026-10-26):** review the components built so far and expose
   the useful ones as standalone commands — `text2audio translate book.md --to en -o
   book-en.md` (owner's form: `text2audio ru2en text-ru.md -o text-en.md`; paragraph by

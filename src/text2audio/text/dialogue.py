@@ -16,6 +16,15 @@ speech only when the remark ends with punctuation («— сказал он, — 
 и вышел» stays one remark. Every part keeps its dash, so
 subtitles show the book's text.
 
+Outside dash paragraphs, the dash convention reads quoted speech, «…» or "…" («"Кто
+там?" спросила Палаша.», «Он сказал: «Приду».»). Russian puts the punctuation after
+the closing quote and uses the same quotes for titles and terms, so a quote is speech
+only when something marks it: it opens the paragraph or follows a colon or a dash, it
+is a whole sentence, it ends with punctuation inside, or a dash or one of the
+`remark_words` follows it. «Война и мир» and «стариком» are none of these. Speech keeps
+the punctuation after its quote, and a remark inside the quotes («Привет, — сказал он,
+— как дела?») is split as in a dash paragraph.
+
 The quote convention (English): quoted speech is dialogue and the words around it are
 the author's, in straight or curly double quotes.
 """
@@ -23,6 +32,7 @@ the author's, in straight or curly double quotes.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 _DASH = re.compile(r"\s+(?=[—–]\s)")
 _OPENS = re.compile(r"^[—–]\s")
@@ -31,13 +41,23 @@ _QUOTES = ("«", '"', "„", "“")
 _OPENING = re.compile(r'["“]')
 _CLOSING = {'"': '"', "“": "”"}
 _SPEECH_END = re.compile(r"[,.!?…;:]$")
+_DASH_OPENING = re.compile(r'[«"]')
+_DASH_CLOSING = {"«": "»", '"': '"'}
+_TRAILING = ",.!?…;:"
+_BEFORE_SPEECH = re.compile(r"(?:^|[:—–-])\s*$")
+_BEFORE_SENTENCE = re.compile(r"[.!?…]\s*$")
+_LEADING_DASH = re.compile(r"[—–-]\s*")
 
 
 def split_dialogue(text: str, remark_words: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """`(role, text)` parts of a paragraph: `dialogue` and `remark`, or one `narration`."""
     if not _OPENS.match(text):
-        return [("narration", text)]
-    pieces = _DASH.split(text.strip())
+        spans = _dash_quoted_spans(text, remark_words)
+        return _parts(text, spans, lambda speech: _alternate(_DASH.split(speech), remark_words))
+    return _alternate(_DASH.split(text.strip()), remark_words)
+
+
+def _alternate(pieces: list[str], remark_words: tuple[str, ...]) -> list[tuple[str, str]]:
     parts: list[tuple[str, str]] = [("dialogue", pieces[0])]
     for piece in pieces[1:]:
         role, prev = parts[-1]
@@ -57,13 +77,21 @@ def split_dialogue(text: str, remark_words: tuple[str, ...] = ()) -> list[tuple[
 def split_quoted(text: str) -> list[tuple[str, str]]:
     """`(role, text)` parts of a paragraph in the quote convention: quoted speech is
     `dialogue`, the words around it `remark`, or one `narration` without speech."""
+    return _parts(text, _quoted_spans(text), lambda speech: [("dialogue", speech)])
+
+
+def _parts(
+    text: str,
+    spans: list[tuple[int, int]],
+    speech: Callable[[str], list[tuple[str, str]]],
+) -> list[tuple[str, str]]:
     parts: list[tuple[str, str]] = []
     position = 0
-    for start, end in _quoted_spans(text):
+    for start, end in spans:
         before = text[position:start].strip()
         if before:
             parts.append(("remark", before))
-        parts.append(("dialogue", text[start:end].strip()))
+        parts.extend(speech(text[start:end].strip()))
         position = end
     after = text[position:].strip()
     if after:
@@ -89,3 +117,30 @@ def _quoted_spans(text: str) -> list[tuple[int, int]]:
 
 def _is_scare_quote(inner: str) -> bool:
     return len(inner.split()) <= 2 and not _SPEECH_END.search(inner)
+
+
+def _dash_quoted_spans(text: str, remark_words: tuple[str, ...]) -> list[tuple[int, int]]:
+    """Spans of quoted speech in the dash convention, each with the punctuation after
+    its closing quote. An unclosed quote runs to the end, as in `_quoted_spans`."""
+    spans = []
+    position = 0
+    while (match := _DASH_OPENING.search(text, position)) is not None:
+        close = text.find(_DASH_CLOSING[match[0]], match.end())
+        end = close + 1 if close >= 0 else len(text)
+        rest = text[end:]
+        tail = end + len(rest) - len(rest.lstrip(_TRAILING))
+        before = text[: match.start()]
+        after = text[tail:].lstrip()
+        dash = _LEADING_DASH.match(after)
+        word = (after[dash.end() :] if dash else after).lower()
+        if (
+            close < 0
+            or _BEFORE_SPEECH.search(before)
+            or (_BEFORE_SENTENCE.search(before) and any(c in ".!?…" for c in text[end:tail]))
+            or _SPEECH_END.search(text[match.end() : close].rstrip())
+            or after.startswith(("— ", "– "))
+            or word.startswith(remark_words)
+        ):
+            spans.append((match.start(), tail))
+        position = end
+    return spans
