@@ -55,6 +55,26 @@ faster and needs 15 GB instead of 19 on the shared GPU; NLLB-3.3B runs when no G
 room for Seed-X and re-translates sentences that come back in mixed scripts.
 Implementation is the last stage (owner: en→ru first).
 
+## en→ru (`MT_BENCH_PAIR=en-ru`, `bench-en-ru.md`)
+
+FLORES-200 `eng_Latn` → `rus_Cyrl` and 40 paragraphs of "A Scandal in Bohemia"
+(`tests/fixtures/en/large`, 10.2 k characters; `out/en-ru/lit-samples.html`, its own
+blind letters):
+
+| Model | COMET-22 | chrF++ | BLEU | literary chars/s | VRAM GB |
+|---|---|---|---|---|---|
+| Seed-X-PPO-7B | **0.9099** | **59.2** | **35.2** | 180 | 14.5 |
+| Tower-Plus-9B | 0.9090 | 57.4 | 32.8 | 156 | 18.4 |
+| NLLB-200 3.3B | 0.8917 | 56.2 | 32.2 | 668 | 12.8 |
+| MADLAD-400 3B | 0.8884 | 56.9 | 32.1 | 225 | 9.8 |
+| NLLB-200 1.3B | 0.8878 | 54.8 | 30.4 | 783 | 6.1 |
+| Qwen3-8B | 0.8844 | 52.0 | 26.8 | 148 | 15.9 |
+| Opus-MT en-ru | 0.8473 | 50.7 | 25.4 | 2948 | 1.1 |
+
+Seed-X leads in this direction too, and by more over NLLB (+0.018). Opus-MT, reading
+sentence by sentence, makes the narrator female in ¶1 («Я редко слышала»); every other
+model writes «слышал». Owner's reading pending.
+
 ## Ensemble (MBR selection, `mbr.py`, ru→en FLORES)
 
 Per sentence, the candidate that agrees most with the others (COMET-22 or chrF++ with

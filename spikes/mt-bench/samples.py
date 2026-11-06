@@ -4,7 +4,7 @@
 
 Each paragraph of the excerpt with every candidate's translation under a letter; the
 letter → model key is folded at the end, so the page can be read blind. The letter
-order is fixed by a seeded shuffle.
+order is a shuffle seeded by the pair, so each direction has its own key.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def main() -> None:
         if (OUT / f"{m.key}.lit.txt").exists()
     }
     keys = sorted(found)
-    random.Random(7).shuffle(keys)
+    random.Random(f"letters-{PAIR}").shuffle(keys)
     letters = {k: chr(ord("A") + i) for i, k in enumerate(keys)}
     parts = [
         "<!doctype html><meta charset='utf-8'>"
