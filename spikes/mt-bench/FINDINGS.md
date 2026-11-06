@@ -82,6 +82,15 @@ better». **Decision: Tower-Plus-9B leads en→ru** (COMET 0.9090, level with Se
 0.9099), Seed-X when no GPU has the 20 GB Tower-Plus needs, NLLB-3.3B by sentence for
 failed pieces.
 
+## Whole book through `text2audio en2ru` (2026-11-07)
+
+*The Adventures of Sherlock Holmes* (`tests/fixtures/en/large`, 575 k characters, 2544
+pieces) on one RTX 4090: **1 h 43 min** (6211 s, ≈ 93 characters/s) with Tower-Plus-9B
+leading; 48 pieces (1.9 %) failed a check and were taken from NLLB-3.3B by sentence, 6
+were redone with abbreviation placeholders, none was left with a warning. Slower than
+the benchmark's 156 characters/s: the pipeline batches pieces in book order, so short
+ones wait for long ones in a padded batch (sorting by length is the obvious next step).
+
 ## Ensemble (MBR selection, `mbr.py`, ru→en FLORES)
 
 Per sentence, the candidate that agrees most with the others (COMET-22 or chrF++ with

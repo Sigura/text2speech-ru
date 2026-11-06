@@ -151,8 +151,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
     pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
   - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
-  - [ ] whole-book en→ru run (*Adventures of Sherlock Holmes*): time, checks and fallback
-    counts, listening to a chapter in Russian.
+  - [x] whole-book en→ru run (*Adventures of Sherlock Holmes*): 1 h 43 min, 1.9 % of
+    pieces from the NLLB fallback, no warning left (§13.1);
+  - [ ] translation throughput: sort pieces by length within batches (93 → ~156 chars/s);
+  - [ ] owner's listening to a translated chapter in Russian.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;
