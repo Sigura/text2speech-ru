@@ -49,6 +49,15 @@ _MONTH_NAMES = [
     "December",
 ]
 _MONTH = "(" + "|".join([*_MONTH_NAMES, *(re.escape(k) for k in _MONTHS)]) + ")"
+# Before a day number a month is a date in lowercase too, as ASR transcripts write it
+# ("march 5th"); not "may", a verb ("you may 5 times").
+_MONTH_ANY_CASE = (
+    "("
+    + "|".join(
+        [*(m if m == "May" else f"(?i:{m})" for m in _MONTH_NAMES), *map(re.escape, _MONTHS)]
+    )
+    + ")"
+)
 
 _TITLES = {
     "Prof": "Professor",
@@ -343,6 +352,9 @@ _WORD = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")
 
 _TEXT_RULES: list[Rule] = [
     *((re.compile(rf"\b{k}\.?(?=\s+[A-Z])"), v) for k, v in _NO_DOT_TITLES.items()),
+    # Lowercase, as ASR transcripts write them ("mr smith"); never anything else in text.
+    (re.compile(r"\bmrs\.?(?=\s+[a-z])"), "missus"),
+    (re.compile(r"\bmr\.?(?=\s+[a-z])"), "mister"),
     *((re.compile(rf"\b{k}\.(?=\s+[A-Z])"), v) for k, v in _TITLES.items()),
     (re.compile(r"\bSt\."), _saint_or_street),
     *(
@@ -403,7 +415,7 @@ _NUMBER_RULES: list[Rule] = [
         lambda m: f"{_month(m[1])} {year(int(m[2]))}",
     ),
     (
-        re.compile(rf"\b{_MONTH}\s+(\d{{1,2}}){_SUFFIX}?(?:,?\s+(\d{{4}}))?(?!\d)"),
+        re.compile(rf"\b{_MONTH_ANY_CASE}\s+(\d{{1,2}}){_SUFFIX}?(?:,?\s+(\d{{4}}))?(?!\d)"),
         lambda m: f"{_month(m[1])} {ordinal(int(m[2]))}{_with_year(m[3])}",
     ),
     (

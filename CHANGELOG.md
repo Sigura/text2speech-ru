@@ -277,3 +277,6 @@ All notable changes to this project are documented here. The format follows
 
 - `en` normalization read an amount followed by a comma, such as «$5.20, and», as
   «five dollars.20»: the money rule backed off to the whole units.
+- `en` QA: a lowercase transcript (`on march 5th 1984 mr smith`) is normalized like
+  the book text, so Chatterbox's correct reading no longer fails the T1 gate; SPEC.md
+  4.10-M5.
