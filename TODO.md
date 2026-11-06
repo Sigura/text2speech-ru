@@ -105,6 +105,15 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] blind T1-vs-T0 test for `en`: T1 preferred in 6/20, fast tier by default;
   - [ ] carried over (owner): `pytest -m "models and slow" tests/e2e/test_novel_en.py`,
     an excerpt of ≤ 100 segments on T0 (no GPU, no core or memory limit) and T1;
+    - [x] QA dropped spoken heading numbers («Three. A Case of Identity»): Whisper no
+      longer suppresses digits, the transcript goes through the pack's normalizer
+      (T1 flags 7 → 1 of 64, T0 3 of 64);
+    - [x] explicit `max_workers` lifts the one-per-25-segments floor; T0 tests set 8;
+    - [ ] `rtf_wall` still over 0.5: T0 0.507 (8 Kokoro workers each slowed to RTF 2.4,
+      two per NUMA die — try one worker per NUMA node), T1 0.70 (2 Chatterbox workers
+      from the floor — let the T1 test set `max_workers`, VRAM still caps it);
+  - [x] `ru` novel excerpt re-run after the excerpt and short-route changes: T0
+    `rtf_wall` 0.30, 4 / 93 flagged; T1 0.31, 3 / 93 flagged;
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for
     English (benchmark challenger, not in the blind test);
 - [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that

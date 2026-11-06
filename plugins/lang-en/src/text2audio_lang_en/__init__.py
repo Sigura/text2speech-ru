@@ -80,7 +80,9 @@ PROFILE = LanguageProfile(
     pauses_ms={},
     dialogue="quote",
     # af_nicole reads slowly: 8.3–13.6 letters/s on the benchmark sentences (§13.1).
-    qa=QaProfile(asr="whisper", wer_threshold=0.12, chars_per_sec=(7.0, 22.0)),
+    qa=QaProfile(
+        asr="whisper", wer_threshold=0.12, chars_per_sec=(7.0, 22.0), normalize_heard=True
+    ),
     translator=None,  # English needs no translation for cover prompts
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",

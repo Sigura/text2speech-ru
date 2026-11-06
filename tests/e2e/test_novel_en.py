@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from test_novel import _gpu, _limits, _run
+from test_novel import T0_WORKERS, _gpu, _limits, _run
 from text2audio_asr_whisper.descriptor import Whisper
 from text2audio_backend_chatterbox.descriptor import ChatterboxBackend
 from text2audio_backend_kokoro.descriptor import KokoroBackend
@@ -52,7 +52,7 @@ def _missing_t1() -> str | None:
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run([], env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS)
+    report = _run([], env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, workers=T0_WORKERS)
     assert report["language"] == "en"
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 

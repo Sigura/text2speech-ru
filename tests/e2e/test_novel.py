@@ -4,9 +4,9 @@
 `uv run python tests/fixtures/fetch_novel.py`. Tests synthesize at most 100 segments
 (owner, SPEC §13.1), so the run takes every chapter heading with its first paragraphs.
 Each run is a real `text2audio run` in a subprocess: T0 = no GPU
-(`CUDA_VISIBLE_DEVICES=""`), every core and no memory limit (owner, SPEC §13.1); T1 =
-the GPU with the most free memory, 8 cores near it (`taskset`), 16 GB. Memory limits use a
-systemd user scope, when available.
+(`CUDA_VISIBLE_DEVICES=""`), every core, no memory limit and `max_workers = 8` (owner,
+SPEC §13.1); T1 = the GPU with the most free memory, 8 cores near it (`taskset`), 16 GB.
+Memory limits use a systemd user scope, when available.
 
     uv run pytest -m "models and slow" tests/e2e/test_novel.py -s [-k t1]
 """
@@ -38,6 +38,8 @@ CLI = Path(sys.executable).parent / "text2audio"
 CHAPTERS = 15  # I–XIV and the appendix (the omitted chapter)
 PARAGRAPHS = 4  # per chapter: 93 segments
 SEGMENTS = 100
+# An excerpt is too short for the planner's one worker per 25 segments; T0 asks for 8.
+T0_WORKERS = 8
 pytestmark = [pytest.mark.models, pytest.mark.slow]
 
 
@@ -108,12 +110,14 @@ def _run(
     chapters: int = CHAPTERS,
     paragraphs: int = PARAGRAPHS,
     tier: str | None = None,
+    workers: int | None = None,
 ) -> dict[str, Any]:
     novel = _excerpt(novel, out.parent / "excerpt", paragraphs)
     # Excerpt chapters last about a minute; the split plan would merge them into one file.
     config = out.parent / "config" / "text2audio" / "config.toml"
     config.parent.mkdir(parents=True)
-    config.write_text("[output]\nmin_part_minutes = 0\n", "utf-8")
+    resources = f"[resources]\nmax_workers = {workers}\n" if workers else ""
+    config.write_text(f"[output]\nmin_part_minutes = 0\n{resources}", "utf-8")
     env = {**env, "XDG_CONFIG_HOME": str(config.parents[1])}
     # Stage lines are streamed, so a long stage does not look like a hang.
     tail: deque[str] = deque(maxlen=60)
@@ -153,7 +157,7 @@ def _run(
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run([], env, tmp_path / "out")
+    report = _run([], env, tmp_path / "out", workers=T0_WORKERS)
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 
 

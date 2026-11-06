@@ -160,6 +160,9 @@ class QaProfile(BaseModel):
     chars_per_sec: tuple[float, float] = (8.0, 25.0)
     # Letters folded before comparing texts (ASR writes "е" for "ё").
     fold: dict[str, str] = {}
+    # Pass the transcript through the pack's normalizer before comparing, for an ASR
+    # that writes digits and symbols ("3.", "£50") where the reference has words.
+    normalize_heard: bool = False
 
 
 class TierRoute(BaseModel):

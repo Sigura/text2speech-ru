@@ -23,7 +23,7 @@ from typing import Any
 
 from text2audio.core import resources as res
 from text2audio.core.config import Config, parse_qa_mode
-from text2audio.core.contracts import LanguageProfile, Segment
+from text2audio.core.contracts import LanguageProfile, Normalizer, Segment
 from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.plugins import discover
@@ -120,6 +120,7 @@ class _Context:
     cer_threshold: float
     audio_dir: Path
     journal: Journal
+    normalizer: Normalizer | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -158,12 +159,15 @@ def asr_slots(asr: Any, config: Config, pending: int) -> list[res.WorkerSlot]:
     cap = MAX_GPU_WORKERS if plan.tier == "expressive" else MAX_CPU_WORKERS
     if rc.max_workers:
         cap = min(cap, rc.max_workers)
-    n = max(1, min(len(plan.slots), cap, math.ceil(pending / SEGMENTS_PER_WORKER)))
-    return plan.slots[:n]
+    else:
+        cap = min(cap, math.ceil(pending / SEGMENTS_PER_WORKER))
+    return plan.slots[: max(1, min(len(plan.slots), cap))]
 
 
 def _evaluate(ctx: _Context, seg: Segment, path: Path, heard: str, attempt: int) -> Attempt:
     text = seg.speech_text
+    if ctx.profile.qa.normalize_heard and ctx.normalizer is not None:
+        heard = ctx.normalizer.normalize(heard).text
     letters = ctx.profile.qa.fold
     score = (wer(text, heard, letters).wer, cer(text, heard, letters))
     unverified: list[str] = []
@@ -253,6 +257,7 @@ class Gate:
         store: ModelStore,
         rerender: Rerender,
         progress: Progress | None = None,
+        normalizer: Normalizer | None = None,
     ) -> None:
         self.percent = parse_qa_mode(config.qa.mode)
         self.config = config
@@ -266,7 +271,7 @@ class Gate:
             max_segments=config.qa.max_segments,
         )
         self.ctx = _Context(
-            profile, self.stats.threshold, self.stats.cer_threshold, audio_dir, journal
+            profile, self.stats.threshold, self.stats.cer_threshold, audio_dir, journal, normalizer
         )
         self.sample: set[str] = set()
         self.asr: Any = None

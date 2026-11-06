@@ -57,7 +57,7 @@ core reads. Any field you leave out falls back to the generic implementation.
 | `voices` | narrator `xenia` | narrator `af_nicole`, dialogue `am_michael` | role → backend → voice id or reference clip |
 | `dialogue` | `"dash"` | `"quote"` | dialogue convention: `—` lines or quoted speech with attribution |
 | `pauses_ms` | `{"paragraph": 800}` | `{}` | overrides of the core's structural pauses |
-| `qa` | `asr="gigaam"`, WER 0.18, `fold={"ё": "е"}` | `asr="whisper"`, WER 0.12, 7–22 letters/s | QA gate bounds |
+| `qa` | `asr="gigaam"`, WER 0.18, `fold={"ё": "е"}` | `asr="whisper"`, WER 0.12, 7–22 letters/s, `normalize_heard` | QA gate bounds; `normalize_heard` when the ASR writes digits |
 | `lexicon` | `lexicon.tsv` | `lexicon.tsv` | base pronunciation list (FR-13) |
 | `part_title` | `"{title} (часть {n} из {total})"` | `"{title} (part {n} of {total})"` | title of a long section split in parts |
 

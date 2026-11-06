@@ -15,6 +15,7 @@ from text2audio_asr_whisper.descriptor import Whisper
 from text2audio_backend_chatterbox.descriptor import ChatterboxBackend
 from text2audio_backend_kokoro.descriptor import KokoroBackend
 from text2audio_lang_en import PROFILE
+from text2audio_lang_en.normalize import Normalizer
 
 from text2audio import api
 from text2audio.core import resources as res
@@ -66,10 +67,11 @@ def transcribe(tmp_path: Path, gpu: bool) -> str:
 
 
 @needs_whisper
-def test_whisper_on_cpu_writes_spoken_forms(tmp_path: Path) -> None:
-    text = transcribe(tmp_path, gpu=False)
-    assert not any(c.isdigit() for c in text), text
-    assert "$" not in text and "Mr." not in text, text
+def test_whisper_on_cpu_heard_text_normalizes_to_spoken_forms(tmp_path: Path) -> None:
+    heard = transcribe(tmp_path, gpu=False)
+    assert "Mr." not in heard, heard
+    text = Normalizer().normalize(heard).text  # what the QA gate compares (normalize_heard)
+    assert not any(c.isdigit() for c in text) and "$" not in text, text
     assert wer(SENTENCE, text).wer < 0.3, text
 
 
@@ -142,15 +144,15 @@ def test_chatterbox_reads_english_in_the_narrator_voice(tmp_path: Path) -> None:
         w.call("synthesize", segment=seg, out=str(out), voice_id=ref, attempt=1)
     with Worker(Whisper(), STORE.root) as w:
         w.load(assets=STORE.payload(assets_for("asr:whisper")))
-        heard = str(w.call("transcribe", paths=[str(out)])["texts"][0])
-    assert wer(SENTENCE, heard).wer <= 0.12, heard
+        heard = Normalizer().normalize(str(w.call("transcribe", paths=[str(out)])["texts"][0]))
+    assert wer(SENTENCE, heard.text).wer <= 0.12, heard.text
 
 
 @needs_whisper
 @pytest.mark.gpu
 @pytest.mark.skipif(not res.probe().gpus, reason="no GPU")
-def test_whisper_on_gpu_writes_spoken_forms(tmp_path: Path) -> None:
-    text = transcribe(tmp_path, gpu=True)
+def test_whisper_on_gpu_heard_text_normalizes_to_spoken_forms(tmp_path: Path) -> None:
+    text = Normalizer().normalize(transcribe(tmp_path, gpu=True)).text
     assert not any(c.isdigit() for c in text), text
     assert wer(SENTENCE, text).wer < 0.3, text
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -18,10 +19,10 @@ from typer.testing import CliRunner
 from text2audio import api
 from text2audio.cli import app
 from text2audio.core.config import load_config, parse_qa_mode
-from text2audio.core.contracts import Segment
+from text2audio.core.contracts import LanguageProfile, NormResult, QaProfile, Segment
 from text2audio.core.journal import Journal
 from text2audio.core.synthesize import _Batches
-from text2audio.qa.gate import sampled, select
+from text2audio.qa.gate import _Context, _evaluate, sampled, select
 
 FIXTURE = Path(__file__).parent / "fixtures" / "ru" / "kapitanskaya-dochka.fb2"
 TARGET = "ch01-s0004"  # a long narration segment
@@ -221,3 +222,29 @@ def test_batched_progress_is_one_bar_per_stage() -> None:
     assert [d for d, _ in qa] == [0, 1, 2, 3, 3, 4, 5, 5]
     assert all(t == 7 for _, t in qa[:-1]) and qa[-1] == (5, 5)
     assert ("qa retry 2", 1, 1) in calls
+
+
+class _Digits:
+    def normalize(self, text: str, role: str = "narration") -> NormResult:
+        return NormResult(text=text.replace("3.", "three."))
+
+
+@pytest.mark.parametrize(("normalize_heard", "wer"), [(True, 0.0), (False, 0.2)])
+def test_heard_text_normalized_when_the_pack_asks(
+    tmp_path: Path, normalize_heard: bool, wer: float
+) -> None:
+    path = tmp_path / "s.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\x00\x10" * 16000 * 2)
+    qa = QaProfile(asr="sine-echo", wer_threshold=0.12, normalize_heard=normalize_heard)
+    profile = LanguageProfile(code="en", name="English", script="Latn", qa=qa)
+    ctx = _Context(profile, 0.12, 0.1, tmp_path, Journal(tmp_path / "j.jsonl"), _Digits())
+    seg = Segment(
+        id="s", text="III. A Case of Identity", text_norm="Three. A Case of Identity", lang="en"
+    )
+    attempt = _evaluate(ctx, seg, path, "3. A Case of Identity", 1)
+    assert attempt.wer == wer
+    assert ("wer" in attempt.flags) is not normalize_heard

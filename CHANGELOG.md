@@ -255,3 +255,7 @@ All notable changes to this project are documented here. The format follows
 - Tier routes take an optional `short` backend: headings and pieces under 15 letters
   skip the cloned backend (`en` expressive → Kokoro, `ru` expressive → unpolished
   Silero); SPEC.md 4.3-M5.
+- `en` QA: faster-whisper no longer suppresses digit tokens (it dropped spoken
+  numbers such as «Three.» in headings); `QaProfile.normalize_heard` runs the pack's
+  normalizer on the transcript before WER. An explicit `max_workers` / `--workers` is
+  the worker count, without the one-per-25-segments floor; SPEC.md 4.4-M5.

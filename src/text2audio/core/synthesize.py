@@ -64,7 +64,7 @@ __all__ = ["SynthesisError", "synthesize"]
 HASH_VERSION = 1  # bump when the meaning of a segment hash changes
 DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
-SEGMENTS_PER_WORKER = 25  # don't start a worker for fewer pending segments than this
+SEGMENTS_PER_WORKER = 25  # without max_workers: no worker for fewer pending segments
 SHORT_LETTERS = 15  # pieces with fewer letters take the tier's short route
 _FOREIGN = ("transliterated", "unresolved")  # span resolutions that go to the foreign backend
 _CORE_ROLES = ("narrator", "dialogue")  # voice roles the segmenter assigns itself
@@ -572,9 +572,10 @@ def _slots(
     ).slots
     if not slots:
         raise SynthesisError(f"no device to run {backend.name!r} on")
-    cap = max_workers or rc.max_workers or DEFAULT_MAX_WORKERS
-    n = max(1, min(len(slots), cap, math.ceil(pending / SEGMENTS_PER_WORKER)))
-    return slots[:n]
+    cap = max_workers or rc.max_workers
+    if not cap:
+        cap = min(DEFAULT_MAX_WORKERS, math.ceil(pending / SEGMENTS_PER_WORKER))
+    return slots[: max(1, min(len(slots), cap))]
 
 
 class Pools:
@@ -1178,6 +1179,7 @@ def synthesize(
         config,
         store,
         rerenderer(folder, plan, sources, config, store, journal, pools, retry_warnings),
+        normalizer=plan.normalizer,
     )
     polishing = {
         s.hash or ""

@@ -2,14 +2,14 @@
 
 The model loads from a pinned directory, never by name, so nothing is fetched. `small`
 on CPU and `large-v3-turbo` on a GPU (§9.6); a GPU without the turbo files (`models pull
---tier fast`) uses `small`. QA compares against normalized text, so tokens with digits or
-currency signs are suppressed ("nineteen eighty-four", not "1984"), and titles and Roman
-numerals are spelled out afterwards (`spoken.py`).
+--tier fast`) uses `small`. Digits and symbols stay as Whisper writes them ("3.", "1984"):
+the QA gate passes the transcript through the pack's normalizer (`normalize_heard`), since
+suppressing those tokens made Whisper drop spoken numbers («Three. A Case of Identity» →
+«A Case of Identity»). Titles and Roman numerals are spelled out here (`spoken.py`).
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,6 @@ from spoken import spoken  # next to this file: the worker runs as a script
 
 WEIGHTS = "model.bin"
 TURBO_MARKER = "preprocessor_config.json"
-NUMERIC = re.compile(r"[0-9$£€%°]")
 state: dict[str, Any] = {}
 
 
@@ -65,11 +64,7 @@ def load(msg: dict[str, Any]) -> dict[str, Any]:
         cpu_threads=t2a_worker.threads(),
         local_files_only=True,
     )
-    tokenizer = model.hf_tokenizer
-    numeric = [
-        i for i in range(tokenizer.get_vocab_size()) if NUMERIC.search(tokenizer.decode([i]))
-    ]
-    state.update(model=model, suppress=[-1, *numeric])
+    state.update(model=model)
     return {"sample_rate": 16000}
 
 
@@ -80,7 +75,6 @@ def _transcribe(path: str) -> str:
         beam_size=5,
         condition_on_previous_text=False,
         without_timestamps=True,
-        suppress_tokens=state["suppress"],
     )
     return spoken(" ".join(s.text.strip() for s in segments))
 
