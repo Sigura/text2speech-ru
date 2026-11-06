@@ -820,6 +820,33 @@ def _add_stats(total: dict[str, Any], part: dict[str, Any]) -> None:
     total["device"] = total.get("device") or part["device"]
 
 
+def _alongside(backend: BackendDescriptor, short: BackendDescriptor) -> bool:
+    """Whether the short route can render while `backend` does: Kokoro on CPU beside
+    Chatterbox on GPU."""
+    return set(short.capabilities.devices).isdisjoint(backend.capabilities.devices)
+
+
+class _Shared:
+    """A `Progress` for stages that run at the same time: calls are serialized, and
+    `loaded` is set once the synthesize stage reports a rendered segment."""
+
+    def __init__(self, progress: Progress | None) -> None:
+        self.progress = progress
+        self.lock = threading.Lock()
+        self.loaded = threading.Event()
+
+    def __call__(self, stage: str, done: int, total: int) -> None:
+        if stage == "synthesize" and done:
+            self.loaded.set()
+        if self.progress:
+            with self.lock:
+                self.progress(stage, done, total)
+
+    def detail(self, stage: str, **fields: Any) -> None:
+        with self.lock:
+            _detail(self.progress, stage, **fields)
+
+
 class _Batches:
     """Progress for stages that run batch by batch: one bar over all batches.
 
@@ -1140,35 +1167,53 @@ def synthesize(
             for s in segments
             if s.hash in sources or s.route == plan.route.backend
         ]
-        stats = render(
-            folder,
-            plan.backend,
-            plan.tier,
-            own,
-            _job(plan, plan.backend.name, {}, audio_dir),
-            config,
-            store,
-            journal,
-            progress,
-            max_workers,
-        )
+        stage_started = time.monotonic()
         short = _short_route(plan, segments)
-        if short and plan.short is not None:
-            part = render(
+        side = plan.short if short else None
+        # The short backend starts once the tier backend's workers have loaded, so its
+        # RAM plan sees them.
+        alongside = side is not None and _alongside(plan.backend, side)
+        shared = _Shared(progress)
+
+        def render_short() -> dict[str, Any]:
+            assert side is not None
+            shared.loaded.wait()
+            return render(
                 folder,
-                plan.short,
+                side,
                 "fast",
                 short,
-                _job(plan, plan.short.name, {}, audio_dir),
+                _job(plan, side.name, {}, audio_dir),
                 config,
                 store,
                 journal,
-                progress,
+                shared,
                 max_workers,
                 stage="short",
             )
+
+        with ThreadPoolExecutor(max_workers=1) as side_pool:
+            later = side_pool.submit(render_short) if alongside else None
+            try:
+                stats = render(
+                    folder,
+                    plan.backend,
+                    plan.tier,
+                    own,
+                    _job(plan, plan.backend.name, {}, audio_dir),
+                    config,
+                    store,
+                    journal,
+                    shared,
+                    max_workers,
+                )
+            finally:
+                shared.loaded.set()
+            part = later.result() if later else render_short() if side else None
+        if part is not None:
             _add_stats(stats, part)
             stats.setdefault("failures", []).extend(part.get("failures", []))
+        stats["wall_s"] = round(time.monotonic() - stage_started, 2)
     retry_warnings: list[dict[str, str]] = []
     pools = Pools(config, store, max_workers)
     qa = gate.Gate(

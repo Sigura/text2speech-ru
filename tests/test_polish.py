@@ -111,6 +111,26 @@ def test_short_pieces_go_to_the_short_backend(book: Path, tmp_path: Path) -> Non
     assert report["route"]["short"] == "sine-polish"
 
 
+def test_short_route_on_other_devices_renders_alongside(
+    book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(synth, "_alongside", lambda backend, short: True)
+    stages: list[tuple[str, int]] = []
+
+    def progress(stage: str, done: int, total: int) -> None:
+        stages.append((stage, done))
+
+    cfg = config("expressive", short="sine-polish", foreign="")
+    report = api.synthesize(book, config=cfg, store=tmp_path / "store", progress=progress).report
+    every = manifest(book)
+    assert {s["route"] for s in every if _short(s)} == {"sine-polish"}
+    assert {s["route"] for s in every if not _short(s)} == {"sine>sine-polish"}
+    assert report["segments"]["failed"] == report["qa"]["flagged"] == 0
+    # the short backend starts after the tier backend has rendered a segment
+    first_short = stages.index(("short", 0))
+    assert any(s == "synthesize" and d > 0 for s, d in stages[:first_short])
+
+
 def test_short_and_foreign_must_differ(book: Path, tmp_path: Path) -> None:
     cfg = config("expressive", short="sine-polish")
     with pytest.raises(synth.SynthesisError, match="short and foreign"):

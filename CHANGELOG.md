@@ -261,3 +261,6 @@ All notable changes to this project are documented here. The format follows
   the worker count, without the one-per-25-segments floor; SPEC.md 4.4-M5.
 - CPU worker slots spread over NUMA nodes (8 Kokoro workers packed on CPUs 0–31 ran
   2.6× slower each); SPEC.md 4.5-M5.
+- The `short` route renders alongside the tier backend when their devices differ
+  (Kokoro on CPU beside Chatterbox on GPU): `en` T1 novel excerpt `rtf_wall` 0.528 →
+  0.49; SPEC.md 4.6-M5.
