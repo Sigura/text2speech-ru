@@ -143,8 +143,11 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     reads ≤ 512 tokens, so whole paragraphs would be cut), structure kept (SPEC 4.9-M5);
   - [x] benchmark (`spikes/mt-bench/FINDINGS.md`): Tower-Plus-9B COMET 0.876, Seed-X-7B
     0.873, NLLB-3.3B 0.868 … Opus-MT 0.839 on FLORES-200;
-  - [ ] owner's blind reading of the literary samples (sent 2026-11-06), then adopt the
-    winner as a translator plugin — an LLM gets whole paragraphs, as asked.
+  - [x] owner's blind reading → ru→en = Seed-X-PPO-7B, NLLB-3.3B fallback (SPEC 4.13-M5);
+  - [ ] **last stage (owner):** Seed-X / NLLB-3.3B translator plugins for ru→en — whole
+    paragraphs for the LLM, as asked; mixed-script sentences re-translated by NLLB.
+  - [ ] **first:** en→ru — benchmark running (`MT_BENCH_PAIR=en-ru`), then the owner's
+    reading, a translator contract with language pairs and the en→ru plugin.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;

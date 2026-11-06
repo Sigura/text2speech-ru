@@ -40,8 +40,20 @@ A whole novel (*Капитанская дочка*, 214 k characters) at the lit
 4. The LLMs need 15–19 GB, i.e. most of a free 24 GB card; on this shared machine
    they wait for one (`bench.sh` waits for 21 GB).
 
-Open: the owner's blind reading of the literary samples decides between Tower-Plus,
-Seed-X and NLLB-3.3B; FLORES is news text, not fiction.
+## Owner's blind reading (ru→en, 2026-11-06)
+
+12 paragraphs sent, 7 answered (A = Seed-X, B = Tower-Plus, E = Opus-MT, G = NLLB-3.3B):
+¶1 Seed-X slightly ahead of Tower-Plus; ¶2 tie; ¶3 Opus-MT «brilliant», NLLB-3.3B «not
+bad»; ¶5 NLLB-3.3B; ¶7 Seed-X; ¶8 and ¶9 Tower-Plus. So Seed-X 2, Tower-Plus 2,
+NLLB-3.3B 1 (+1 runner-up), Opus-MT 1. In ¶3 and ¶5 the sentence-level models kept
+Pushkin's French «pour être outchitel» and «дворовыми» (yard boys), which the LLMs
+smoothed away; Seed-X also wrote one name in mixed scripts («Boпре»).
+
+**Decision (owner asked for one from these answers): Seed-X-PPO-7B for ru→en, NLLB-3.3B
+as the fallback.** Seed-X ties Tower-Plus by ear and is 0.002 COMET behind, but 1.6×
+faster and needs 15 GB instead of 19 on the shared GPU; NLLB-3.3B runs when no GPU has
+room for Seed-X and re-translates sentences that come back in mixed scripts.
+Implementation is the last stage (owner: en→ru first).
 
 ## Reproduce
 
