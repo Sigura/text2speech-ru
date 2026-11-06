@@ -55,10 +55,32 @@ faster and needs 15 GB instead of 19 on the shared GPU; NLLB-3.3B runs when no G
 room for Seed-X and re-translates sentences that come back in mixed scripts.
 Implementation is the last stage (owner: en→ru first).
 
+## Ensemble (MBR selection, `mbr.py`, ru→en FLORES)
+
+Per sentence, the candidate that agrees most with the others (COMET-22 or chrF++ with
+the other candidates as pseudo-references), scored against the real references:
+
+| Selection | COMET-22 | chrF++ |
+|---|---|---|
+| MBR-COMET, 5 models (Tower-Plus, Seed-X, NLLB-3.3B, MADLAD, Qwen3) | **0.8772** | 62.9 |
+| MBR-COMET, Seed-X + Tower-Plus + NLLB-3.3B | 0.8767 | 63.1 |
+| Tower-Plus-9B alone | 0.8755 | 62.8 |
+| MBR-COMET, Seed-X + NLLB-3.3B + MADLAD | 0.8748 | 62.6 |
+| MBR-chrF++, 5 models | 0.8747 | 63.1 |
+| Seed-X alone | 0.8731 | 62.6 |
+
+MBR gains at most +0.0017 COMET over the best single model — partly metric bias, as
+COMET both selects and judges — for 2–5× the translation time (a novel: ≈ 50–90 min
+instead of 18). chrF++ selection does not beat Tower-Plus alone. **Not adopted for
+whole books**; the ensemble is used only where one model demonstrably fails: an LLM
+translates paragraphs, and a paragraph that fails a check (abbreviations lost, mixed
+scripts, length ratio, sentence count) is re-translated sentence by sentence by NLLB.
+
 ## Reproduce
 
 ```bash
 MT_BENCH_HOME=/mnt/devbox/text2audio/spikes/mt-bench spikes/mt-bench/setup.sh   # online
 MT_BENCH_HOME=/mnt/devbox/text2audio/spikes/mt-bench spikes/mt-bench/bench.sh   # offline
 "$MT_BENCH_HOME/venv/bin/python" spikes/mt-bench/samples.py                      # reading page
+"$MT_BENCH_HOME/venv/bin/python" spikes/mt-bench/mbr.py [key ...]                # ensemble
 ```
