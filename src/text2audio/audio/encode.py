@@ -13,6 +13,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +51,31 @@ def _run(cmd: list[str]) -> str:
     if proc.returncode != 0:
         raise FfmpegError(f"ffmpeg failed ({proc.returncode}): {proc.stderr[-1500:]}")
     return proc.stderr
+
+
+def _feed(cmd: list[str], chunks: Iterable[Path]) -> None:
+    """Run `cmd` with the chunks' bytes on its standard input, in order, deleting each
+    chunk once it is sent; `chunks` may still be producing them."""
+    with tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=err)
+        assert proc.stdin is not None
+        try:
+            for chunk in chunks:
+                with chunk.open("rb") as f:
+                    shutil.copyfileobj(f, proc.stdin, 1 << 20)
+                chunk.unlink()
+        except BrokenPipeError:
+            pass  # FFmpeg exited early; its exit status and stderr below say why
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            raise
+        with suppress(BrokenPipeError):
+            proc.stdin.close()
+        if proc.wait() != 0:
+            err.seek(0)
+            tail = err.read().decode("utf-8", "replace")[-1500:]
+            raise FfmpegError(f"ffmpeg failed ({proc.returncode}): {tail}")
 
 
 def measure(ffmpeg: str, wav: Path) -> dict[str, str]:
@@ -111,21 +138,31 @@ def encode_mp3(
     _encode(ffmpeg, wav, out, tags, cover, chapters or [], [*codec, "-f", "mp3"])
 
 
+def normalize(ffmpeg: str, wav: Path, out: Path) -> None:
+    """Normalize loudness into raw 16-bit mono PCM at `OUTPUT_RATE`: a piece of the M4B."""
+    filt = _loudnorm(measure(ffmpeg, wav))
+    cmd = [ffmpeg, "-hide_banner", "-nostats", "-y", "-i", str(wav), "-af", filt]
+    _run([*cmd, "-ar", str(OUTPUT_RATE), "-ac", "1", "-f", "s16le", str(out)])
+
+
 def encode_m4b(
     ffmpeg: str,
-    wav: Path,
+    pieces: Iterable[Path],
     out: Path,
     *,
     tags: dict[str, str],
     cover: Path | None = None,
     chapters: list[Chapter] | None = None,
 ) -> None:
-    """AAC-LC audiobook with chapter marks and cover (FR-09), written atomically."""
+    """AAC-LC audiobook with chapter marks and cover (FR-09), written atomically, from
+    the book's pieces in order (`normalize`); encoding starts with the first piece, and
+    each piece is deleted once read."""
     # MP4 keeps only its standard tags (`use_metadata_tags` drops the cover in FFmpeg 4.3);
     # audiobook players read the narrator from the composer tag.
     tags = {("composer" if k == "narrator" else k): v for k, v in tags.items()}
-    codec = ["-c:a", "aac", "-b:a", M4B_BITRATE, "-movflags", "+faststart"]
-    _encode(ffmpeg, wav, out, tags, cover, chapters or [], [*codec, "-f", "ipod"])
+    codec = ["-c:a", "aac", "-b:a", M4B_BITRATE, "-movflags", "+faststart", "-f", "ipod"]
+    source = ["-f", "s16le", "-ar", str(OUTPUT_RATE), "-ac", "1", "-i", "pipe:0"]
+    _mux(ffmpeg, source, [], out, tags, cover, chapters or [], codec, pieces)
 
 
 def _encode(
@@ -137,13 +174,27 @@ def _encode(
     chapters: list[Chapter],
     codec: list[str],
 ) -> None:
-    out.parent.mkdir(parents=True, exist_ok=True)
     filt = _loudnorm(measure(ffmpeg, wav))
+    _mux(ffmpeg, ["-i", str(wav)], ["-af", filt], out, tags, cover, chapters, codec)
+
+
+def _mux(
+    ffmpeg: str,
+    source: list[str],
+    filters: list[str],
+    out: Path,
+    tags: dict[str, str],
+    cover: Path | None,
+    chapters: list[Chapter],
+    codec: list[str],
+    feed: Iterable[Path] | None = None,
+) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(f".{out.stem}.partial{out.suffix}")
     with tempfile.NamedTemporaryFile("w", suffix=".txt", encoding="utf-8", delete=False) as meta:
         meta.write(_metadata_file(tags, chapters))
     try:
-        cmd = [ffmpeg, "-hide_banner", "-nostats", "-y", "-i", str(wav), "-i", meta.name]
+        cmd = [ffmpeg, "-hide_banner", "-nostats", "-y", *source, "-i", meta.name]
         if cover is not None:
             cmd += ["-i", str(cover)]
         cmd += ["-map", "0:a", "-map_metadata", "1", "-map_chapters", "1"]
@@ -160,8 +211,11 @@ def _encode(
                 "-metadata:s:v",
                 "comment=Cover (front)",
             ]
-        cmd += ["-af", filt, "-ar", str(OUTPUT_RATE), "-ac", "1", *codec, str(tmp)]
-        _run(cmd)
+        cmd += [*filters, "-ar", str(OUTPUT_RATE), "-ac", "1", *codec, str(tmp)]
+        if feed is None:
+            _run(cmd)
+        else:
+            _feed(cmd, feed)
         tmp.replace(out)
     finally:
         Path(meta.name).unlink(missing_ok=True)

@@ -115,8 +115,8 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
       T1 0.31 — pass;
     - [x] `en` T1 `rtf_wall` 0.528 (> 0.5) → 0.4895: the Kokoro `short` stage runs
       alongside Chatterbox instead of after it (thin margin);
-    - [ ] optional: whole-book M4B is a single-threaded loudnorm + AAC pass (~25 s for
-      10 min of audio), the longest assembly job; encode it in parallel chunks;
+    - [x] whole-book M4B normalized in up to 8 pieces in parallel and streamed to one
+      AAC encoder: 10 min of audio 36.8 s → 15.8 s (SPEC 4.7-M5);
   - [x] `ru` novel excerpt re-run after the excerpt and short-route changes: T0
     `rtf_wall` 0.30, 4 / 93 flagged; T1 0.31, 3 / 93 flagged;
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for

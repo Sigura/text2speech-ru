@@ -136,6 +136,34 @@ def test_m4b_kept_on_rerun_and_removed_when_not_wanted(book: Path, tmp_path: Pat
     assert third.m4b is None and not first.m4b.exists()
 
 
+def test_m4b_normalized_in_pieces_streams_one_book(
+    book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from text2audio.core import synthesize
+
+    normalized: list[Path] = []
+    real = synthesize.normalize
+
+    def spy(ffmpeg: str, wav: Path, out: Path) -> None:
+        normalized.append(out)
+        real(ffmpeg, wav, out)
+
+    monkeypatch.setattr(synthesize, "M4B_PIECE_MS", 5000)
+    monkeypatch.setattr(synthesize, "normalize", spy)
+    result = run(book, tmp_path / "store", min_part_minutes=0.2)
+    assert result.m4b is not None
+    assert len(normalized) > 2
+    assert not any(p.exists() for p in normalized)  # each piece deleted once streamed
+    info = probe(result.m4b)
+    assert [c["tags"]["title"] for c in info["chapters"]] == [
+        "Глава I. Сержант гвардии",
+        "Глава II. Вожатый",
+    ]
+    mp3_s = sum(float(probe(f)["format"]["duration"]) for f in result.files)
+    lead_s = LEAD_IN_MS / 1000 * (len(result.files) - 1)
+    assert abs(float(info["format"]["duration"]) - (mp3_s - lead_s)) < 0.5
+
+
 def test_report(book: Path, tmp_path: Path) -> None:
     result = run(book, tmp_path / "store")
     report = json.loads((book / "report.json").read_text("utf-8"))

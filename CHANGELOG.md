@@ -264,3 +264,5 @@ All notable changes to this project are documented here. The format follows
 - The `short` route renders alongside the tier backend when their devices differ
   (Kokoro on CPU beside Chatterbox on GPU): `en` T1 novel excerpt `rtf_wall` 0.528 →
   0.49; SPEC.md 4.6-M5.
+- The M4B is loudness-normalized in up to 8 pieces in parallel and streamed to one AAC
+  encoder (10 min of audio: 36.8 s → 15.8 s); SPEC.md 4.7-M5.

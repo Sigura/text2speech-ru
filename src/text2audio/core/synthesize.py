@@ -13,6 +13,7 @@ run resumes where it stopped.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import shutil
@@ -28,7 +29,14 @@ from typing import Any
 
 from text2audio import __version__
 from text2audio.audio import split as splitting
-from text2audio.audio.encode import Chapter, encode_m4b, encode_mp3, find_ffmpeg, write_m3u
+from text2audio.audio.encode import (
+    Chapter,
+    encode_m4b,
+    encode_mp3,
+    find_ffmpeg,
+    normalize,
+    write_m3u,
+)
 from text2audio.audio.srt import Cue, split_cue, write_srt
 from text2audio.audio.wav import ASSEMBLY_RATE, LEAD_IN_MS, PartWriter, atempo, speech
 from text2audio.core import report_md
@@ -61,6 +69,7 @@ from text2audio.workers.backend import Worker, WorkerBackend
 
 __all__ = ["SynthesisError", "synthesize"]
 
+M4B_PIECE_MS = 60_000  # shortest M4B piece loudness-normalized on its own (§6.8)
 HASH_VERSION = 1  # bump when the meaning of a segment hash changes
 DEFAULT_MAX_WORKERS = 8  # GPUs and CPUs are shared with other jobs (§9.1)
 STRESS_BATCH = 32
@@ -1052,24 +1061,51 @@ def assemble(
         if previous.get(m4b.name) != fingerprint or not m4b.is_file():
             m4b_job = (m4b, book_tags, book_chapters)
 
-    def encode_book(job: tuple[Path, dict[str, str], list[Chapter]]) -> None:
-        out, tags, chapters = job
-        wav = parts_dir / "book.wav"
-        with PartWriter(wav, ASSEMBLY_RATE) as writer:
-            _part_audio(segments, audio_dir, writer, ffmpeg)
-        encode_m4b(ffmpeg, wav, out, tags=tags, cover=cover, chapters=chapters)
-        wav.unlink(missing_ok=True)
-
     # Parts are independent and FFmpeg's loudnorm is single-threaded: encode in parallel.
-    threads = max(
-        1, min(len(jobs) + (m4b_job is not None), res.probe().usable_cpus, DEFAULT_MAX_WORKERS)
-    )
+    # The M4B is normalized in pieces in the same pool and streamed, in order, to one AAC
+    # encoder, so its loudnorm passes run in parallel without seams in the AAC stream.
+    cpus = res.probe().usable_cpus
+    pieces: list[tuple[int, int]] = []
+    if m4b_job is not None:
+        total_ms = sum(i.duration_ms for i in items)
+        pieces = _pieces(items, min(cpus, DEFAULT_MAX_WORKERS, total_ms // M4B_PIECE_MS))
+
+    def book_piece(k: int) -> Path:
+        start, end = pieces[k]
+        wav = parts_dir / f"book-{k:02d}.wav"
+        with PartWriter(wav, ASSEMBLY_RATE, LEAD_IN_MS if k == 0 else 0) as writer:
+            _part_audio(segments[start:end], audio_dir, writer, ffmpeg)
+        pcm = wav.with_suffix(".pcm")
+        normalize(ffmpeg, wav, pcm)
+        wav.unlink()
+        return pcm
+
+    threads = max(1, min(len(jobs) + len(pieces), cpus, DEFAULT_MAX_WORKERS))
     unchanged = len(split.parts) - len(jobs)
-    _detail(progress, "assemble", parts=len(split.parts), reason=split.reason, threads=threads)
+    _detail(
+        progress,
+        "assemble",
+        parts=len(split.parts),
+        reason=split.reason,
+        threads=threads,
+        m4b_pieces=len(pieces),
+    )
     if progress:
         progress("assemble", unchanged, len(split.parts))
-    with ThreadPoolExecutor(max_workers=threads) as pool:
-        book = pool.submit(encode_book, m4b_job) if m4b_job is not None else None
+    with ThreadPoolExecutor(max_workers=threads) as pool, ThreadPoolExecutor(1) as muxer:
+        book = None
+        if m4b_job is not None:
+            book_out, book_tags, book_chapters = m4b_job
+            normalized = [pool.submit(book_piece, k) for k in range(len(pieces))]
+            book = muxer.submit(
+                encode_m4b,
+                ffmpeg,
+                (f.result() for f in normalized),
+                book_out,
+                tags=book_tags,
+                cover=cover,
+                chapters=book_chapters,
+            )
         for encoded, _ in enumerate(pool.map(encode, jobs), 1):
             _detail(progress, "assemble", encoded=encoded)
             if progress:
@@ -1115,6 +1151,19 @@ def _part_audio(
             writer.silence(seg.pause_after_ms)
         frames += ASSEMBLY_RATE * seg.pause_after_ms // 1000
     return cues
+
+
+def _pieces(items: list[splitting.Item], count: int) -> list[tuple[int, int]]:
+    """At most `count` (at least one) segment ranges of about equal duration."""
+    count = max(1, count)
+    total = sum(i.duration_ms for i in items)
+    bounds, done = [0], 0
+    for n, item in enumerate(items[:-1], 1):
+        done += item.duration_ms
+        if len(bounds) < count and done * count >= total * len(bounds):
+            bounds.append(n)
+    bounds.append(len(items))
+    return list(itertools.pairwise(bounds))
 
 
 def _offset(items: list[splitting.Item], index: int) -> int:
