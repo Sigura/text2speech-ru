@@ -1,10 +1,11 @@
 """Translate one benchmark set with one candidate, offline, on one GPU.
 
-    HF_HOME=$MT_BENCH_HOME/hf python translate.py <model key> flores|lit
+    MT_BENCH_PAIR=ru-en|en-ru HF_HOME=$MT_BENCH_HOME/hf python translate.py <key> flores|lit
 
-flores: FLORES-200 devtest rus_Cyrl (1012 sentences). lit: 40 paragraphs of
-*Капитанская дочка* from chapter I on; seq2seq models get them sentence by sentence,
-LLMs whole. Writes out/<key>.<set>.txt (one line per item) and out/<key>.<set>.json.
+flores: FLORES-200 devtest of the source language (1012 sentences). lit: 40 paragraphs
+of *Капитанская дочка* from chapter I (ru) or of "A Scandal in Bohemia" (en); seq2seq
+models get them sentence by sentence, LLMs whole. Writes out/<pair>/<key>.<set>.txt
+(one line per item) and .json.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 import torch
-from models import BY_KEY, OPUS_DIR, Model
+from models import BY_KEY, LANGS, OPUS_DIR, OPUS_EN_RU, PAIR, SRC, TGT, Model
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
@@ -29,18 +30,24 @@ from transformers import (
 
 HERE = Path(__file__).parent
 HOME = Path(os.environ.get("MT_BENCH_HOME", HERE / "models"))
-OUT = HERE / "out"
-LIT = HERE.parents[1] / "tests/fixtures/ru/large/kapitanskaya-dochka.md"
+OUT = HERE / "out" / PAIR
+FIXTURES = HERE.parents[1] / "tests/fixtures"
+LIT = {
+    "ru": (FIXTURES / "ru/large/kapitanskaya-dochka.md", "Отец мой"),
+    "en": (FIXTURES / "en/large/adventures-of-sherlock-holmes.md", "To Sherlock Holmes"),
+}
 
 
 def load_set(name: str) -> list[str]:
     if name == "flores":
-        path = HOME / "flores200_dataset/devtest/rus_Cyrl.devtest"
+        path = HOME / f"flores200_dataset/devtest/{LANGS[SRC]['flores']}.devtest"
         return path.read_text(encoding="utf-8").splitlines()
-    blocks = LIT.read_text(encoding="utf-8").split("\n\n")
+    book, opening = LIT[SRC]
+    blocks = book.read_text(encoding="utf-8").split("\n\n")
     paras = [b.strip() for b in blocks if b.strip() and not b.startswith(("#", ">", "[^", "<!--"))]
-    start = next(i for i, p in enumerate(paras) if p.startswith("Отец мой"))
-    return [" ".join(p.split()) for p in paras[start : start + 40]]
+    start = next(i for i, p in enumerate(paras) if p.startswith(opening))
+    # Emphasis marks are Markdown, not text: the translators get plain prose.
+    return [" ".join(p.replace("*", "").split()) for p in paras[start : start + 40]]
 
 
 _SENT = re.compile(r"(?<=[.!?…»])\s+(?=[—«A-ZА-ЯЁ])")
@@ -52,16 +59,14 @@ def sentences(text: str) -> list[str]:
 
 def prompt(m: Model, src: str) -> tuple[str, bool]:
     """(text, use the chat template)."""
+    a, b = LANGS[SRC]["name"], LANGS[TGT]["name"]
     if m.kind == "towerplus":
-        return (
-            f"Translate the following Russian source text to English:\nRussian: {src}\nEnglish: ",
-            True,
-        )
+        return f"Translate the following {a} source text to {b}:\n{a}: {src}\n{b}: ", True
     if m.kind == "seedx":
-        return f"Translate the following Russian sentence into English:\n{src} <en>", False
+        return f"Translate the following {a} sentence into {b}:\n{src} <{TGT}>", False
     if m.kind == "qwen3":
         return (
-            "Translate the following Russian text into English. Keep the meaning, tone and "
+            f"Translate the following {a} text into {b}. Keep the meaning, tone and "
             f"paragraph as they are. Reply with the translation only.\n\n{src}",
             True,
         )
@@ -71,10 +76,13 @@ def prompt(m: Model, src: str) -> tuple[str, bool]:
 class Seq2Seq:
     def __init__(self, m: Model) -> None:
         self.m = m
-        path = OPUS_DIR if m.kind == "marian" else m.repo
-        kw = {"revision": m.revision} if m.kind != "marian" else {}
+        path, kw = m.repo, {"revision": m.revision}
+        if m.kind == "marian" and PAIR == "ru-en":
+            path, kw = OPUS_DIR, {}
+        elif m.kind == "marian":
+            path, kw = OPUS_EN_RU[0], {"revision": OPUS_EN_RU[1]}
         if m.kind == "nllb":
-            kw["src_lang"] = "rus_Cyrl"
+            kw["src_lang"] = LANGS[SRC]["flores"]
         self.tok = AutoTokenizer.from_pretrained(path, **kw)
         dtype = torch.float32 if m.kind == "marian" else torch.bfloat16
         self.model = (
@@ -91,13 +99,13 @@ class Seq2Seq:
         for i in range(0, len(texts), self.batch):
             chunk = texts[i : i + self.batch]
             if self.m.kind == "madlad":
-                chunk = [f"<2en> {t}" for t in chunk]
+                chunk = [f"<2{TGT}> {t}" for t in chunk]
             enc = self.tok(
                 chunk, return_tensors="pt", padding=True, truncation=True, max_length=512
             ).to("cuda")
             kw: dict = {"num_beams": 4, "max_new_tokens": 512}
             if self.m.kind == "nllb":
-                kw["forced_bos_token_id"] = self.tok.convert_tokens_to_ids("eng_Latn")
+                kw["forced_bos_token_id"] = self.tok.convert_tokens_to_ids(LANGS[TGT]["flores"])
             with torch.inference_mode():
                 gen = self.model.generate(**enc, **kw)
             out += self.tok.batch_decode(gen, skip_special_tokens=True)
@@ -176,10 +184,11 @@ def main() -> None:
     result = engine.translate(items, name)
     torch.cuda.synchronize()
     t2 = time.perf_counter()
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"{key}.{name}.txt").write_text("\n".join(result) + "\n", encoding="utf-8")
     stats = {
         "model": key,
+        "pair": PAIR,
         "set": name,
         "items": len(items),
         "src_chars": sum(map(len, items)),

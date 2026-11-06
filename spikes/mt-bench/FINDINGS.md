@@ -10,7 +10,7 @@ seq2seq models.
   scored with sacrebleu (BLEU, chrF++) and COMET-22 (`Unbabel/wmt22-comet-da`).
 - **Literary excerpt**: 40 paragraphs of *Капитанская дочка* from chapter I
   (`tests/fixtures/ru/large`, 14.2 k characters, no reference), for reading by the
-  owner (`out/lit-samples.html`, blind letters). Seq2seq models get it sentence by
+  owner (`out/ru-en/lit-samples.html`, blind letters). Seq2seq models get it sentence by
   sentence, LLMs paragraph by paragraph.
 
 ## Results

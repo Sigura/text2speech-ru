@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Spike mt-bench, OFFLINE: translate both sets with every candidate, then score.
-#   MT_BENCH_HOME=/mnt/devbox/text2audio/spikes/mt-bench spikes/mt-bench/bench.sh [key ...]
+#   MT_BENCH_PAIR=ru-en|en-ru MT_BENCH_HOME=/mnt/devbox/text2audio/spikes/mt-bench \
+#     spikes/mt-bench/bench.sh [key ...]
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export MT_BENCH_HOME="${MT_BENCH_HOME:-$HERE/models}"
 export HF_HOME="$MT_BENCH_HOME/hf"
+export MT_BENCH_PAIR="${MT_BENCH_PAIR:-ru-en}"
 PY="$MT_BENCH_HOME/venv/bin/python"
 [[ -x "$PY" ]] || { echo "run setup.sh first" >&2; exit 1; }
 KEYS=("$@")
@@ -23,7 +25,7 @@ wait_for_gpu() {
 }
 for key in "${KEYS[@]}"; do
   for set in flores lit; do
-    [[ -s "out/$key.$set.json" ]] && { echo "== $key $set (done)"; continue; }
+    [[ -s "out/$MT_BENCH_PAIR/$key.$set.json" ]] && { echo "== $key $set (done)"; continue; }
     echo "== $key $set"
     wait_for_gpu
     "$PY" translate.py "$key" "$set"

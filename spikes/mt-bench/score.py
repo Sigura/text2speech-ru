@@ -1,6 +1,7 @@
-"""Score out/<key>.flores.txt against FLORES-200 eng_Latn devtest: BLEU, chrF++, COMET-22.
+"""Score out/<pair>/<key>.flores.txt against the FLORES-200 devtest of the target
+language: BLEU, chrF++, COMET-22.
 
-HF_HOME=$MT_BENCH_HOME/hf python score.py   → bench.md (also lists speed and VRAM)
+MT_BENCH_PAIR=ru-en|en-ru HF_HOME=$MT_BENCH_HOME/hf python score.py   → bench-<pair>.md
 """
 
 from __future__ import annotations
@@ -14,19 +15,19 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 import sacrebleu
 from huggingface_hub import snapshot_download
-from models import COMET, MODELS
+from models import COMET, LANGS, MODELS, PAIR, SRC, TGT
 
 HERE = Path(__file__).parent
 HOME = Path(os.environ.get("MT_BENCH_HOME", HERE / "models"))
-OUT = HERE / "out"
+OUT = HERE / "out" / PAIR
 
 
 def main() -> None:
     from comet import load_from_checkpoint
 
     devtest = HOME / "flores200_dataset/devtest"
-    src = (devtest / "rus_Cyrl.devtest").read_text(encoding="utf-8").splitlines()
-    ref = (devtest / "eng_Latn.devtest").read_text(encoding="utf-8").splitlines()
+    src = (devtest / f"{LANGS[SRC]['flores']}.devtest").read_text(encoding="utf-8").splitlines()
+    ref = (devtest / f"{LANGS[TGT]['flores']}.devtest").read_text(encoding="utf-8").splitlines()
     comet = load_from_checkpoint(
         str(Path(snapshot_download(COMET[0], revision=COMET[1])) / "checkpoints/model.ckpt")
     )
@@ -49,7 +50,7 @@ def main() -> None:
         print(m.key, round(bleu, 1), round(chrf, 1), round(cm, 4), flush=True)
     rows.sort(key=lambda r: -r[3])
     lines = [
-        "# ru→en MT benchmark (FLORES-200 devtest, 1012 sentences)",
+        f"# {SRC}→{TGT} MT benchmark (FLORES-200 devtest, 1012 sentences)",
         "",
         "| Model | COMET-22 | chrF++ | BLEU | FLORES chars/s | lit chars/s | VRAM GB | Licence |",
         "|---|---|---|---|---|---|---|---|",
@@ -61,7 +62,7 @@ def main() -> None:
             f"{lit.get('chars_per_s', '-')} | {max(f.get('vram_gb', 0), lit.get('vram_gb', 0))} | "
             f"{m.license} |"
         )
-    (HERE / "bench.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (HERE / f"bench-{PAIR}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 
 

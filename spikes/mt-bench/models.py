@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,18 @@ OPUS_DIR = (
     "/mnt/devbox/text2audio/models/assets/Helsinki-NLP/opus-mt-ru-en/"
     "fbd6dc73284f95536648512cc21d57f19191961a"
 )
+# Opus-MT is one model per direction; ru-en comes from the text2audio store.
+OPUS_EN_RU = ("Helsinki-NLP/opus-mt-en-ru", "bb09c99d180016eac6819df3dae68edb1690fdee")
+
+# Direction of the run: MT_BENCH_PAIR=ru-en (default) or en-ru.
+PAIR = os.environ.get("MT_BENCH_PAIR", "ru-en")
+if PAIR not in ("ru-en", "en-ru"):
+    raise SystemExit(f"MT_BENCH_PAIR must be ru-en or en-ru, not {PAIR!r}")
+SRC, TGT = PAIR.split("-")
+LANGS = {
+    "ru": {"name": "Russian", "flores": "rus_Cyrl"},
+    "en": {"name": "English", "flores": "eng_Latn"},
+}
 
 
 @dataclass(frozen=True)
@@ -87,6 +100,7 @@ def download() -> None:
             continue
         print(f"   {m.repo}@{m.revision[:8]}", flush=True)
         snapshot_download(m.repo, revision=m.revision, ignore_patterns=SKIP)
+    snapshot_download(OPUS_EN_RU[0], revision=OPUS_EN_RU[1], ignore_patterns=[*SKIP, "*.ot"])
     snapshot_download(COMET[0], revision=COMET[1])
     snapshot_download(XLMR[0], revision=XLMR[1], allow_patterns=XLMR_FILES)
     pin_main(*XLMR)

@@ -1,6 +1,6 @@
-"""Side-by-side literary samples for reading: out/lit-samples.html.
+"""Side-by-side literary samples for reading: out/<pair>/lit-samples.html.
 
-    python samples.py [paragraphs]   (default 12)
+    MT_BENCH_PAIR=ru-en|en-ru python samples.py [paragraphs]   (default 12)
 
 Each paragraph of the excerpt with every candidate's translation under a letter; the
 letter → model key is folded at the end, so the page can be read blind. The letter
@@ -14,11 +14,12 @@ import random
 import sys
 from pathlib import Path
 
-from models import MODELS
+from models import MODELS, PAIR, SRC, TGT
 from translate import load_set
 
 HERE = Path(__file__).parent
-OUT = HERE / "out"
+OUT = HERE / "out" / PAIR
+BOOKS = {"ru": "Капитанская дочка", "en": "A Scandal in Bohemia"}
 
 
 def main() -> None:
@@ -35,7 +36,7 @@ def main() -> None:
     parts = [
         "<!doctype html><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<title>ru→en literary samples</title><style>"
+        f"<title>{SRC}→{TGT} literary samples</title><style>"
         "body{font:16px/1.5 Georgia,serif;max-width:46em;margin:auto;padding:0 16px;"
         "background:#fff;color:#222}"
         ".src{background:#f3f0e8;padding:.6em;border-radius:6px}"
@@ -43,8 +44,8 @@ def main() -> None:
         "h2{font-size:1em;color:#666;margin-top:2em}"
         "@media(prefers-color-scheme:dark){body{background:#181818;color:#ddd}"
         ".src{background:#2a2720}}</style>",
-        "<h1>Капитанская дочка — ru→en</h1>"
-        f"<p>{count} of the 40 benchmark paragraphs from chapter I. Letters are models; "
+        f"<h1>{BOOKS[SRC]} — {SRC}→{TGT}</h1>"
+        f"<p>{count} of the 40 benchmark paragraphs from its opening. Letters are models; "
         "the key is at the end.</p>",
     ]
     for n in range(min(count, len(source))):
