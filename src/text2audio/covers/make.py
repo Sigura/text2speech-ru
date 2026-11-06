@@ -25,10 +25,9 @@ from text2audio.core.config import Config
 from text2audio.core.contracts import CoverImage, CoverRequest
 from text2audio.core.envs import EnvMissing
 from text2audio.core.errors import CoverError
-from text2audio.core.languages import profile
 from text2audio.core.plugins import discover
 from text2audio.core.pool import cpu_slots
-from text2audio.core.translate import TranslateError, open_translator
+from text2audio.core.translate import TranslateError, open_translator, runnable_translators
 from text2audio.core.workspace import BookFolder, write_json
 from text2audio.covers import prompt, typographic
 from text2audio.models.lock import assets_for, load_lock
@@ -313,16 +312,17 @@ def _translate(books: list[_Book], store: ModelStore) -> dict[int, tuple[str | N
         else:
             by_lang.setdefault(book.lang, []).append(book)
     for lang, group in by_lang.items():
-        prof = profile(lang)
-        name = next(iter(prof.translators.get("en", ())), None) if prof else None
-        found = discover(("translators",)).get("translators", name) if name else None
-        if found is None:
+        # A title and a blurb: the lightest translator that can run, not a book model.
+        ready, skipped = runnable_translators(lang, "en", store)
+        if not ready:
+            why = "; ".join(skipped) or f"no {lang!r} → English translator"
             for book in group:
-                book.warnings.append(f"no {lang!r} → English translator; cover prompt from genres")
+                book.warnings.append(f"cover prompt not translated ({why}); genres only")
             continue
+        found, slot = min(ready, key=lambda r: r[0].capabilities.vram_mb)
         texts = [t for b in group for t in (b.title, b.description)]
         try:
-            english = _run_translator(found, [t for t in texts if t], store, lang)
+            english = _run_translator(found, [t for t in texts if t], store, lang, slot)
         except (WorkerError, EnvMissing, TranslateError) as exc:
             for book in group:
                 book.warnings.append(f"cover prompt not translated: {exc}")
@@ -334,8 +334,8 @@ def _translate(books: list[_Book], store: ModelStore) -> dict[int, tuple[str | N
 
 
 def _run_translator(
-    found: Any, texts: list[str], store: ModelStore, lang: str = "ru"
+    found: Any, texts: list[str], store: ModelStore, lang: str = "ru", slot: Any = None
 ) -> dict[str, str]:
-    with open_translator(found, store, lang, "en") as engine:
+    with open_translator(found, store, lang, "en", slot) as engine:
         unique = list(dict.fromkeys(texts))
         return dict(zip(unique, engine.run(unique), strict=True))

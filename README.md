@@ -79,7 +79,8 @@ text2audio translate "output/Книга" --to en           # a book folder, any 
 
 Translation keeps headings, quotes, poems, footnotes and directives; English → Russian
 uses Tower-Plus-9B paragraph by paragraph on a GPU with 20 GB free (Seed-X or NLLB with
-less), checks every paragraph and keeps abbreviations as they are ([ADR-0011](docs/adr/0011-book-translation-pipeline.md)).
+less), Russian → English Seed-X (Opus-MT without the translation models); every
+paragraph is checked and abbreviations are kept as they are ([ADR-0011](docs/adr/0011-book-translation-pipeline.md)).
 A run resumes from its cache.
 
 **A new cover** without converting again:

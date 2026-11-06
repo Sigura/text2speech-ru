@@ -78,7 +78,9 @@ PROFILE = LanguageProfile(
         "согласи",
     ),
     qa=QaProfile(asr="gigaam", wer_threshold=0.18, chars_per_sec=(6.0, 25.0), fold={"ё": "е"}),
-    translators={"en": ("opus-mt-ru-en",)},  # `translate`, cover prompts (§6.8.2)
+    # Seed-X by paragraph, NLLB by sentence for failed pieces, Opus-MT where neither
+    # is installed; cover prompts take the lightest (§6.8.2, §13.1, ADR-0011).
+    translators={"en": ("seedx-7b", "nllb-3.3b", "opus-mt-ru-en")},
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (часть {n} из {total})",
     abbreviations=(

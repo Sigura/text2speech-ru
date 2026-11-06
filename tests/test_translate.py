@@ -213,7 +213,7 @@ def _translator_ready() -> bool:
 
 @pytest.mark.models
 @pytest.mark.skipif(not _translator_ready(), reason="Opus-MT env or assets missing")
-def test_ru2en_with_opus_mt(tmp_path: Path) -> None:
+def test_ru2en_keeps_structure_with_whichever_translator_can_run(tmp_path: Path) -> None:
     src = tmp_path / "text-ru.md"
     src.write_text(
         "# Капитанская дочка\n\n## Глава I\n\nОтец мой служил в гвардии.[^1]\n\n"
@@ -227,7 +227,8 @@ def test_ru2en_with_opus_mt(tmp_path: Path) -> None:
     assert lines[0].startswith("# ") and "captain" in lines[0].lower()
     assert lines[2].startswith("## ")
     assert "father" in text.lower() and "[^1]" in lines[4] and lines[6].startswith("[^1]: ")
-    assert "ru → en by opus-mt-ru-en on " in out.output
+    lead = out.output.split("ru → en by ", 1)[1].split(" on ", 1)[0]
+    assert lead in ("seedx-7b", "nllb-3.3b", "opus-mt-ru-en")  # the ru pack's order
 
 
 def _mt_hf_ready(free_mb: int) -> bool:
@@ -272,3 +273,17 @@ def test_en2ru_with_towerplus_keeps_structure_and_abbreviations(tmp_path: Path) 
     assert "Шерлок" in lines[4] and "слышал" in lines[4] and "[^1]" in lines[4]
     assert all(a in lines[6] for a in ("NASA", "FBI", "USB"))  # abbreviations kept
     assert lines[8].startswith("[^1]: ") and any("а" <= c <= "я" for c in lines[8])
+
+
+def test_translators_without_files_are_skipped_with_the_pull_command(tmp_path: Path) -> None:
+    from text2audio.core.translate import runnable_translators
+
+    ready, skipped = runnable_translators("ru", "en", ModelStore(tmp_path / "empty"))
+    assert ready == []
+    assert any(
+        w.startswith("seedx-7b: model files missing") and "models pull --feature translate" in w
+        for w in skipped
+    )
+    assert any(
+        w.startswith("opus-mt-ru-en: model files missing (text2audio models pull)") for w in skipped
+    )

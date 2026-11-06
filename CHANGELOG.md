@@ -241,6 +241,10 @@ All notable changes to this project are documented here. The format follows
   choice by blind reading; Seed-X-PPO-7B when it has no room) by paragraph, checked,
   with NLLB-200 3.3B by sentence for failed pieces; Latin abbreviations kept;
   resumable; weights via `models pull --feature translate` (ADR-0011, SPEC 4.14–4.15-M5).
+- ru→en book translation (`translate --to en`, `ru2en`): Seed-X-PPO-7B by paragraph,
+  NLLB-200 3.3B fallback, Opus-MT where those are not installed; uninstalled or
+  device-less translators are skipped with a warning; cover prompts use the lightest
+  (SPEC 4.16-M5).
 
 ### Changed
 

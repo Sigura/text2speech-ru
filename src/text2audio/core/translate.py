@@ -37,7 +37,7 @@ from typing import Any, Literal
 
 from text2audio.core import resources as res
 from text2audio.core.contracts import Capabilities
-from text2audio.core.envs import EnvMissing
+from text2audio.core.envs import EnvMissing, plugin_env
 from text2audio.core.languages import guess_language, profile
 from text2audio.core.plugins import discover
 from text2audio.core.pool import cpu_slots
@@ -415,12 +415,44 @@ def open_translator(
 
 
 def _chain(source: str, target: str) -> list[Any]:
-    """Installed translators for the pair, in the source language's order of preference."""
+    """Discovered translators for the pair, in the source language's order of preference."""
     prof = profile(source)
     names = prof.translators.get(target, ()) if prof else ()
     found = discover(("translators",))
     chain = [found.get("translators", n) for n in names]
     return [t for t in chain if t is not None and (source, target) in getattr(t, "pairs", ())]
+
+
+def _unusable(translator: Any, store: ModelStore) -> str | None:
+    """Why a translator cannot load here (environment or files missing), or None."""
+    env = plugin_env(translator)
+    if env is not None and not env.installed:
+        return f"{translator.name}: environment missing ({env.fix})"
+    assets = assets_for(translator.component, load_lock())
+    if not assets or any(not store.path(a, f).is_file() for a in assets for f in a.files):
+        feature = next((a.feature for a in assets if a.feature), None)
+        how = f" --feature {feature}" if feature else ""
+        return f"{translator.name}: model files missing (text2audio models pull{how})"
+    return None
+
+
+def runnable_translators(
+    source: str, target: str, store: ModelStore
+) -> tuple[list[tuple[Any, WorkerSlot]], list[str]]:
+    """Translators for the pair that are installed and have a device now, in order of
+    preference, with a slot each; and why the others were passed over."""
+    ready: list[tuple[Any, WorkerSlot]] = []
+    skipped: list[str] = []
+    for t in _chain(source, target):
+        why = _unusable(t, store)
+        slot = None if why else translator_slot(t.capabilities)
+        if why is None and slot is None:
+            why = f"{t.name}: needs a GPU with {t.capabilities.vram_mb} MiB free"
+        if why:
+            skipped.append(why)
+        elif slot is not None:
+            ready.append((t, slot))
+    return ready, skipped
 
 
 def translate_file(
@@ -456,18 +488,15 @@ def translate_file(
         raise TranslateError(f"no target language: {lang!r} translates into none; pass --to")
     if lang == target_lang:
         raise TranslateError(f"the text is already in {lang!r}")
-    chain = _chain(lang, target_lang)
-    if not chain:
+    if not _chain(lang, target_lang):
         raise TranslateError(f"no {lang!r} → {target_lang!r} translator installed")
     output = output or source.with_name(f"{source.stem}.{target_lang}.md")
     if output.resolve() == source.resolve():
         raise TranslateError("the output would overwrite the input")
-    # The first translator that can run here leads; the next one after it is the fallback.
-    slots = [(t, translator_slot(t.capabilities)) for t in chain]
-    runnable = [(t, s) for t, s in slots if s is not None]
+    # The first translator that can run here leads; a sentence-unit one is the fallback.
+    runnable, skipped = runnable_translators(lang, target_lang, store)
     if not runnable:
-        needs = ", ".join(f"{t.name} ({t.capabilities.vram_mb} MiB GPU)" for t in chain)
-        raise TranslateError(f"no translator can run now: {needs}")
+        raise TranslateError("no translator can run now: " + "; ".join(skipped))
     lead, lead_slot = runnable[0]
     factories: list[EngineFactory] = [
         lambda: open_translator(lead, store, lang, target_lang, lead_slot)
@@ -498,4 +527,5 @@ def translate_file(
     partial = output.with_name(output.name + ".partial")
     partial.write_text(result, encoding="utf-8")
     partial.replace(output)
+    stats.warnings[:0] = [f"skipped {why}" for why in skipped]
     return TranslateResult(source, output, lang, target_lang, lead.name, lead_slot.device, stats)

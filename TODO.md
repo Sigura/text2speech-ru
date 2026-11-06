@@ -144,8 +144,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] benchmark (`spikes/mt-bench/FINDINGS.md`): Tower-Plus-9B COMET 0.876, Seed-X-7B
     0.873, NLLB-3.3B 0.868 … Opus-MT 0.839 on FLORES-200;
   - [x] owner's blind reading → ru→en = Seed-X-PPO-7B, NLLB-3.3B fallback (SPEC 4.13-M5);
-  - [ ] **last stage (owner):** Seed-X / NLLB-3.3B translator plugins for ru→en — whole
-    paragraphs for the LLM, as asked; mixed-script sentences re-translated by NLLB.
+  - [x] **last stage (owner):** ru→en with Seed-X by paragraph, NLLB-3.3B fallback,
+    Opus-MT when those are not installed (SPEC 4.16-M5);
+  - [ ] real-model ru→en run with Seed-X on a free GPU (*Капитанская дочка*), and the
+    owner's listening to it.
   - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
     pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
   - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
