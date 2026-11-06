@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 OPUS_DIR = (
     "/mnt/devbox/text2audio/models/assets/Helsinki-NLP/opus-mt-ru-en/"
@@ -88,10 +89,23 @@ def download() -> None:
         snapshot_download(m.repo, revision=m.revision, ignore_patterns=SKIP)
     snapshot_download(COMET[0], revision=COMET[1])
     snapshot_download(XLMR[0], revision=XLMR[1], allow_patterns=XLMR_FILES)
+    pin_main(*XLMR)
+
+
+def pin_main(repo: str, revision: str) -> None:
+    """COMET loads XLM-R by name, which offline resolves through refs/main; a download by
+    revision does not write that ref."""
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    refs = Path(HF_HUB_CACHE) / f"models--{repo.replace('/', '--')}" / "refs"
+    refs.mkdir(parents=True, exist_ok=True)
+    (refs / "main").write_text(revision)
 
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["download"]:
         download()
+    elif sys.argv[1:] == ["pin"]:
+        pin_main(*XLMR)
     else:
-        sys.exit("usage: models.py download")
+        sys.exit("usage: models.py download | pin")

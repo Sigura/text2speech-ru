@@ -13,6 +13,7 @@ dependencies = [
     "sacrebleu",
     "unbabel-comet",
     "huggingface-hub",
+    "setuptools<81",  # COMET imports pkg_resources
 ]
 
 [tool.uv]

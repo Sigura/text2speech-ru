@@ -10,9 +10,22 @@ PY="$MT_BENCH_HOME/venv/bin/python"
 KEYS=("$@")
 [[ ${#KEYS[@]} -gt 0 ]] || mapfile -t KEYS < <(cd "$HERE" && "$PY" -c 'from models import MODELS; print("\n".join(m.key for m in MODELS))')
 cd "$HERE"
+# The GPU is shared: wait until it has room (MT_BENCH_FREE_MB, default 21000 MiB, enough
+# for the largest candidate) instead of running out of memory; finished outputs are kept.
+FREE_MB="${MT_BENCH_FREE_MB:-21000}"
+wait_for_gpu() {
+  local free
+  while free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i 0) \
+      && (( free < FREE_MB )); do
+    echo "   waiting for GPU memory: ${free} MiB free, need ${FREE_MB}"
+    sleep 60
+  done
+}
 for key in "${KEYS[@]}"; do
   for set in flores lit; do
+    [[ -s "out/$key.$set.json" ]] && { echo "== $key $set (done)"; continue; }
     echo "== $key $set"
+    wait_for_gpu
     "$PY" translate.py "$key" "$set"
   done
 done

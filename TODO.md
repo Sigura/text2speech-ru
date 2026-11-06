@@ -141,9 +141,10 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] `text2audio cover <book folder>… [--mode …]` (SPEC 4.9-M5);
   - [x] `text2audio translate` / `ru2en` with Opus-MT, sentence by sentence (Marian
     reads ≤ 512 tokens, so whole paragraphs would be cut), structure kept (SPEC 4.9-M5);
-  - [ ] benchmark (`spikes/mt-bench/`: Opus-MT, NLLB 1.3B / 3.3B, MADLAD-3B, Tower-Plus-9B,
-    Seed-X-PPO-7B, Qwen3-8B on FLORES-200 + a literary excerpt), then adopt the winner
-    as a translator plugin — an LLM gets whole paragraphs, as asked.
+  - [x] benchmark (`spikes/mt-bench/FINDINGS.md`): Tower-Plus-9B COMET 0.876, Seed-X-7B
+    0.873, NLLB-3.3B 0.868 … Opus-MT 0.839 on FLORES-200;
+  - [ ] owner's blind reading of the literary samples (sent 2026-11-06), then adopt the
+    winner as a translator plugin — an LLM gets whole paragraphs, as asked.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;
