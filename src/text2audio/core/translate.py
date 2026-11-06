@@ -424,15 +424,15 @@ def _chain(source: str, target: str) -> list[Any]:
 
 
 def _unusable(translator: Any, store: ModelStore) -> str | None:
-    """Why a translator cannot load here (environment or files missing), or None."""
-    env = plugin_env(translator)
-    if env is not None and not env.installed:
-        return f"{translator.name}: environment missing ({env.fix})"
+    """Why a translator cannot load here (files or environment missing), or None."""
     assets = assets_for(translator.component, load_lock())
     if not assets or any(not store.path(a, f).is_file() for a in assets for f in a.files):
         feature = next((a.feature for a in assets if a.feature), None)
         how = f" --feature {feature}" if feature else ""
         return f"{translator.name}: model files missing (text2audio models pull{how})"
+    env = plugin_env(translator)
+    if env is not None and not env.installed:
+        return f"{translator.name}: environment missing ({env.fix})"
     return None
 
 

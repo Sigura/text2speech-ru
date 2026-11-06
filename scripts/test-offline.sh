@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the test suite with no network (SPEC §12, FR-04).
 #
-# Preferred: a network namespace with no interfaces (`unshare -rn`). pytest-socket
+# Preferred: a network namespace with only loopback (`unshare -rn`). pytest-socket
 # (enabled for every run in pyproject.toml) blocks sockets on top of that.
 #
 # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor
@@ -18,8 +18,10 @@ command -v "$UV" >/dev/null || UV=~/.local/bin/uv
 "$UV" sync --frozen --quiet
 
 if unshare -rn true 2>/dev/null; then
-    echo "== offline: running inside a network namespace with no interfaces"
-    exec unshare -rn "$UV" run --frozen --offline pytest "$@"
+    # Only loopback comes up: local services such as the cover WebUI bind 127.0.0.1
+    # (ADR-0009); there is still no route off the machine.
+    echo "== offline: running inside a network namespace with loopback only"
+    exec unshare -rn sh -c 'ip link set lo up && exec "$0" run --frozen --offline pytest "$@"' "$UV" "$@"
 fi
 
 if [ "${T2A_OFFLINE_STRICT:-0}" = 1 ]; then
