@@ -235,6 +235,8 @@ All notable changes to this project are documented here. The format follows
   `ru2en`): the Markdown in English through the language's translator (Opus-MT for
   `ru`), offline, structure, footnotes and directives kept; `text2audio cover <book
   folder>… [--mode …]` chooses a cover again without re-conversion (SPEC 4.9-M5).
+- The translator runs on a GPU when one has room, else on CPU: a whole novel in 1 min
+  14 s instead of 72 min (SPEC 4.11-M5).
 
 ### Changed
 

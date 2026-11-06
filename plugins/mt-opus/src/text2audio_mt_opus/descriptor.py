@@ -15,8 +15,10 @@ class OpusMtRuEn:
     env = "mt-opus"
     env_project = HERE / "env"
     languages = ("ru",)
-    # A few titles and blurbs per batch: one CPU worker is enough.
-    capabilities = Capabilities(languages=("ru",), devices=("cpu",), ram_mb=1500, threads=4)
+    # One worker: a GPU when one has room (a whole book in about a minute), else CPU.
+    capabilities = Capabilities(
+        languages=("ru",), devices=("cpu", "cuda"), vram_mb=1500, ram_mb=1500, threads=4
+    )
 
     def assets(self) -> list[ModelAsset]:
         return []  # resolved from models.lock by `component`

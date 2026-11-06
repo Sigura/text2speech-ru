@@ -1,4 +1,5 @@
-"""Opus-MT worker (protocol 1): texts → English, with transformers' Marian model on CPU.
+"""Opus-MT worker (protocol 1): texts → English, with transformers' Marian model on the
+planned device (a GPU, else CPU).
 
 The model and tokenizer load from the pinned files in the model store by directory, so
 nothing is looked up on the Hub; `pytorch_model.bin` is read by transformers with
@@ -30,11 +31,12 @@ def load(msg: dict[str, Any]) -> dict[str, Any]:
     from transformers import MarianMTModel, MarianTokenizer
 
     torch.set_num_threads(t2a_worker.threads())
+    device = msg.get("device") or "cpu"
     root = _snapshot(msg)
     tokenizer = MarianTokenizer.from_pretrained(root, local_files_only=True)
-    model = MarianMTModel.from_pretrained(root, local_files_only=True).eval()
-    state.update(model=model, tokenizer=tokenizer, torch=torch)
-    return {}
+    model = MarianMTModel.from_pretrained(root, local_files_only=True).eval().to(device)
+    state.update(model=model, tokenizer=tokenizer, torch=torch, device=device)
+    return {"device": device}
 
 
 def translate(msg: dict[str, Any]) -> dict[str, Any]:
@@ -46,7 +48,7 @@ def translate(msg: dict[str, Any]) -> dict[str, Any]:
     tokenizer, model, torch = state["tokenizer"], state["model"], state["torch"]
     batch = tokenizer(
         texts, return_tensors="pt", padding=True, truncation=True, max_length=MAX_TOKENS
-    )
+    ).to(state["device"])
     with torch.inference_mode():
         out = model.generate(**batch, num_beams=4, max_new_tokens=MAX_TOKENS)
     return {"texts": tokenizer.batch_decode(out, skip_special_tokens=True)}

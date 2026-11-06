@@ -15,9 +15,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from text2audio.core import resources as res
+from text2audio.core.contracts import Capabilities
 from text2audio.core.languages import guess_language, profile
 from text2audio.core.plugins import discover
 from text2audio.core.pool import cpu_slots
+from text2audio.core.resources import WorkerSlot
 from text2audio.core.workspace import BookFolder
 from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.store import ModelStore
@@ -42,6 +45,7 @@ class TranslateResult:
     source_lang: str
     target_lang: str
     translator: str
+    device: str
     sentences: int = 0
     warnings: list[str] = field(default_factory=list)
 
@@ -132,15 +136,28 @@ def translate_markdown(
     return to_markdown(doc), len(unique)
 
 
-@contextmanager
-def open_translator(found: Any, store: ModelStore) -> Iterator[Translate]:
-    """A worker of a `text2audio.translators` plugin, loaded from the model store."""
-    caps = found.capabilities
+def translator_slot(caps: Capabilities) -> WorkerSlot:
+    """The first GPU with room for the translator when it can use one, else CPU (§9.1)."""
+    if "cuda" in caps.devices:
+        plan = res.plan(res.probe(), caps)
+        gpu = [s for s in plan.slots if s.gpu_uuid]
+        if gpu:
+            return gpu[0]
     [slot] = cpu_slots(caps.threads, caps.ram_mb, 1)
-    worker = Worker(found, store.root, slot)
+    return slot
+
+
+@contextmanager
+def open_translator(found: Any, store: ModelStore) -> Iterator[tuple[Translate, str]]:
+    """A worker of a `text2audio.translators` plugin, loaded from the model store, and
+    the device it runs on."""
+    worker = Worker(found, store.root, translator_slot(found.capabilities))
     try:
         worker.load(assets=store.payload(assets_for(found.component, load_lock())))
-        yield lambda texts: [str(t) for t in worker.call("translate", texts=texts)["texts"]]
+        yield (
+            lambda texts: [str(t) for t in worker.call("translate", texts=texts)["texts"]],
+            worker.slot.device,
+        )
     finally:
         worker.close()
 
@@ -180,7 +197,7 @@ def translate_file(
     output = output or source.with_name(f"{source.stem}.{target_lang}.md")
     if output.resolve() == source.resolve():
         raise TranslateError("the output would overwrite the input")
-    with open_translator(found, store) as translate:
+    with open_translator(found, store) as (translate, device):
         result, count = translate_markdown(
             text, translate, prof.abbreviations if prof else (), progress
         )
@@ -188,4 +205,4 @@ def translate_file(
     partial = output.with_name(output.name + ".partial")
     partial.write_text(result, encoding="utf-8")
     partial.replace(output)
-    return TranslateResult(source, output, lang, target_lang, found.name, count)
+    return TranslateResult(source, output, lang, target_lang, found.name, device, count)

@@ -334,6 +334,6 @@ def _translate(books: list[_Book], store: ModelStore) -> dict[int, tuple[str | N
 
 
 def _run_translator(found: Any, texts: list[str], store: ModelStore) -> dict[str, str]:
-    with open_translator(found, store) as translate:
+    with open_translator(found, store) as (translate, _):
         unique = list(dict.fromkeys(texts))
         return dict(zip(unique, translate(unique), strict=True))

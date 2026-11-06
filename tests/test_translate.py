@@ -94,6 +94,21 @@ def test_cli_refuses_what_it_cannot_translate(tmp_path: Path) -> None:
     assert out.exit_code == 2 and "no such Markdown file" in out.output
 
 
+@pytest.mark.parametrize(("free_mb", "device"), [(20000, "cuda:3"), (1000, "cpu")])
+def test_translator_takes_a_gpu_with_room_else_cpu(
+    monkeypatch: pytest.MonkeyPatch, free_mb: int, device: str
+) -> None:
+    from text2audio_mt_opus.descriptor import OpusMtRuEn
+
+    from text2audio.core import resources as res
+    from text2audio.core.translate import translator_slot
+
+    gpu = res.Gpu(index=3, uuid="GPU-fake", name="Fake", total_mb=24000, free_mb=free_mb)
+    found = res.Resources(frozenset(range(8)), None, 16000, 16000, (gpu,))
+    monkeypatch.setattr(res, "probe", lambda *a, **k: found)
+    assert translator_slot(OpusMtRuEn.capabilities).device == device
+
+
 def _translator_ready() -> bool:
     from text2audio_mt_opus.descriptor import OpusMtRuEn
 
@@ -121,4 +136,4 @@ def test_ru2en_with_opus_mt(tmp_path: Path) -> None:
     assert lines[0].startswith("# ") and "captain" in lines[0].lower()
     assert lines[2].startswith("## ")
     assert "father" in text.lower() and "[^1]" in lines[4] and lines[6].startswith("[^1]: ")
-    assert "ru → en by opus-mt-ru-en" in out.output
+    assert "ru → en by opus-mt-ru-en on " in out.output

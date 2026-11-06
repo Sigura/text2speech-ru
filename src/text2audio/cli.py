@@ -250,7 +250,7 @@ def _translate(source: Path, output: Path | None, source_lang: str | None, targe
             ui.print(f"[red]error:[/] {escape(str(exc))}")
             raise typer.Exit(ExitCode.MISSING_ASSET) from exc
         ui.result(
-            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator}, "
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator} on {r.device}, "
             f"{r.sentences} sentences"
         )
 
