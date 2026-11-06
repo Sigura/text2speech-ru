@@ -472,8 +472,11 @@ def translate_file(
     factories: list[EngineFactory] = [
         lambda: open_translator(lead, store, lang, target_lang, lead_slot)
     ]
-    if len(runnable) > 1:
-        backup = runnable[1][0]
+    # The fallback re-translates by sentence: a sentence-unit model when one can run.
+    rest = [t for t, _ in runnable[1:]]
+    backup = next((t for t in rest if getattr(t, "unit", "sentence") == "sentence"), None)
+    backup = backup or next(iter(rest), None)
+    if backup is not None:
         factories.append(lambda: open_translator(backup, store, lang, target_lang))
     tgt_prof = profile(target_lang)
     cache_dir = work if work is not None else output.parent

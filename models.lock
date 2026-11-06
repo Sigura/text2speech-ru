@@ -319,3 +319,27 @@ files = ["config.json", "generation_config.json", "pytorch_model-00001-of-00003.
 "tokenizer.json" = "e316b82de11d0f951f370943b3c438311629547285129b0b81dadabd01bca665"
 "tokenizer_config.json" = "d1aa8c3697d3e35674f97b5b7e9c99d22b010f528e80140257d97316be90d044"
 
+# Tower-Plus-9B (Gemma-2-based LLM, safetensors): book translation en→ru paragraph by
+# paragraph, the owner's choice by blind reading (§6.11, spikes/mt-bench); GPU only,
+# ~19 GB in bf16. Opt-in feature.
+[[asset]]
+repo = "Unbabel/Tower-Plus-9B"
+revision = "c59d17c5bbf5eb6d9f0f8ba67e0ee76b4b106ecc"
+license = "CC-BY-NC-SA-4.0"
+component = "mt:towerplus-9b"
+langs = ["en", "ru"]
+feature = "translate"
+files = ["config.json", "generation_config.json", "model-00001-of-00004.safetensors", "model-00002-of-00004.safetensors", "model-00003-of-00004.safetensors", "model-00004-of-00004.safetensors", "model.safetensors.index.json", "special_tokens_map.json", "tokenizer.json", "tokenizer.model", "tokenizer_config.json"]
+[asset.sha256]
+"config.json" = "5b65602c1bea8ae08b1d0de89dffcb009d9fbe49b1cdb9312e8c84b3db16385a"
+"generation_config.json" = "bf68dd2be5385d9c1d62c21b29755633b84817c378b38e0b3cbd4f705f733409"
+"model-00001-of-00004.safetensors" = "eec497db1ac3e62ee899cc45505737c257d3f7f94a044ca2a9916544b836291e"
+"model-00002-of-00004.safetensors" = "1390d49fbf816cd47783b30a7ebf274f6f29473e60fd0bd4adc53365f225d81a"
+"model-00003-of-00004.safetensors" = "0bc92d223f177fc5599ea79dc49469f4284315d4c8e086bada285e23cfea6e18"
+"model-00004-of-00004.safetensors" = "fcac97e4b249ba836aee840cc23f6f93baf761be6b6c43d418c1d536f0805fb8"
+"model.safetensors.index.json" = "c38b39b80b2d7aa422464a9b816af4c30d2177e471b89e5325df1336a23ad284"
+"special_tokens_map.json" = "f65f1b09194276efdce220a63853039f7677e8f23d52a61e34e4089bf18eba2e"
+"tokenizer.json" = "cff2ad68719a416bf520aac5d71e574862465f0cdb7c98fc00906c8117e9021c"
+"tokenizer.model" = "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2"
+"tokenizer_config.json" = "266632916b1ebf97cd2358fd6364c55167f203ad3e261749d2a52bb52a6c4c87"
+

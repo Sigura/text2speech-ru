@@ -148,8 +148,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     paragraphs for the LLM, as asked; mixed-script sentences re-translated by NLLB.
   - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
     pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
-  - [ ] owner's blind reading of the en→ru samples (sent 2026-11-06) — may change the
-    `en` pack's order.
+  - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
+  - [ ] whole-book en→ru run (*Adventures of Sherlock Holmes*): time, checks and fallback
+    counts, listening to a chapter in Russian.
 - [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
   - English → Russian book translation as an option at the Markdown step, using the
     strongest model that runs offline on this hardware, chosen by benchmark;

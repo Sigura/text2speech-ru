@@ -73,7 +73,14 @@ blind letters):
 
 Seed-X leads in this direction too, and by more over NLLB (+0.018). Opus-MT, reading
 sentence by sentence, makes the narrator female in ¶1 («Я редко слышала»); every other
-model writes «слышал». Owner's reading pending.
+model writes «слышал».
+
+**Owner's blind reading (en→ru, letters A = MADLAD, B = Tower-Plus, C = Opus-MT,
+D = NLLB-1.3B, E = Seed-X, F = Qwen3, G = NLLB-3.3B):** ¶1 Tower-Plus and Seed-X, ¶2
+Tower-Plus, ¶3 Seed-X, ¶4 Tower-Plus, ¶5 Tower-Plus — «one option significantly
+better». **Decision: Tower-Plus-9B leads en→ru** (COMET 0.9090, level with Seed-X's
+0.9099), Seed-X when no GPU has the 20 GB Tower-Plus needs, NLLB-3.3B by sentence for
+failed pieces.
 
 ## Ensemble (MBR selection, `mbr.py`, ru→en FLORES)
 

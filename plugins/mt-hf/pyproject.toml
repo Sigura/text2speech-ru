@@ -1,12 +1,13 @@
 [project]
 name = "text2audio-mt-hf"
 version = "0.1.0"
-description = "Book translation with Hugging Face models — Seed-X (LLM, paragraphs) and NLLB-200 (sentences) — in their own uv environment"
+description = "Book translation with Hugging Face models — Tower-Plus and Seed-X (LLMs, paragraphs), NLLB-200 (sentences) — in their own uv environment"
 requires-python = ">=3.11"
 # The descriptors import text2audio; the worker runs in env/ and uses no core code.
 dependencies = ["text2audio"]
 
 [project.entry-points."text2audio.translators"]
+"towerplus-9b" = "text2audio_mt_hf.descriptor:TowerPlus"
 "seedx-7b" = "text2audio_mt_hf.descriptor:SeedX"
 "nllb-3.3b" = "text2audio_mt_hf.descriptor:Nllb"
 

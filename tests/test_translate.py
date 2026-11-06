@@ -238,7 +238,7 @@ def _mt_hf_ready(free_mb: int) -> bool:
     from text2audio.models.lock import assets_for
 
     env = plugin_env(SeedX())
-    assets = assets_for("mt:seedx-7b") + assets_for("mt:nllb-3.3b")
+    assets = [*assets_for("mt:towerplus-9b"), *assets_for("mt:nllb-3.3b")]
     gpus = res.probe().gpus
     return bool(
         env
@@ -254,7 +254,7 @@ def _mt_hf_ready(free_mb: int) -> bool:
 @pytest.mark.skipif(
     not _mt_hf_ready(17500), reason="mt-hf env, assets or a free 17.5 GB GPU missing"
 )
-def test_en2ru_with_seedx_keeps_structure_and_abbreviations(tmp_path: Path) -> None:
+def test_en2ru_with_towerplus_keeps_structure_and_abbreviations(tmp_path: Path) -> None:
     src = tmp_path / "story.md"
     src.write_text(
         "# A Scandal in Bohemia\n\n## Chapter I\n\n"
@@ -266,7 +266,7 @@ def test_en2ru_with_seedx_keeps_structure_and_abbreviations(tmp_path: Path) -> N
     )
     out = CliRunner().invoke(app, ["en2ru", str(src)])
     assert out.exit_code == 0, out.output
-    assert "en → ru by seedx-7b on cuda" in out.output
+    assert "en → ru by towerplus-9b on cuda" in out.output
     lines = (tmp_path / "story.ru.md").read_text(encoding="utf-8").splitlines()
     assert lines[0].startswith("# ") and lines[2].startswith("## ")
     assert "Шерлок" in lines[4] and "слышал" in lines[4] and "[^1]" in lines[4]

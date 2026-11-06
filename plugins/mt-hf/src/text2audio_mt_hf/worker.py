@@ -1,11 +1,12 @@
-"""Seed-X / NLLB worker (protocol 1): texts → another language with transformers.
+"""Tower-Plus / Seed-X / NLLB worker (protocol 1): texts → another language with
+transformers.
 
-    worker.py seedx|nllb
+    worker.py towerplus|seedx|nllb
 
 The model and tokenizer load from the pinned files in the model store by directory, so
 nothing is looked up on the Hub; Seed-X ships safetensors, NLLB's `.bin` shards are
 read by transformers with `torch.load(weights_only=True)` (§6.12). bf16 on a GPU, fp32
-on CPU. Seed-X takes its documented prompt, greedy; NLLB 4 beams.
+on CPU. Tower-Plus and Seed-X take their documented prompts, greedy; NLLB 4 beams.
 """
 
 from __future__ import annotations
@@ -37,13 +38,13 @@ def load(msg: dict[str, Any]) -> dict[str, Any]:
     import torch
     from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 
-    if KIND not in ("seedx", "nllb"):
+    if KIND not in ("towerplus", "seedx", "nllb"):
         raise RuntimeError(f"unknown model kind {KIND!r}")
     torch.set_num_threads(t2a_worker.threads())
     device = msg.get("device") or "cpu"
     dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
     root = _snapshot(msg)
-    if KIND == "seedx":
+    if KIND in ("towerplus", "seedx"):
         tokenizer = AutoTokenizer.from_pretrained(root, local_files_only=True, padding_side="left")
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -55,14 +56,40 @@ def load(msg: dict[str, Any]) -> dict[str, Any]:
     return {"device": device}
 
 
-def _seedx(texts: list[str], source: str, target: str) -> list[str]:
-    tokenizer, model, torch = state["tokenizer"], state["model"], state["torch"]
-    prompts = [
-        f"Translate the following {NAMES[source]} sentence into {NAMES[target]}:\n{t} <{target}>"
+def _prompts(texts: list[str], source: str, target: str) -> tuple[list[str], bool]:
+    """The model's documented prompt per text, and whether it already holds the BOS."""
+    a, b = NAMES[source], NAMES[target]
+    if KIND == "seedx":
+        return [
+            f"Translate the following {a} sentence into {b}:\n{t} <{target}>" for t in texts
+        ], False
+    tokenizer = state["tokenizer"]
+    chats = [
+        tokenizer.apply_chat_template(
+            [
+                {
+                    "role": "user",
+                    "content": f"Translate the following {a} source text to {b}:\n{a}: {t}\n{b}: ",
+                }
+            ],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
         for t in texts
     ]
+    return chats, True
+
+
+def _llm(texts: list[str], source: str, target: str) -> list[str]:
+    tokenizer, model, torch = state["tokenizer"], state["model"], state["torch"]
+    prompts, templated = _prompts(texts, source, target)
     batch = tokenizer(
-        prompts, return_tensors="pt", padding=True, truncation=True, max_length=MAX_INPUT
+        prompts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=MAX_INPUT,
+        add_special_tokens=not templated,
     ).to(state["device"])
     width = batch["input_ids"].shape[1]
     with torch.inference_mode():
@@ -104,7 +131,7 @@ def translate(msg: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(f"{KIND} is set up for en and ru, not {source} → {target}")
     if not texts:
         return {"texts": []}
-    run = _seedx if KIND == "seedx" else _nllb
+    run = _nllb if KIND == "nllb" else _llm
     return {"texts": run(texts, source, target)}
 
 
