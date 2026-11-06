@@ -95,13 +95,15 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     Piper for `en` T0;
   - [ ] Chatterbox hallucinates on quote pieces under ~15 characters («“Holmes,”»):
     join short remarks to their line, or a minimum split length, for cloned backends;
-  - [ ] `en` text gaps from the benchmark: *St.* before a name after a capitalized
-    word («Avenue, St. John’s Wood» → Street), pre-decimal money («2s. 6d.»);
+  - [x] `en` text gaps from the benchmark: *St.* before a name after a capitalized
+    word («Avenue, St. John’s Wood» → Saint), pre-decimal money («2s. 6d.» → two
+    shillings and six pence), the sentence dot before a closing quote, «I.» / «II.»
+    opening a heading;
   - [x] `models.lock` entries with `langs = ["en"]`; golden fixtures per format;
   - [x] female narrator + contrasting dialogue voice (owner: `af_nicole`, `am_michael`);
   - [x] blind T1-vs-T0 test for `en`: T1 preferred in 6/20, fast tier by default;
   - [ ] carried over (owner): `pytest -m "models and slow" tests/e2e/test_novel_en.py`,
-    the full English book on T0 and T1 (T0 will fail NFR-05 until Kokoro is faster);
+    an excerpt of ≤ 100 segments on T0 (no GPU, no core or memory limit) and T1;
   - [ ] optional: IndexTTS-2 vs Chatterbox by ear, if the expressive tier matters for
     English (benchmark challenger, not in the blind test);
 - [ ] **After M4 (owner, 2026-11-06):** review what `ru` can reuse from `en` now that

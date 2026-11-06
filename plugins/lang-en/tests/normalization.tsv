@@ -148,6 +148,14 @@ It cost £5.	It cost five pounds.
 It cost £1.	It cost one pound.
 It cost £3.50.	It cost three pounds and fifty pence.
 It cost £1.01.	It cost one pound and one penny.
+Breakfast cost 2s. 6d., lunch 1s.	Breakfast cost two shillings and six pence, lunch one shilling.
+A glass of sherry, 8d.	A glass of sherry, eight pence.
+It cost 1d. A bargain.	It cost one penny. A bargain.
+Rooms were 8s., all told.	Rooms were eight shillings, all told.
+“Lunch, 8d.” He paid.	“Lunch, eight pence.” He paid.
+“He lives on Baker St.”	“He lives on Baker Street.”
+It cost £1 2s. 6d. in all.	It cost one pound two shillings and six pence in all.
+Music of the 1960s. Then silence.	Music of the nineteen sixties. Then silence.
 It cost €10.	It cost ten euros.
 It cost €1.	It cost one euro.
 It cost €2.50.	It cost two euros and fifty cents.
@@ -177,6 +185,10 @@ Book IX	Book Nine	heading
 Volume XII	Volume Twelve	heading
 Act V	Act Five	heading
 Scene II	Scene Two	heading
+I. A Scandal in Bohemia	One. A Scandal in Bohemia	heading
+II.	Two.	heading
+XII. The Adventure of the Copper Beeches	Twelve. The Adventure of the Copper Beeches	heading
+I. Am here.	I. Am here.
 Stave I	Stave One	heading
 Chapter XL	Chapter Forty	heading
 Chapter 12	Chapter twelve	heading
@@ -232,6 +244,7 @@ He lives at 221 Baker St. in London.	He lives at two hundred twenty-one Baker St
 He lives on Baker St. Then he moved.	He lives on Baker Street. Then he moved.
 Main St. was empty.	Main Street was empty.
 Wall St. fell.	Wall Street fell.
+He lived in Serpentine Avenue, St. John’s Wood.	He lived in Serpentine Avenue, Saint John’s Wood.
 # Street types
 He lives on Fifth Ave.	He lives on Fifth Avenue.
 He lives on Abbey Rd. in London.	He lives on Abbey Road in London.

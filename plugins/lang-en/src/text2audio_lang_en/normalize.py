@@ -155,9 +155,9 @@ _COUNTED = re.compile(r"\s+(?:years|men|people|miles|pounds|dollars|times)\b")
 
 def _closing(m: re.Match[str]) -> str:
     """A dot that belonged to an abbreviation also ends the sentence at the end of the
-    text or before a capital."""
+    text or before a capital, closing quotes and brackets in between."""
     rest = m.string[m.end() :]
-    return "." if not rest.strip() or re.match(r"\s+[A-Z]", rest) else ""
+    return "." if re.match(r"[’”'\")\]]*(?:\s*$|\s+[A-Z])", rest) else ""
 
 
 def _number(text: str) -> str:
@@ -176,6 +176,11 @@ def _keyword_roman(m: re.Match[str]) -> str:
     return f"{m[1]} {cardinal(value).title()}" if value else m[0]
 
 
+def _heading_roman(m: re.Match[str]) -> str:
+    value = roman_value(m[1])
+    return f"{cardinal(value).title()}." if value else m[0]
+
+
 def _ruler(m: re.Match[str]) -> str:
     value = roman_value(m[2])
     if not value:
@@ -189,7 +194,12 @@ def _saint_or_street(m: re.Match[str]) -> str:
     before = m.string[: m.start()].rstrip()
     rest = m.string[m.end() :]
     words = before.split()
-    after_name = len(words) > 1 and words[-1][0].isupper() and words[-2][-1] not in ".!?"
+    after_name = (
+        len(words) > 1
+        and words[-1][0].isupper()
+        and words[-1][-1].isalpha()
+        and words[-2][-1] not in ".!?"
+    )
     if re.match(r"\s+[A-Z]", rest) and not after_name:
         return "Saint"
     return "Street" + _closing(m)
@@ -209,6 +219,15 @@ def _money(m: re.Match[str]) -> str:
     if small:
         parts.append(f"{cardinal(small)} {small_one if small == 1 else small_many}")
     return " and ".join(parts)
+
+
+def _shillings_pence(m: re.Match[str]) -> str:
+    parts = []
+    if m[1]:
+        parts.append(f"{cardinal(int(m[1]))} {'shilling' if m[1] == '1' else 'shillings'}")
+    if m[2]:
+        parts.append(f"{cardinal(int(m[2]))} {'penny' if m[2] == '1' else 'pence'}")
+    return " and ".join(parts) + _closing(m)
 
 
 def _month(name: str) -> str:
@@ -318,6 +337,7 @@ def _integer(m: re.Match[str]) -> str:
 
 _KEYWORD_ROMAN = re.compile(rf"\b((?i:{_NUMBERED}))\s+([IVXL]+)\b")
 _WORLD_WAR = re.compile(r"\b(World War)\s+([IV]+)\b")
+_HEADING_ROMAN = re.compile(r"^([IVXLC]+)\.(?=\s|$)")
 _RULER = re.compile(r"\b([A-Z][a-z]+)\s+([IVXL]+)\b")
 _WORD = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")
 
@@ -351,6 +371,11 @@ _NUMBER_RULES: list[Rule] = [
         re.compile(rf"([$£€])\s?({_READABLE})(?:\s+(thousand|million|billion|trillion))?(?![\d,])"),
         _money,
     ),
+    (
+        re.compile(r"(?<![\w.,])(1\d|\d)s\.(?:\s(1[01]|\d)d\.)?"),
+        _shillings_pence,
+    ),
+    (re.compile(r"(?<![\w.,])()(1[01]|\d)d\."), _shillings_pence),
     (
         re.compile(r"(?<![\w.,])(\d+)¢"),
         lambda m: f"{cardinal(int(m[1]))} {'cent' if m[1] == '1' else 'cents'}",
@@ -425,6 +450,8 @@ class Normalizer:
         shouted = role in ("heading", "title") and _is_shouted(text)
         text = _KEYWORD_ROMAN.sub(_keyword_roman, text)
         text = _WORLD_WAR.sub(_keyword_roman, text)
+        if role in ("heading", "title"):
+            text = _HEADING_ROMAN.sub(_heading_roman, text)
         if shouted:
             text = _WORD.sub(lambda m: m[0].capitalize(), text)
         text = _RULER.sub(_ruler, text)

@@ -1,10 +1,12 @@
-"""M2 exit criteria (SPEC §11): a full public-domain Russian novel rendered on T0 and T1.
+"""M2 exit criteria (SPEC §11): a public-domain Russian novel rendered on T0 and T1.
 
 «Капитанская дочка» in full is not committed; fetch it once with
-`uv run python tests/fixtures/fetch_novel.py`. Each run is a real `text2audio run` in a
-subprocess, restricted like the reference machines (§9): T0 = 4 cores (`taskset`), no
-GPU (`CUDA_VISIBLE_DEVICES=""`), 8 GB; T1 = the GPU with the most free memory, 8 cores
-near it, 16 GB. Memory limits use a systemd user scope, when available.
+`uv run python tests/fixtures/fetch_novel.py`. Tests synthesize at most 100 segments
+(owner, SPEC §13.1), so the run takes every chapter heading with its first paragraphs.
+Each run is a real `text2audio run` in a subprocess: T0 = no GPU
+(`CUDA_VISIBLE_DEVICES=""`), every core and no memory limit (owner, SPEC §13.1); T1 =
+the GPU with the most free memory, 8 cores near it (`taskset`), 16 GB. Memory limits use a
+systemd user scope, when available.
 
     uv run pytest -m "models and slow" tests/e2e/test_novel.py -s [-k t1]
 """
@@ -34,6 +36,8 @@ from text2audio.models.store import ModelStore
 NOVEL = Path(__file__).parents[1] / "fixtures" / "ru" / "large" / "kapitanskaya-dochka.md"
 CLI = Path(sys.executable).parent / "text2audio"
 CHAPTERS = 15  # I–XIV and the appendix (the omitted chapter)
+PARAGRAPHS = 4  # per chapter: 93 segments
+SEGMENTS = 100
 pytestmark = [pytest.mark.models, pytest.mark.slow]
 
 
@@ -79,17 +83,42 @@ def _limits(cpus: str, memory: str) -> list[str]:
     return cmd
 
 
+def _excerpt(novel: Path, folder: Path, paragraphs: int) -> Path:
+    kept: list[str] = []
+    count = 0
+    for block in novel.read_text("utf-8").split("\n\n"):
+        if block.startswith("#"):
+            kept.append(block)
+            if block.startswith(("# ", "## ")):
+                count = 0
+        elif count < paragraphs:
+            kept.append(block)
+            count += 1
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / novel.name
+    path.write_text("\n\n".join(kept), "utf-8")
+    return path
+
+
 def _run(
     limits: list[str],
     env: dict[str, str],
     out: Path,
     novel: Path = NOVEL,
     chapters: int = CHAPTERS,
+    paragraphs: int = PARAGRAPHS,
+    tier: str | None = None,
 ) -> dict[str, Any]:
+    novel = _excerpt(novel, out.parent / "excerpt", paragraphs)
+    # Excerpt chapters last about a minute; the split plan would merge them into one file.
+    config = out.parent / "config" / "text2audio" / "config.toml"
+    config.parent.mkdir(parents=True)
+    config.write_text("[output]\nmin_part_minutes = 0\n", "utf-8")
+    env = {**env, "XDG_CONFIG_HOME": str(config.parents[1])}
     # Stage lines are streamed, so a long stage does not look like a hang.
     tail: deque[str] = deque(maxlen=60)
     with subprocess.Popen(
-        [*limits, str(CLI), "run", str(novel), "-o", str(out)],
+        [*limits, str(CLI), "run", str(novel), "-o", str(out), *(["--tier", tier] if tier else [])],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -111,6 +140,7 @@ def _run(
     assert len(parts) >= chapters  # one MP3 per chapter (long ones may be split)
     assert all(m.with_suffix(".srt").is_file() for m in parts)
     assert (book / "report.md").is_file()
+    assert report["segments"]["total"] <= SEGMENTS
     assert report["segments"]["failed"] == 0
     qa = report["qa"]
     assert qa["mode"] == "on"
@@ -123,7 +153,7 @@ def _run(
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run(_limits("0-3", "8G"), env, tmp_path / "out")
+    report = _run([], env, tmp_path / "out")
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 
 
@@ -134,7 +164,8 @@ def test_t1(tmp_path: Path) -> None:
     assert gpu is not None
     near = sorted(gpu.cpu_affinity or range(os.cpu_count() or 8))[:8]
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": gpu.uuid}
-    report = _run(_limits(",".join(map(str, near)), "16G"), env, tmp_path / "out")
+    limits = _limits(",".join(map(str, near)), "16G")
+    report = _run(limits, env, tmp_path / "out", tier="expressive")  # fast is the default
     assert report["tier"] == "expressive"
     assert report["route"] == {"backend": "silero", "polish": "chatterbox", "foreign": "chatterbox"}
     assert report["polish"]["workers"] >= 1

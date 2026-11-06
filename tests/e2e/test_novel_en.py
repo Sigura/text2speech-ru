@@ -1,9 +1,8 @@
-"""M4 exit criterion (SPEC §11, FR-06): a full public-domain English book on T0 and T1.
+"""M4 exit criterion (SPEC §11, FR-06): a public-domain English book on T0 and T1.
 
 *The Adventures of Sherlock Holmes* in full is not committed; fetch it once with
-`uv run python tests/fixtures/fetch_novel_en.py`. Same limits and checks as the Russian
-novel (`test_novel.py`). T0 is known to miss NFR-05 (Kokoro RTF ≈ 1.0 on 4 cores,
-SPEC §13.1); the assertion stays until that is fixed.
+`uv run python tests/fixtures/fetch_novel_en.py`. Same limits, excerpt and checks as the
+Russian novel (`test_novel.py`).
 
     uv run pytest -m "models and slow" tests/e2e/test_novel_en.py -s [-k t1]
 """
@@ -26,6 +25,7 @@ from text2audio.models.store import ModelStore
 
 NOVEL = Path(__file__).parents[1] / "fixtures" / "en" / "large" / "adventures-of-sherlock-holmes.md"
 STORIES = 12
+PARAGRAPHS = 1  # per story: 64 segments
 pytestmark = [pytest.mark.models, pytest.mark.slow]
 
 
@@ -52,7 +52,7 @@ def _missing_t1() -> str | None:
 @pytest.mark.skipif(_missing() is not None, reason=str(_missing()))
 def test_t0(tmp_path: Path) -> None:
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""}
-    report = _run(_limits("0-3", "8G"), env, tmp_path / "out", NOVEL, STORIES)
+    report = _run([], env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS)
     assert report["language"] == "en"
     assert report["tier"] == "fast" and report["qa"]["device"] == "cpu"
 
@@ -64,6 +64,7 @@ def test_t1(tmp_path: Path) -> None:
     assert gpu is not None
     near = sorted(gpu.cpu_affinity or range(os.cpu_count() or 8))[:8]
     env = {**os.environ, "CUDA_VISIBLE_DEVICES": gpu.uuid}
-    report = _run(_limits(",".join(map(str, near)), "16G"), env, tmp_path / "out", NOVEL, STORIES)
+    limits = _limits(",".join(map(str, near)), "16G")
+    report = _run(limits, env, tmp_path / "out", NOVEL, STORIES, PARAGRAPHS, "expressive")
     assert report["language"] == "en" and report["tier"] == "expressive"
     assert report["route"]["backend"] == "chatterbox"

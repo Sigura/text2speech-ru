@@ -246,3 +246,9 @@ All notable changes to this project are documented here. The format follows
 - Output parts are encoded in parallel (two-pass loudnorm is single-threaded): Banks
   "Выбор оружия" (9 h, 18 files) assembles in 3 m 41 s instead of ~23 min; stress runs
   on up to 8 RUAccent workers.
+- SPEC.md 4.1-M5: the novel e2e tests render an excerpt of at most 100 segments (every
+  chapter heading with its first paragraphs) instead of the whole book; T0 there has no
+  core or memory limit (still no GPU).
+- `en` normalization: *St.* after a comma reads Saint, pre-decimal shillings and pence
+  are read, an abbreviation's dot ends the sentence before a closing quote, and a
+  Roman numeral opening a heading is read as a number.
