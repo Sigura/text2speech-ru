@@ -249,6 +249,12 @@ class _Cache:
                     continue  # a line cut off by an interrupted run
                 self.done[row["key"]] = row["out"]
 
+    def has(self, engine: str, text: str) -> bool:
+        return self.key(engine, text) in self.done
+
+    def get(self, engine: str, text: str) -> str:
+        return self.done[self.key(engine, text)]
+
     @staticmethod
     def key(engine: str, text: str) -> str:
         return hashlib.sha256(f"{engine}\0{text}".encode()).hexdigest()[:32]
@@ -292,17 +298,21 @@ def _translate_pieces(
     for p in pieces:
         whole = engine.unit == "paragraph" and not p.inner_marks and not by_sentence
         jobs.append((p, [p.text] if whole else p.sentences))
-    texts = [t for _, ts in jobs for t in ts]
+    unique = list(dict.fromkeys(t for _, ts in jobs for t in ts))
+    # Batches of similar length: a padded batch runs as long as its longest text, so
+    # book order (a heading next to a long paragraph) wastes most of the GPU time.
+    todo = sorted((t for t in unique if not cache.has(engine.name, t)), key=len)
+    stats.cached += len(unique) - len(todo)
     batch = BATCH[engine.unit]
-    done: list[str] = []
-    for start in range(0, len(texts), batch):
-        done += cache.run(engine, texts[start : start + batch], stats)
+    for start in range(0, len(todo), batch):
+        cache.run(engine, todo[start : start + batch], stats)
         if progress:
-            progress("translate", len(done), len(texts))
-    at = 0
+            done = len(unique) - len(todo) + min(start + batch, len(todo))
+            progress("translate", done, len(unique))
+    if progress and not todo:
+        progress("translate", len(unique), len(unique))
     for p, ts in jobs:
-        p.out, p.by = done[at : at + len(ts)], engine.name
-        at += len(ts)
+        p.out, p.by = [cache.get(engine.name, t) for t in ts], engine.name
 
 
 def _check(p: _Piece, unit: Unit, target_abbrevs: tuple[str, ...]) -> list[str]:

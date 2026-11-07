@@ -287,3 +287,19 @@ def test_translators_without_files_are_skipped_with_the_pull_command(tmp_path: P
     assert any(
         w.startswith("opus-mt-ru-en: model files missing (text2audio models pull)") for w in skipped
     )
+
+
+def test_batches_hold_texts_of_similar_length() -> None:
+    batches: list[list[str]] = []
+
+    def llm(texts: list[str]) -> list[str]:
+        batches.append(texts)
+        return list(texts)
+
+    paras = ["Short one.", "A" * 300 + ".", "Mid length paragraph here.", "B" * 120 + ".", "Tiny."]
+    out, _ = translate_markdown("\n\n".join(paras) + "\n", [_engine("llm", "paragraph", llm)])
+    lengths = [len(t) for b in batches for t in b]
+    assert lengths == sorted(lengths)  # shortest first, so batches are of a size
+    assert out.split("\n\n")[0] == "Short one." and out.rstrip().endswith(
+        "Tiny."
+    )  # book order kept
