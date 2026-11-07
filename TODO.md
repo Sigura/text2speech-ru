@@ -154,8 +154,9 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] whole-book en→ru run (*Adventures of Sherlock Holmes*): 1 h 43 min, 1.9 % of
     pieces from the NLLB fallback, no warning left (§13.1);
   - [x] translation throughput: batches sorted by length — 579 s → 336 s on one story (§13.1);
-  - [ ] owner's listening to a translated chapter in Russian (sent 2026-11-07: «Скандал в
-    Богемии», Tower-Plus → Silero xenia, 49 min).
+  - [x] owner's listening to a translated chapter in Russian («Скандал в Богемии»,
+    Tower-Plus → Silero xenia, and the re-voiced test clip): "samples look awesome"
+    (2026-11-07).
 - [ ] **After M4, idea (owner, 2026-11-05):**
   - [x] English → Russian book translation, the strongest offline model by benchmark
     (Tower-Plus-9B, ADR-0011);
