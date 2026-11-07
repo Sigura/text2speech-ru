@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.18-M5 |
+| Document version | 4.19-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-07 |
 | Primary language | Python 3.11+ |
@@ -87,6 +87,7 @@
 | 4.16-M5 | 2026-11-06 | **ru→en book translation**: the `ru` pack translates with Seed-X-PPO-7B, NLLB-200 3.3B, then Opus-MT; translators whose environment or files are missing, or that have no device, are skipped with the reason; cover prompts take the lightest runnable translator (§6.8.2, §6.11, §13.1). |
 | 4.17-M5 | 2026-11-07 | **`revoice`** (ADR-0012): recordings re-spoken in another language. Video gets a track timed to the original and audio keeps its pauses; books and Markdown go through `translate` then `run`. The Whisper worker gains a `timed` op (§6.11, §13.1). |
 | 4.18-M5 | 2026-11-07 | The voice-cloning consent flag (`--i-have-consent`) is dropped by the owner's decision; FR-19 keeps cloning without it (§6.12, §13.1). |
+| 4.19-M5 | 2026-11-07 | **Offline bundle as built** (FR-16, §6.10): one plain `.tar` with the tracked repository, the chosen models, a uv cache for the worker environments those models need, the CPython builds and uv; `./install.sh --bundle` installs from it with uv offline. `doctor --lang/--tier` checks only the models installed for them. §6.12: cloning uses only the reference clips the language packs pin. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1201,9 +1202,30 @@ hash, so a changed upstream file can never replace a pinned one.
 
 **Air-gapped install (FR-16)**
 
-- `text2audio bundle export --lang en --tier fast,expressive -o t2a-bundle.tar.zst`
-  packs wheels, model store and lockfiles; `bundle import` installs on the target
-  machine with `uv sync --offline`.
+- `text2audio bundle export -o t2a-bundle.tar [--lang ru,en] [--tier fast]
+  [--feature translate]` (default: every language and tier) writes one `.tar` with
+  everything under `text2audio/`:
+  - the repository's tracked files (export refuses untracked files under `src/` or
+    `plugins/`, which would be missing on the target);
+  - `bundle/models/`, the chosen assets from the local store, verified first;
+  - `bundle/uv-cache/`, a uv cache filled by syncing the main env and the worker
+    environments of the plugins those models belong to (ru fast: Silero, RUAccent,
+    GigaAM, Opus-MT, WD14), each into a throwaway directory;
+  - `bundle/python/`, the CPython builds uv makes those envs with (3.11, 3.12);
+  - `bundle/bin/uv`, the uv that filled the cache (another uv version may not read
+    it), and `bundle/manifest.json`.
+
+  The archive is not compressed: the weights, most of it, do not compress, and zstd
+  would need a new dependency or a system tool.
+- On the target: `tar xf t2a-bundle.tar && text2audio/install.sh --bundle`. It runs
+  the usual install with `UV_OFFLINE=1`, no Python downloads and the bundle's cache:
+  - the Python builds go to uv's Python dir;
+  - `bundle import` copies the models into the store, checking every hash again;
+  - `doctor --lang --tier` takes the manifest's languages and tier.
+
+  FFmpeg and espeak-ng are system packages and are not bundled.
+  `scripts/test-bundle.sh` checks the round trip with an empty HOME and every proxy
+  pointed at a closed port.
 
 ### 6.11 CLI and Configuration
 
@@ -1221,8 +1243,8 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 | `text2audio cover <book folder>… [--mode auto\|embedded-only\|generate\|typographic]` | Choose the cover again (§6.8.2) under each book's `[cover]` settings, `--mode` overriding the mode, without touching `<book>.md`: the embedded picture is read from the stored source. `synthesize` then re-encodes the audio files with it (their fingerprint includes the cover). |
 | `text2audio voices [--lang en]` | Voice roles per installed language pack (backend → voice id) and the voices each installed backend declares; cloning backends are listed as cloning a reference clip. A `voice=` directive accepts either (§6.4.1). |
 | `text2audio models pull / list / verify / gc` | Manage the model store. |
-| `text2audio bundle export / import` | Air-gapped transfer. |
-| `text2audio doctor` | Environment and offline-readiness check. |
+| `text2audio bundle export -o <tar> [--lang] [--tier] [--feature]` / `bundle import <bundle dir>` | Air-gapped transfer (§6.10): export packs models, packages, Python and uv; `install.sh --bundle` installs from it offline and calls `import`. |
+| `text2audio doctor [--lang] [--tier]` | Environment and offline-readiness check; `--lang`/`--tier` check only the models installed for them. |
 | `text2audio config show <book folder> [--lang] [--tier]` | Effective configuration as TOML with the source of each value (`core`, `profile:<lang>`, `metadata`, `user`, `book`, `cli`), §6.6.5. |
 | `text2audio plugins` | List discovered languages and backends with capabilities. |
 | `text2audio resources [--json]` | Usable CPUs, RAM and GPUs (within affinity, cgroup and `CUDA_VISIBLE_DEVICES` limits) and the planned worker slots (§9.1). |
@@ -1304,8 +1326,9 @@ have `detail(stage, **fields)` for the facts above.
   reviewed revision in `models.lock`.
 - **Supply chain**: pinned dependency and model hashes (NFR-04); dependency audit
   ([pip-audit](https://github.com/pypa/pip-audit)) in CI.
-- **Voice cloning**: no consent flag (owner, 2026-11-07, personal use, ADR-0007);
-  a voice is cloned from any clip that a directive or the config names.
+- **Voice cloning**: Chatterbox clones only from the reference clips that the
+  language packs pin in `models.lock`. No directive or setting takes a user's clip,
+  so there is no consent flag (owner, 2026-11-07, personal use, ADR-0007).
 - **Watermarking**: when the backend supports it (Chatterbox ships the
   [Perth](https://github.com/resemble-ai/Perth) watermarker), watermarking is on by
   default.
@@ -1610,6 +1633,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-07 | **Translation batches sorted by length** (owner: "translation speed-up"): the texts still to translate are batched shortest first, cached ones skipped beforehand. "A Scandal in Bohemia" (46 k characters, Tower-Plus-9B): 579 s → 336 s (≈ 80 → 138 characters/s, identical check and fallback counts; the old run includes a one-off env sync). | Measured |
 | 2026-11-07 | **`revoice`** (owner: "re-voice English into Russian — markdown/audio/video, output same as input, video's audio track replaced, do it all"; ADR-0012). Whisper `timed` without VAD: with VAD, large-v3-turbo dropped "Look at the moon." after a 2 s pause in the test clip; without a punctuated prompt it wrote lowercase words with no stops. Paragraph-level translation is mapped back to phrases by sentence count, else phrase by phrase, so context and timing both hold. Video phrases: speed-up at most 1.3× (beyond that speech sounds hurried), then drift into the next pause. The original audio is replaced, not mixed: mixing would keep the English voice. Verified: a 28 s English clip → mp4 with H.264 copied, AAC `rus` and a `mov_text` track, all 7 phrases on time; `tests/test_revoice.py` real test (espeak → video → revoice → GigaAM hears «телескоп», «лун»). |
 | 2026-11-07 | **No voice-cloning consent flag** (owner, option C of three: the flag as specified, a hash-only record, or neither). The tool is for personal use only (ADR-0007), so `--i-have-consent` is removed from FR-19 and §6.12. It was never implemented; M5 drops it. |
+| 2026-11-07 | **Offline bundle** (FR-16, owner: keep it in M5): a plain `.tar`, not `.tar.zst` (weights do not compress; no zstd in the 3.11 standard library). Packages travel as a uv cache filled by real syncs, so custom indexes (Kokoro's CPU torch) and wheels built from source are covered; the bundle ships its own uv and CPython. Only the environments of the plugins whose models are bundled go in: the first try with all nine downloaded 14 GB in 23 min and had three done (owner: "tests so long"). `doctor --lang/--tier`: before, `install.sh --lang ru` always ended with a failing doctor, since it checked the English models too. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |

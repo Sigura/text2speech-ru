@@ -13,7 +13,7 @@ import typer
 from rich.markup import escape
 
 from text2audio.console import StageProgress, duration, plural
-from text2audio.core.offline import enforce_offline
+from text2audio.core.offline import allow_network, enforce_offline
 from text2audio.models.store import default_store
 
 
@@ -31,6 +31,8 @@ models_app = typer.Typer(no_args_is_help=True, help="Manage the local model stor
 app.add_typer(models_app, name="models")
 envs_app = typer.Typer(no_args_is_help=True, help="Manage plugin worker environments.")
 app.add_typer(envs_app, name="envs")
+bundle_app = typer.Typer(no_args_is_help=True, help="Move an install to an offline machine.")
+app.add_typer(bundle_app, name="bundle")
 config_app = typer.Typer(no_args_is_help=True, help="Inspect the configuration of a book.")
 app.add_typer(config_app, name="config")
 
@@ -90,11 +92,14 @@ def version() -> None:
 
 
 @app.command()
-def doctor(json_out: JsonOpt = False, lock: LockOpt = None) -> None:
-    """Check tools, hardware, models and plugins; exit 3 if something is missing."""
+def doctor(
+    json_out: JsonOpt = False, lock: LockOpt = None, lang: LangOpt = None, tier: TierOpt = None
+) -> None:
+    """Check tools, hardware, models and plugins; exit 3 if something is missing.
+    `--lang` / `--tier` check only the models installed for them (default: all)."""
     from text2audio import api
 
-    report = api.doctor(lock=lock)
+    report = api.doctor(lock=lock, lang=lang, tier=_tier(tier))
     if json_out:
         typer.echo(json.dumps(_sets([asdict(c) for c in report.checks]), indent=2))
     else:
@@ -184,6 +189,57 @@ def models_pull(
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.MISSING_ASSET) from exc
     typer.echo(f"{len(fetched)} file(s) downloaded")
+
+
+@bundle_app.command("export")
+def bundle_export(
+    output: Annotated[Path, typer.Option("-o", "--output", help="The .tar to write.")],
+    lang: LangOpt = None,
+    tier: TierOpt = None,
+    feature: FeatureOpt = None,
+) -> None:
+    """Pack the installed models, the Python packages of every environment, Python and uv
+    into one tar for an offline machine (uses the network for the packages, FR-16).
+    Default: every language and tier."""
+    from text2audio import api
+    from text2audio.core.envs import EnvMissing
+    from text2audio.models.bundle import BundleError
+
+    allow_network()
+    try:
+        api.bundle_export(
+            output,
+            lang,
+            _tier(tier),
+            tuple(feature or ()),
+            progress=lambda step: typer.echo(f"== {step}"),
+        )
+    except (BundleError, EnvMissing) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+    typer.echo(f"{output}: {output.stat().st_size / 1e9:.1f} GB")
+    typer.echo("on the offline machine: tar xf it, then ./text2audio/install.sh --bundle")
+
+
+@bundle_app.command("import")
+def bundle_import(
+    folder: Annotated[Path, typer.Argument(help="The bundle/ folder of an unpacked export.")],
+) -> None:
+    """Copy the bundle's models into the model store and verify them (offline)."""
+    from text2audio import api
+    from text2audio.models.bundle import BundleError
+    from text2audio.models.pull import PullError
+
+    try:
+        manifest, copied = api.bundle_import(folder)
+    except BundleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.USAGE) from exc
+    except PullError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+    langs = ",".join(manifest.langs) or "all languages"
+    typer.echo(f"{len(copied)} file(s) copied ({langs}, tier {manifest.tier or 'all'})")
 
 
 @app.command()
@@ -689,25 +745,6 @@ def voices(
     typer.echo("backends:")
     for name, voice_ids in found.backends.items():
         typer.echo(f"  {name}: {', '.join(voice_ids) or '-'}")
-
-
-_PLANNED = {
-    "bundle": "M5",
-}
-
-
-def _planned(name: str, milestone: str) -> None:
-    def command() -> None:
-        typer.echo(f"`{name}` is not implemented yet (planned for {milestone}).", err=True)
-        raise typer.Exit(ExitCode.USAGE)
-
-    command.__doc__ = f"Not implemented yet ({milestone})."
-    settings = {"ignore_unknown_options": True, "allow_extra_args": True}
-    app.command(name, context_settings=settings)(command)
-
-
-for _name, _milestone in _PLANNED.items():
-    _planned(_name, _milestone)
 
 
 def main() -> None:

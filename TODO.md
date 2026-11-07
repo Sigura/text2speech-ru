@@ -167,7 +167,18 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     - Video gives the same video with its audio track replaced by the Russian one,
       timed to the original, plus subtitles.
   - [ ] revoice on a real recording from the owner (speech with music, several speakers).
-- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
+- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs (plan sent to the
+  owner 2026-11-07; work stays in PR #1).
+  - [x] Offline bundle: `bundle export/import`, `install.sh --bundle`,
+    `scripts/test-bundle.sh` (FR-16, SPEC 4.19-M5). ru fast: 9.4 GB, export ~30 min
+    in the devbox (packages at ~5 MB/s), offline install 12 s, `doctor` offline-ready,
+    a short text → MP3 + M4B in 46 s.
+  - [ ] Security tests (§6.12): hostile XML, PDF time limit, safe weight loading,
+    pip-audit in CI.
+  - [ ] Definition of Done (§14) line by line; a test for each gap.
+  - [ ] Docs: README offline install.
+  - [ ] Owner: `install.sh` on a clean machine, the bundle on a second machine, OK for
+    v1.0.0.
 
 ## Housekeeping
 

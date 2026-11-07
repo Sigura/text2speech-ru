@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +26,8 @@ from text2audio.core.synthesize import preview as _preview
 from text2audio.core.synthesize import synthesize as _synthesize
 from text2audio.core.translate import TranslateResult
 from text2audio.core.translate import translate_file as _translate
-from text2audio.models.lock import load_lock
+from text2audio.models import bundle as _bundle
+from text2audio.models.lock import assets_for, load_lock
 from text2audio.models.pull import pull
 from text2audio.models.store import AssetProblem, ModelStore
 
@@ -35,8 +36,13 @@ def version() -> str:
     return __version__
 
 
-def doctor(store: Path | None = None, lock: Path | None = None) -> DoctorReport:
-    return run_doctor(ModelStore(store), lock)
+def doctor(
+    store: Path | None = None,
+    lock: Path | None = None,
+    lang: str | None = None,
+    tier: Tier | None = None,
+) -> DoctorReport:
+    return run_doctor(ModelStore(store), lock, langs=lang.split(",") if lang else None, tier=tier)
 
 
 def resources(
@@ -171,6 +177,48 @@ def models_pull(
     return pull(models_list(lang, tier, lock, features), ModelStore(store))
 
 
+def bundle_export(
+    output: Path,
+    lang: str | None = None,
+    tier: Tier | None = None,
+    features: tuple[str, ...] = (),
+    store: Path | None = None,
+    progress: Callable[[str], None] = lambda _: None,
+) -> Path:
+    """Everything an offline machine needs in one tar (FR-16). Uses the network to fetch
+    the Python packages; the models come from the local store."""
+    from text2audio.core.envs import find_uv
+
+    assets = models_list(lang, tier, None, features)
+    envs = envs_for(assets)
+    manifest = _bundle.Manifest(
+        langs=lang.split(",") if lang else [],
+        tier=tier,
+        features=list(features),
+        envs=[e.name for e in envs],
+        commit=_bundle.commit(_bundle.REPO),
+    )
+    _bundle.export(
+        output,
+        assets=assets,
+        store=ModelStore(store),
+        envs=envs,
+        manifest=manifest,
+        uv=find_uv(),
+        progress=progress,
+    )
+    return output
+
+
+def bundle_import(folder: Path, store: Path | None = None) -> tuple[_bundle.Manifest, list[Path]]:
+    """The bundle's models into the store, verified (`install.sh --bundle` calls this)."""
+    manifest = _bundle.read_manifest(folder)
+    assets = models_list(
+        ",".join(manifest.langs) or None, manifest.tier, None, tuple(manifest.features)
+    )
+    return manifest, _bundle.import_models(folder, ModelStore(store), assets)
+
+
 def synthesize(
     folder: Path,
     *,
@@ -244,6 +292,22 @@ def plugin_envs(names: list[str] | None = None) -> list[PluginEnv]:
     else:
         chosen = {e.name: e for e in envs.values()}
     return [chosen[k] for k in sorted(chosen)]
+
+
+def envs_for(assets: list[ModelAsset]) -> list[PluginEnv]:
+    """The environments of the plugins that load any of `assets`: what a bundle for
+    some languages and a tier needs, instead of every installed plugin's."""
+    found = discover(("backends", "g2p", "asr", "polishers", "translators", "taggers"))
+    envs: dict[str, PluginEnv] = {}
+    for items in found.plugins.values():
+        for plugin in items.values():
+            env = plugin_env(plugin)
+            if env is None:
+                continue
+            owner = getattr(plugin, "component", None) or plugin.name
+            if assets_for(owner, assets) or any(a in assets for a in plugin.assets()):
+                envs[env.name] = env
+    return [envs[k] for k in sorted(envs)]
 
 
 def envs_sync(names: list[str] | None = None) -> list[PluginEnv]:

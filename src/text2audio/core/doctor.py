@@ -12,6 +12,7 @@ from typing import Literal
 
 from text2audio.core import resources as res
 from text2audio.core.config import Config, load_config
+from text2audio.core.contracts import Tier
 from text2audio.core.envs import plugin_env
 from text2audio.core.offline import is_offline
 from text2audio.core.plugins import Discovery, discover
@@ -79,7 +80,11 @@ def run_doctor(
     plugins: Discovery | None = None,
     env: Mapping[str, str] | None = None,
     config: Config | None = None,
+    langs: list[str] | None = None,
+    tier: Tier | None = None,
 ) -> DoctorReport:
+    """`langs` and `tier` limit the model check to what was installed for them
+    (`install.sh --lang ru --tier fast`); by default every pinned asset is checked."""
     env = os.environ if env is None else env
     which = which or shutil.which
     store = store or ModelStore()
@@ -113,6 +118,12 @@ def run_doctor(
         report.add("models.lock", "fail", str(exc))
         assets = []
     else:
+        scope: list[str | None] = list(langs) if langs else [None]
+        assets = [
+            a
+            for a in assets
+            if any(a.wanted(x, tier, (a.feature,) if a.feature else ()) for x in scope)
+        ]
         optional = [a for a in assets if a.feature]
         assets = [a for a in assets if not a.feature]
         problems = store.verify(assets)

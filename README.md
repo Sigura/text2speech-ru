@@ -9,7 +9,7 @@ English and Russian first. Everything runs on your machine; after installation n
 touches the network. Personal use only ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)).
 
 **Status:** milestones M0–M4 are done (conversion, Russian and English speech,
-expression); M5 (hardening, air-gapped bundle) is next — see [TODO.md](TODO.md).
+expression); M5 (hardening, air-gapped bundle) is in progress — see [TODO.md](TODO.md).
 
 ## Install
 
@@ -19,6 +19,15 @@ expression); M5 (hardening, air-gapped bundle) is next — see [TODO.md](TODO.md
 ./install.sh --lang ru --tier fast        # CPU voices only (smaller)
 text2audio models pull --feature translate   # optional: book translation models (~51 GB)
 text2audio doctor                         # everything ready? exit 0 = offline-ready
+```
+
+**A machine without internet:** make a bundle where text2audio is installed, carry it
+over, and install from it. Nothing is downloaded on the target.
+
+```bash
+text2audio bundle export -o t2a.tar --lang ru --tier fast   # default: every language and tier
+# on the offline machine (FFmpeg and espeak-ng from its own packages):
+tar xf t2a.tar && text2audio/install.sh --bundle             # ends with doctor
 ```
 
 Needs Linux, FFmpeg and espeak-ng; a GPU is optional (CPU voices are fast). Every

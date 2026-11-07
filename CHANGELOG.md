@@ -251,6 +251,11 @@ All notable changes to this project are documented here. The format follows
   - Video keeps its picture and gets a Russian track timed to the original (at most
     1.3× faster), plus `.srt` subtitles.
   - Whisper has a new `timed` op that returns word times (ADR-0012, SPEC 4.17-M5).
+- `text2audio bundle export` / `bundle import` and `./install.sh --bundle`: install on a
+  machine with no network from one archive with the models, the Python packages of the
+  environments they need, CPython and uv; `scripts/test-bundle.sh` checks the round
+  trip with networking blocked (FR-16, SPEC 4.19-M5).
+- `text2audio doctor --lang --tier` checks only the models installed for them.
 
 ### Changed
 
@@ -295,6 +300,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `install.sh --lang ru` ended with a failing `doctor`, which checked the models of
+  every language; it also ran a stray `pip install -r requirements.txt` outside uv.
 - `en` normalization read an amount followed by a comma, such as «$5.20, and», as
   «five dollars.20»: the money rule backed off to the whole units.
 - `en` QA: a lowercase transcript (`on march 5th 1984 mr smith`) is normalized like
