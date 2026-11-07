@@ -256,6 +256,10 @@ All notable changes to this project are documented here. The format follows
   environments they need, CPython and uv; `scripts/test-bundle.sh` checks the round
   trip with networking blocked (FR-16, SPEC 4.19-M5).
 - `text2audio doctor --lang --tier` checks only the models installed for them.
+- PDFs are read in a child process that is stopped after 5000 s (§6.12); tests for
+  hostile EPUBs, ZIP limits and forged headers, and a source check that weights load
+  safely (`tests/test_model_loading.py`); `scripts/audit.sh` runs pip-audit over the
+  main and every plugin env lock (SPEC 4.20-M5).
 
 ### Changed
 

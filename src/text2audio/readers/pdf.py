@@ -16,7 +16,11 @@ Clean-up after conversion, language-independent:
 
 from __future__ import annotations
 
+import os
+import pickle
 import re
+import subprocess
+import sys
 from collections import Counter
 
 from text2audio.core.languages import guess_language
@@ -25,6 +29,7 @@ from text2audio.readers.markdown import parse_markdown
 from text2audio.readers.safety import InputError
 
 MAX_PAGES = 5000
+TIME_LIMIT_S = 5000.0  # per file: 1 s a page at MAX_PAGES, 2.5x the measured 0.4 s/page
 MIN_CHARS_PER_PAGE = 40  # below this the PDF has no usable text layer (a scan)
 _PAGE_NUMBER = re.compile(r"[\W_]*\d{1,4}[\W_]*")
 _HYPHEN_END = re.compile(r"(\w)[-­]$")
@@ -94,7 +99,54 @@ def clean(doc: Document) -> Document:
     return doc
 
 
-def read_pdf(data: bytes, lang: str | None = None) -> Document:
+def read_pdf(
+    data: bytes,
+    lang: str | None = None,
+    *,
+    time_limit: float = TIME_LIMIT_S,
+    max_pages: int = MAX_PAGES,
+) -> Document:
+    """Convert in a child process that is killed after `time_limit` seconds (§6.12):
+    PyMuPDF and the layout model are C code that a crafted PDF can keep busy, and a
+    thread or signal cannot stop them. A plain subprocess, not multiprocessing: spawn
+    would re-run the caller's main script, fork copies a process with threads."""
+    request = pickle.dumps((data, lang, max_pages))
+    try:
+        done = subprocess.run(
+            [sys.executable, "-m", __name__],
+            input=request,
+            capture_output=True,
+            timeout=time_limit,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise InputError(f"reading the PDF took longer than the {time_limit:g} s limit") from exc
+    if done.returncode != 0:
+        tail = done.stderr.decode(errors="replace").strip()[-2000:]
+        raise RuntimeError(f"the PDF reader failed (exit code {done.returncode}):\n{tail}")
+    kind, value = pickle.loads(done.stdout)  # our own child's answer
+    if kind == "input":
+        raise InputError(value)
+    assert isinstance(value, Document)
+    return value
+
+
+def _child() -> None:
+    """`python -m` this module: one request on stdin, the answer on stdout. MuPDF may
+    print to fd 1 itself, so the answer goes to a copy of it and fd 1 is pointed at
+    stderr while converting."""
+    answer = os.fdopen(os.dup(1), "wb")
+    os.dup2(2, 1)
+    data, lang, max_pages = pickle.load(sys.stdin.buffer)
+    try:
+        result: tuple[str, object] = ("ok", _convert(data, lang, max_pages))
+    except InputError as exc:
+        result = ("input", str(exc))
+    with answer:
+        pickle.dump(result, answer)
+
+
+def _convert(data: bytes, lang: str | None, max_pages: int) -> Document:
     import pymupdf
     import pymupdf4llm
 
@@ -105,8 +157,8 @@ def read_pdf(data: bytes, lang: str | None = None) -> Document:
     with pdf:
         if pdf.needs_pass:
             raise InputError("the PDF is password-protected")
-        if pdf.page_count > MAX_PAGES:
-            raise InputError(f"the PDF has {pdf.page_count} pages (limit {MAX_PAGES})")
+        if pdf.page_count > max_pages:
+            raise InputError(f"the PDF has {pdf.page_count} pages (limit {max_pages})")
         sample = range(min(pdf.page_count, 30))
         chars = 0
         for n in sample:
@@ -128,3 +180,7 @@ def read_pdf(data: bytes, lang: str | None = None) -> Document:
     meta.language = lang or guess_language(text)
     doc.heading_confidence = 0.8 if doc.chapters() >= 2 else 0.0
     return doc
+
+
+if __name__ == "__main__":
+    _child()

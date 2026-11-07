@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.19-M5 |
+| Document version | 4.20-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-07 |
 | Primary language | Python 3.11+ |
@@ -87,7 +87,8 @@
 | 4.16-M5 | 2026-11-06 | **ru→en book translation**: the `ru` pack translates with Seed-X-PPO-7B, NLLB-200 3.3B, then Opus-MT; translators whose environment or files are missing, or that have no device, are skipped with the reason; cover prompts take the lightest runnable translator (§6.8.2, §6.11, §13.1). |
 | 4.17-M5 | 2026-11-07 | **`revoice`** (ADR-0012): recordings re-spoken in another language. Video gets a track timed to the original and audio keeps its pauses; books and Markdown go through `translate` then `run`. The Whisper worker gains a `timed` op (§6.11, §13.1). |
 | 4.18-M5 | 2026-11-07 | The voice-cloning consent flag (`--i-have-consent`) is dropped by the owner's decision; FR-19 keeps cloning without it (§6.12, §13.1). |
-| 4.19-M5 | 2026-11-07 | **Offline bundle as built** (FR-16, §6.10): one plain `.tar` with the tracked repository, the chosen models, a uv cache for the worker environments those models need, the CPython builds and uv; `./install.sh --bundle` installs from it with uv offline. `doctor --lang/--tier` checks only the models installed for them. §6.12: cloning uses only the reference clips the language packs pin. |
+| 4.19-M5 | 2026-11-07 | **Offline bundle as built** (FR-16, §6.10): one plain `.tar` with the tracked repository, the chosen models, a uv cache for the worker environments those models need, the CPython builds and uv; `./install.sh --bundle` installs from it with uv offline. `doctor --lang/--tier` checks only the models installed for them. §6.12: cloning uses only the reference clips shipped in the language packs. |
+| 4.20-M5 | 2026-11-07 | Security (§6.12) as built: the PDF time limit (a child process, 5000 s); tests for hostile EPUBs, every ZIP limit, forged ZIP size headers and the input size; a source check of how weights are loaded. |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1318,20 +1319,29 @@ have `detail(stage, **fields)` for the facts above.
   external references refused; XHTML named entities such as `&nbsp;` are rewritten to
   numeric references first, so no DTD is ever needed); archives are read in memory,
   never extracted, with limits on member count, unpacked size and compression ratio,
-  and member names may not escape the archive; PDFs are refused when encrypted or over
-  5000 pages (a per-file time limit is still to do).
+  and member names may not escape the archive (a member that unpacks past its
+  declared size fails its CRC check); PDFs are refused when encrypted or over 5000
+  pages, and are read in a child process killed after 5000 s (1 s a page at the page
+  limit; the layout model reads 0.4 s/page), since PyMuPDF is C code that a thread
+  or signal cannot stop.
 - **Model loading**: prefer [safetensors](https://github.com/huggingface/safetensors)
   or ONNX; when a backend needs PyTorch checkpoints, load with
   `torch.load(weights_only=True)`; `trust_remote_code` is disabled unless pinned to a
-  reviewed revision in `models.lock`.
+  reviewed revision in `models.lock`. `tests/test_model_loading.py` checks the source
+  of the core and every plugin: `torch.load` with `weights_only=True`,
+  `from_pretrained` with `local_files_only=True` and no `trust_remote_code`, no
+  `torch.hub`, no `allow_pickle`. Pickle is allowed in two listed places: Silero,
+  which ships only as a `torch.package` (its file is pinned by SHA-256), and the PDF
+  reader's answer from its own child process.
 - **Supply chain**: pinned dependency and model hashes (NFR-04); dependency audit
   ([pip-audit](https://github.com/pypa/pip-audit)) in CI.
-- **Voice cloning**: Chatterbox clones only from the reference clips that the
-  language packs pin in `models.lock`. No directive or setting takes a user's clip,
-  so there is no consent flag (owner, 2026-11-07, personal use, ADR-0007).
+- **Voice cloning**: Chatterbox clones only from the reference clips shipped inside
+  the language packs (`voices/ref-*.wav`). No directive or setting takes a user's
+  clip, so there is no consent flag (owner, 2026-11-07, personal use, ADR-0007).
 - **Watermarking**: when the backend supports it (Chatterbox ships the
   [Perth](https://github.com/resemble-ai/Perth) watermarker), watermarking is on by
-  default.
+  default. `chatterbox-tts` 0.1.7 applies it in `generate` of both TTS and VC, and the
+  worker does not turn it off.
 
 ---
 
