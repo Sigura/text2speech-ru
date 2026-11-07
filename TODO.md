@@ -146,27 +146,26 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] owner's blind reading → ru→en = Seed-X-PPO-7B, NLLB-3.3B fallback (SPEC 4.13-M5);
   - [x] **last stage (owner):** ru→en with Seed-X by paragraph, NLLB-3.3B fallback,
     Opus-MT when those are not installed (SPEC 4.16-M5);
-  - [ ] real-model ru→en run with Seed-X on a free GPU (*Капитанская дочка*), and the
-    owner's listening to it.
+  - [x] real-model ru→en run with Seed-X (*Капитанская дочка*, 214 k characters):
+    13 min 54 s on one RTX 4090, 20 of 731 pieces from NLLB, no warning left;
   - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
     pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
   - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
   - [x] whole-book en→ru run (*Adventures of Sherlock Holmes*): 1 h 43 min, 1.9 % of
     pieces from the NLLB fallback, no warning left (§13.1);
   - [x] translation throughput: batches sorted by length — 579 s → 336 s on one story (§13.1);
-  - [ ] owner's listening to a translated chapter in Russian.
+  - [ ] owner's listening to a translated chapter in Russian (sent 2026-11-07: «Скандал в
+    Богемии», Tower-Plus → Silero xenia, 49 min).
 - [ ] **After M4, idea (owner, 2026-11-05):**
   - [x] English → Russian book translation, the strongest offline model by benchmark
     (Tower-Plus-9B, ADR-0011);
-  - [ ] **next (owner, 2026-11-07): re-voice English into Russian** with the female
-    voice — speech → English text → Russian text → audio, all steps in one command.
-    Input and output match (owner):
-    - Markdown → the translated Markdown and its Russian audio;
-    - audio (mp3/m4a/wav…) → Russian audio;
-    - video (mp4/mkv…) → the same video with the audio track replaced by the Russian
-      one, **timed to the original** (each phrase fitted to its time slot);
-    Plan first (transcription with timestamps, phrase alignment, fitting by rate and
-    pauses, muxing with FFmpeg); then M5.
+  - [x] **re-voice English into Russian** (owner, 2026-11-07), all steps in one command:
+    `text2audio revoice` (ADR-0012, SPEC 4.17-M5).
+    - Markdown or a book gives the translated Markdown and its audiobook.
+    - Audio gives audio in the same format.
+    - Video gives the same video with its audio track replaced by the Russian one,
+      timed to the original, plus subtitles.
+  - [ ] revoice on a real recording from the owner (speech with music, several speakers).
 - [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
 
 ## Housekeeping

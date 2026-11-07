@@ -465,6 +465,26 @@ def runnable_translators(
     return ready, skipped
 
 
+def engine_chain(
+    source: str, target: str, store: ModelStore
+) -> tuple[list[EngineFactory], Any, WorkerSlot, list[str]]:
+    """The lead translator that can run here and a fallback that re-translates by
+    sentence (a sentence-unit model when one can run), with the skip reasons."""
+    runnable, skipped = runnable_translators(source, target, store)
+    if not runnable:
+        raise TranslateError("no translator can run now: " + "; ".join(skipped))
+    lead, lead_slot = runnable[0]
+    factories: list[EngineFactory] = [
+        lambda: open_translator(lead, store, source, target, lead_slot)
+    ]
+    rest = [t for t, _ in runnable[1:]]
+    backup = next((t for t in rest if getattr(t, "unit", "sentence") == "sentence"), None)
+    backup = backup or next(iter(rest), None)
+    if backup is not None:
+        factories.append(lambda: open_translator(backup, store, source, target))
+    return factories, lead, lead_slot, skipped
+
+
 def translate_file(
     source: Path,
     output: Path | None,
@@ -503,20 +523,7 @@ def translate_file(
     output = output or source.with_name(f"{source.stem}.{target_lang}.md")
     if output.resolve() == source.resolve():
         raise TranslateError("the output would overwrite the input")
-    # The first translator that can run here leads; a sentence-unit one is the fallback.
-    runnable, skipped = runnable_translators(lang, target_lang, store)
-    if not runnable:
-        raise TranslateError("no translator can run now: " + "; ".join(skipped))
-    lead, lead_slot = runnable[0]
-    factories: list[EngineFactory] = [
-        lambda: open_translator(lead, store, lang, target_lang, lead_slot)
-    ]
-    # The fallback re-translates by sentence: a sentence-unit model when one can run.
-    rest = [t for t, _ in runnable[1:]]
-    backup = next((t for t in rest if getattr(t, "unit", "sentence") == "sentence"), None)
-    backup = backup or next(iter(rest), None)
-    if backup is not None:
-        factories.append(lambda: open_translator(backup, store, lang, target_lang))
+    factories, lead, lead_slot, skipped = engine_chain(lang, target_lang, store)
     tgt_prof = profile(target_lang)
     cache_dir = work if work is not None else output.parent
     cache_dir.mkdir(parents=True, exist_ok=True)

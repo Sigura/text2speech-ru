@@ -83,6 +83,18 @@ less), Russian → English Seed-X (Opus-MT without the translation models); ever
 paragraph is checked and abbreviations are kept as they are ([ADR-0011](docs/adr/0011-book-translation-pipeline.md)).
 A run resumes from its cache.
 
+**Re-voice English speech in Russian**: one command for a book, a recording or a video.
+
+```bash
+text2audio revoice lecture.mp4     # → lecture.ru.mp4 (+ lecture.ru.srt), timed to the original
+text2audio revoice podcast.mp3     # → podcast.ru.mp3
+text2audio revoice "Book.epub"     # → the Russian .md and its audiobook
+```
+
+Video keeps its picture, and the original audio track is replaced. Each phrase starts
+at its original time and is sped up by at most 1.3× to fit; phrases that still run more
+than 1 s late are listed ([ADR-0012](docs/adr/0012-revoicing-recordings.md)).
+
 **A new cover** without converting again:
 
 ```bash

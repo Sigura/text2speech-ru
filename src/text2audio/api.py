@@ -19,6 +19,8 @@ from text2audio.core.effective import voices as _voices
 from text2audio.core.envs import PluginEnv, UnknownEnv, plugin_env
 from text2audio.core.envs import sync as _sync_env
 from text2audio.core.plugins import Discovery, discover
+from text2audio.core.revoice import RevoiceResult
+from text2audio.core.revoice import revoice as _revoice
 from text2audio.core.synthesize import Progress, SynthesisReport
 from text2audio.core.synthesize import preview as _preview
 from text2audio.core.synthesize import synthesize as _synthesize
@@ -98,6 +100,30 @@ def translate(
         output,
         source_lang=source_lang,
         target_lang=target_lang,
+        store=ModelStore(store),
+        progress=progress,
+    )
+
+
+def revoice(
+    source: Path,
+    output: Path | None = None,
+    *,
+    source_lang: str = "en",
+    target_lang: str | None = None,
+    store: Path | None = None,
+    progress: Progress | None = None,
+) -> RevoiceResult:
+    """An audio or video file re-spoken in another language, offline: video keeps its
+    picture and gets a track timed to the original (default output `<name>.<lang>.<ext>`)."""
+    from text2audio.core.config import user_config_path
+
+    return _revoice(
+        source,
+        output,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        config=lambda folder: load_config([user_config_path(), folder.work / "text2audio.toml"]),
         store=ModelStore(store),
         progress=progress,
     )

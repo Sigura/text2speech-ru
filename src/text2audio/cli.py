@@ -12,7 +12,7 @@ from typing import Annotated, Any
 import typer
 from rich.markup import escape
 
-from text2audio.console import StageProgress, duration
+from text2audio.console import StageProgress, duration, plural
 from text2audio.core.offline import enforce_offline
 from text2audio.models.store import default_store
 
@@ -244,7 +244,7 @@ OutputOpt = Annotated[
 
 def _translate(
     source: Path, output: Path | None, source_lang: str | None, target: str | None
-) -> None:
+) -> Path:
     from text2audio import api
     from text2audio.core.envs import EnvMissing
     from text2audio.core.translate import TranslateError
@@ -272,6 +272,7 @@ def _translate(
         )
         for w in s.warnings:
             ui.warn(w)
+    return r.output
 
 
 @app.command()
@@ -522,6 +523,83 @@ def run(
         ok = sum(c in (ExitCode.OK, ExitCode.QA_WARNINGS) for c in codes)
         typer.echo(f"{ok} of {len(results)} book(s) done")
     raise typer.Exit(max(codes, default=ExitCode.INPUT))
+
+
+def _revoice_media(source: Path, output: Path | None, source_lang: str, target: str | None) -> None:
+    from text2audio import api
+    from text2audio.audio.encode import FfmpegError
+    from text2audio.core.envs import EnvMissing
+    from text2audio.core.revoice import RevoiceError
+    from text2audio.core.synthesize import SynthesisError
+    from text2audio.core.translate import TranslateError
+    from text2audio.workers.process import WorkerError
+
+    with StageProgress() as ui:
+        try:
+            r = api.revoice(
+                source, output, source_lang=source_lang, target_lang=target, progress=ui
+            )
+        except (RevoiceError, TranslateError, SynthesisError) as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.INPUT) from exc
+        except (EnvMissing, WorkerError, FfmpegError) as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+        ui.result(
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator}: "
+            f"{r.phrases} phrases, {duration(r.duration_s)}"
+            + (f"; subtitles {r.subtitles.name}" if r.subtitles else "")
+        )
+        for w in r.stats.warnings:
+            ui.warn(w)
+        if r.late:
+            more = f" (+{len(r.late) - 5} more)" if len(r.late) > 5 else ""
+            ui.warn(
+                f"{plural(len(r.late), 'phrase')} over 1 s behind the original: "
+                + ", ".join(r.late[:5])
+                + more
+            )
+
+
+@app.command()
+def revoice(
+    source: Annotated[Path, typer.Argument(help="A book, Markdown, audio or video file.")],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "-o",
+            "--output",
+            help="Audio/video: the output file (default <name>.<lang>.<ext>). "
+            "Books: the output root (default ./output).",
+        ),
+    ] = None,
+    to: Annotated[
+        str | None,
+        typer.Option("--to", help="Target language (default: the first the source has)."),
+    ] = None,
+    source_lang: Annotated[str, typer.Option("--from", help="Language spoken or written.")] = "en",
+    tier: TierFlag = None,
+    workers: WorkersFlag = None,
+    qa: QaFlag = None,
+) -> None:
+    """Re-voice in another language: a book → its translation and audiobook, audio →
+    audio, video → the same video with a track timed to the original."""
+    from text2audio.core.revoice import media_kind
+
+    if media_kind(source) is not None:
+        _revoice_media(source, output, source_lang, to)
+        return
+    text = source
+    if source.is_file() and source.suffix.lower() != ".md":
+        from text2audio import api
+
+        converted = api.convert([source], output, lang=source_lang)[0]
+        if converted.folder is None:
+            typer.echo(f"error: {converted.error}", err=True)
+            raise typer.Exit(ExitCode.INTERNAL if converted.internal else ExitCode.INPUT)
+        text = converted.folder
+    translated = _translate(text, None, source_lang, to)
+    run([translated], output, None, False, None, tier, workers, qa, None)
 
 
 @app.command()

@@ -35,6 +35,9 @@ LABELS = {
     "short": "Short",
     "qa": "QA",
     "assemble": "Encode",
+    "transcribe": "Transcribe",
+    "translate": "Translate",
+    "encode": "Encode",
 }
 WIDTH = max(len(v) for v in LABELS.values())
 # What a running stage is waiting for before its first item is done.
@@ -43,6 +46,7 @@ STARTING = {
     "synthesize": "loading voices",
     "short": "loading voices",
     "qa": "loading ASR model",
+    "transcribe": "loading ASR model, transcribing",
 }
 
 

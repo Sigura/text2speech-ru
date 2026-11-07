@@ -245,6 +245,12 @@ All notable changes to this project are documented here. The format follows
   NLLB-200 3.3B fallback, Opus-MT where those are not installed; uninstalled or
   device-less translators are skipped with a warning; cover prompts use the lightest
   (SPEC 4.16-M5).
+- `text2audio revoice <book, .md, audio or video>`: re-voice English in Russian.
+  - Books chain `translate` and `run`.
+  - Audio comes out in the same format.
+  - Video keeps its picture and gets a Russian track timed to the original (at most
+    1.3× faster), plus `.srt` subtitles.
+  - Whisper has a new `timed` op that returns word times (ADR-0012, SPEC 4.17-M5).
 
 ### Changed
 
