@@ -91,6 +91,12 @@ were redone with abbreviation placeholders, none was left with a warning. Slower
 the benchmark's 156 characters/s: the pipeline batches pieces in book order, so short
 ones wait for long ones in a padded batch (sorting by length is the obvious next step).
 
+**Length-sorted batches** (commit 1dae240): "A Scandal in Bohemia" (46 k characters, 264
+pieces, Tower-Plus-9B, same GPU) took 579 s with the old batching and **336 s** with the
+texts to translate sorted by length (≈ 80 → 138 characters/s, same checks and fallback
+counts). The old run's time includes a one-off environment sync of its separate checkout,
+so the gain is a little under the measured 1.7×.
+
 ## Ensemble (MBR selection, `mbr.py`, ru→en FLORES)
 
 Per sentence, the candidate that agrees most with the others (COMET-22 or chrF++ with

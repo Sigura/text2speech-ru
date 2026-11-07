@@ -153,7 +153,7 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
   - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
   - [x] whole-book en→ru run (*Adventures of Sherlock Holmes*): 1 h 43 min, 1.9 % of
     pieces from the NLLB fallback, no warning left (§13.1);
-  - [ ] translation throughput: sort pieces by length within batches (93 → ~156 chars/s);
+  - [x] translation throughput: batches sorted by length — 579 s → 336 s on one story (§13.1);
   - [ ] owner's listening to a translated chapter in Russian.
 - [ ] **After M4, idea (owner, 2026-11-05):**
   - [x] English → Russian book translation, the strongest offline model by benchmark
