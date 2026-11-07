@@ -254,6 +254,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Voice cloning needs no consent flag: `--i-have-consent` is dropped from the spec at the owner's decision (personal use; SPEC 4.18-M5).
 - README rewritten as a solution description with usage examples, open questions and
   a TODO list; Russian narrator voice defaults to female.
 - README keeps the solution description, installation, usage and open questions; the

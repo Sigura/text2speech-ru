@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.17-M5 |
+| Document version | 4.18-M5 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-07 |
 | Primary language | Python 3.11+ |
@@ -86,6 +86,7 @@
 | 4.15-M5 | 2026-11-06 | en→ru translation leads with Tower-Plus-9B (owner's blind reading), then Seed-X, then NLLB-3.3B; the fallback prefers a sentence-unit translator (§6.11, §13.1). |
 | 4.16-M5 | 2026-11-06 | **ru→en book translation**: the `ru` pack translates with Seed-X-PPO-7B, NLLB-200 3.3B, then Opus-MT; translators whose environment or files are missing, or that have no device, are skipped with the reason; cover prompts take the lightest runnable translator (§6.8.2, §6.11, §13.1). |
 | 4.17-M5 | 2026-11-07 | **`revoice`** (ADR-0012): recordings re-spoken in another language. Video gets a track timed to the original and audio keeps its pauses; books and Markdown go through `translate` then `run`. The Whisper worker gains a `timed` op (§6.11, §13.1). |
+| 4.18-M5 | 2026-11-07 | The voice-cloning consent flag (`--i-have-consent`) is dropped by the owner's decision; FR-19 keeps cloning without it (§6.12, §13.1). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -316,7 +317,7 @@ Final file names inside the book folder follow §6.8 (`NN - <Section title>.mp3`
 | FR-16 | **Offline bundle**: export all installed models and wheels to an archive and import it on an air-gapped machine. | Should | Import on a machine with networking disabled followed by `doctor` passes. |
 | FR-17 | Progress reporting (TTY progress bar), structured JSON logs, and a final `report.json` with a readable `report.md` next to it. | Should | `report.json` lists per-chapter durations, real-time factor, QA failures, time per stage; `report.md` lists the files, flagged segments (text vs what ASR heard) and warnings. |
 | FR-18 | Per-paragraph **language detection** for mixed-language books, routing each segment to **its own language's pipeline and backend** (which may be a different model from the main language), with a per-language narrator voice chosen to sound close to the main narrator. | May | A test book with embedded foreign quotes routes them correctly or warns. |
-| FR-19 | **Voice cloning** from a reference clip on backends that support it, subject to the consent policy (§6.12). | May | Clone works on Chatterbox; refusal message shown when consent flag is absent. |
+| FR-19 | **Voice cloning** from a reference clip on backends that support it (§6.12). | May | Clone works on Chatterbox. |
 | FR-20 | **Automatic splitting** into one file per book section when the detected structure passes the sanity checks in §6.8.1; otherwise fall back to a **single file**. Mode is `auto` (default), `section` (force) or `none` (always one file). | Must | Fixture with clean chapters → one MP3 per chapter; fixture with 500 tiny sections or no headings → single MP3; the decision and reason are recorded in `report.json`. |
 | FR-21 | **One output folder per book**, named after the input file name, under a configurable output root; work files in `_work/`; batch input of several files or a directory (§5.2). | Must | `run a.fb2 b.epub` creates `output/a/` and `output/b/`; re-running `a.fb2` resumes in `output/a/`; a name clash produces `a (pdf)` or `a (2)` as specified. |
 | FR-22 | **Zero-config quality**: every setting has an automatic value derived from the language profile, content profile and hardware (§6.6.5); `text2audio config show <book>` prints the effective value and the source of each setting. | Must | With an empty `text2audio.toml`, fixtures in each supported language select the expected backend, voices, pauses, normalization and footnote policy; output passes the QA gate. |
@@ -850,7 +851,7 @@ Spike `ru-polish` results (details in `spikes/ru-polish/FINDINGS.md`):
 - Russian T1 uses a **hybrid** route per segment: Silero → Chatterbox VC for
   Cyrillic-only text, Chatterbox Multilingual TTS (same reference voice) for segments
   with Latin-script words, which Silero cannot read. Listening found no audible switch
-  between the two. Voice-conversion targets follow the voice-cloning consent policy (§6.12).
+  between the two.
 
 As built (M2 step 3b):
 
@@ -1303,9 +1304,8 @@ have `detail(stage, **fields)` for the facts above.
   reviewed revision in `models.lock`.
 - **Supply chain**: pinned dependency and model hashes (NFR-04); dependency audit
   ([pip-audit](https://github.com/pypa/pip-audit)) in CI.
-- **Voice cloning consent**: cloning a voice requires an explicit
-  `--i-have-consent` flag and records the reference clip's hash in the output
-  metadata; documentation states that cloning people without consent is prohibited.
+- **Voice cloning**: no consent flag (owner, 2026-11-07, personal use, ADR-0007);
+  a voice is cloned from any clip that a directive or the config names.
 - **Watermarking**: when the backend supports it (Chatterbox ships the
   [Perth](https://github.com/resemble-ai/Perth) watermarker), watermarking is on by
   default.
@@ -1609,6 +1609,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-07 | **Whole-book en→ru measured** (`spikes/mt-bench/FINDINGS.md`): *The Adventures of Sherlock Holmes*, 575 k characters, 2544 pieces, 1 h 43 min on one RTX 4090 with Tower-Plus-9B; 48 pieces (1.9 %) from the NLLB fallback, 6 redone with abbreviation placeholders, no warning left. Throughput ≈ 93 characters/s against 156 in the benchmark — batches follow book order, so padding wastes time; sorting pieces by length per batch is the next optimization. | Measured |
 | 2026-11-07 | **Translation batches sorted by length** (owner: "translation speed-up"): the texts still to translate are batched shortest first, cached ones skipped beforehand. "A Scandal in Bohemia" (46 k characters, Tower-Plus-9B): 579 s → 336 s (≈ 80 → 138 characters/s, identical check and fallback counts; the old run includes a one-off env sync). | Measured |
 | 2026-11-07 | **`revoice`** (owner: "re-voice English into Russian — markdown/audio/video, output same as input, video's audio track replaced, do it all"; ADR-0012). Whisper `timed` without VAD: with VAD, large-v3-turbo dropped "Look at the moon." after a 2 s pause in the test clip; without a punctuated prompt it wrote lowercase words with no stops. Paragraph-level translation is mapped back to phrases by sentence count, else phrase by phrase, so context and timing both hold. Video phrases: speed-up at most 1.3× (beyond that speech sounds hurried), then drift into the next pause. The original audio is replaced, not mixed: mixing would keep the English voice. Verified: a 28 s English clip → mp4 with H.264 copied, AAC `rus` and a `mov_text` track, all 7 phrases on time; `tests/test_revoice.py` real test (espeak → video → revoice → GigaAM hears «телескоп», «лун»). |
+| 2026-11-07 | **No voice-cloning consent flag** (owner, option C of three: the flag as specified, a hash-only record, or neither). The tool is for personal use only (ADR-0007), so `--i-have-consent` is removed from FR-19 and §6.12. It was never implemented; M5 drops it. |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |
