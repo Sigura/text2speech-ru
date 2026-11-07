@@ -155,11 +155,18 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     pieces from the NLLB fallback, no warning left (§13.1);
   - [ ] translation throughput: sort pieces by length within batches (93 → ~156 chars/s);
   - [ ] owner's listening to a translated chapter in Russian.
-- [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
-  - English → Russian book translation as an option at the Markdown step, using the
-    strongest model that runs offline on this hardware, chosen by benchmark;
-  - English speech-to-text, so lectures and similar recordings can be re-voiced in
-    Russian with the female voice (speech → English text → Russian text → audio).
+- [ ] **After M4, idea (owner, 2026-11-05):**
+  - [x] English → Russian book translation, the strongest offline model by benchmark
+    (Tower-Plus-9B, ADR-0011);
+  - [ ] **next (owner, 2026-11-07): re-voice English into Russian** with the female
+    voice — speech → English text → Russian text → audio, all steps in one command.
+    Input and output match (owner):
+    - Markdown → the translated Markdown and its Russian audio;
+    - audio (mp3/m4a/wav…) → Russian audio;
+    - video (mp4/mkv…) → the same video with the audio track replaced by the Russian
+      one, **timed to the original** (each phrase fitted to its time slot);
+    Plan first (transcription with timestamps, phrase alignment, fitting by rate and
+    pauses, muxing with FFmpeg); then M5.
 - [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
 
 ## Housekeeping
