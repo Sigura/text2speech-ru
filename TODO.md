@@ -143,14 +143,47 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     reads ≤ 512 tokens, so whole paragraphs would be cut), structure kept (SPEC 4.9-M5);
   - [x] benchmark (`spikes/mt-bench/FINDINGS.md`): Tower-Plus-9B COMET 0.876, Seed-X-7B
     0.873, NLLB-3.3B 0.868 … Opus-MT 0.839 on FLORES-200;
-  - [ ] owner's blind reading of the literary samples (sent 2026-11-06), then adopt the
-    winner as a translator plugin — an LLM gets whole paragraphs, as asked.
-- [ ] **After M4, idea (owner, 2026-11-05), not planned yet:**
-  - English → Russian book translation as an option at the Markdown step, using the
-    strongest model that runs offline on this hardware, chosen by benchmark;
-  - English speech-to-text, so lectures and similar recordings can be re-voiced in
-    Russian with the female voice (speech → English text → Russian text → audio).
-- [ ] **M5 — Hardening:** air-gapped bundle, security tests, docs.
+  - [x] owner's blind reading → ru→en = Seed-X-PPO-7B, NLLB-3.3B fallback (SPEC 4.13-M5);
+  - [x] **last stage (owner):** ru→en with Seed-X by paragraph, NLLB-3.3B fallback,
+    Opus-MT when those are not installed (SPEC 4.16-M5);
+  - [x] real-model ru→en run with Seed-X (*Капитанская дочка*, 214 k characters):
+    13 min 54 s on one RTX 4090, 20 of 731 pieces from NLLB, no warning left;
+  - [x] **first:** en→ru — benchmark (Seed-X 0.910 COMET), translator contract with
+    pairs and units, `mt-hf` plugin, checks + placeholders + NLLB fallback (ADR-0011);
+  - [x] owner's blind reading of the en→ru samples → Tower-Plus-9B leads (SPEC 4.15-M5);
+  - [x] whole-book en→ru run (*Adventures of Sherlock Holmes*): 1 h 43 min, 1.9 % of
+    pieces from the NLLB fallback, no warning left (§13.1);
+  - [x] translation throughput: batches sorted by length — 579 s → 336 s on one story (§13.1);
+  - [x] owner's listening to a translated chapter in Russian («Скандал в Богемии»,
+    Tower-Plus → Silero xenia, and the re-voiced test clip): "samples look awesome"
+    (2026-11-07).
+- [ ] **After M4, idea (owner, 2026-11-05):**
+  - [x] English → Russian book translation, the strongest offline model by benchmark
+    (Tower-Plus-9B, ADR-0011);
+  - [x] **re-voice English into Russian** (owner, 2026-11-07), all steps in one command:
+    `text2audio revoice` (ADR-0012, SPEC 4.17-M5).
+    - Markdown or a book gives the translated Markdown and its audiobook.
+    - Audio gives audio in the same format.
+    - Video gives the same video with its audio track replaced by the Russian one,
+      timed to the original, plus subtitles.
+  - [ ] revoice on a real recording from the owner (speech with music, several speakers).
+- [x] **M5 — Hardening:** air-gapped bundle, security tests, docs (plan sent to the
+  owner 2026-11-07; work in PR #1). **v1.0.0 tagged 2026-11-07** on the owner's word
+  ("Tag it, all works"); the open items below stay open after the release.
+  - [x] Offline bundle: `bundle export/import`, `install.sh --bundle`,
+    `scripts/test-bundle.sh` (FR-16, SPEC 4.19-M5). ru fast: 9.4 GB, export ~30 min
+    in the devbox (packages at ~5 MB/s), offline install 12 s, `doctor` offline-ready,
+    a short text → MP3 + M4B in 46 s.
+  - [x] Security tests (§6.12): hostile XML, PDF time limit, safe weight loading
+    (SPEC 4.20-M5).
+  - [ ] pip-audit in CI: `scripts/audit.sh` finds advisories in 5 env locks
+    (transformers 4.57.6; Chatterbox's pins); owner to choose how to handle them.
+  - [x] Definition of Done (§14) line by line; a test for each gap (SPEC 4.21-M5).
+    Not met as written: the English pack needed one `core/` change (`quote` dialogue).
+  - [x] Docs: README offline install, voices and expression levels.
+  - [x] Owner's OK for v1.0.0 (2026-11-07).
+  - [ ] Owner: `install.sh` on a clean machine with network, the bundle on a second
+    machine without it (no automated test for the first; §14).
 
 ## Housekeeping
 

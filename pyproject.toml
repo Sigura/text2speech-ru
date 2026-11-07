@@ -1,6 +1,6 @@
 [project]
 name = "text2audio"
-version = "0.1.0.dev0"
+version = "1.0.0"
 description = "Offline, multi-language document-to-audiobook pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,6 +39,7 @@ langs = [
     "text2audio-asr-whisper",
     "text2audio-backend-chatterbox",
     "text2audio-mt-opus",
+    "text2audio-mt-hf",
 ]
 # Optional generators; covers fall back to typographic without them (§6.8.2).
 covers = ["text2audio-cover-sd-webui", "text2audio-tagger-wd14"]
@@ -71,6 +72,7 @@ text2audio-asr-gigaam = { workspace = true }
 text2audio-asr-whisper = { workspace = true }
 text2audio-backend-chatterbox = { workspace = true }
 text2audio-mt-opus = { workspace = true }
+text2audio-mt-hf = { workspace = true }
 text2audio-cover-sd-webui = { workspace = true }
 text2audio-tagger-wd14 = { workspace = true }
 

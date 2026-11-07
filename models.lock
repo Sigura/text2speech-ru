@@ -279,3 +279,67 @@ files = [
 "vocab/strings.json" = "b1966d1f07a05b68576df07f43f40203b4e11124ad82cc839e8312ad8d7fdae7"
 "vocab/vectors" = "14772b683e726436d5948ad3fff2b43d036ef2ebbe3458aafed6004e05a40706"
 "vocab/vectors.cfg" = "ff4359091952c8cd16f1f0482f5770fb82d1707368d5cca3c46aa501f552e3c5"
+
+# Seed-X-PPO-7B (Mistral-based LLM, safetensors): book translation en↔ru paragraph by
+# paragraph (§6.11, spikes/mt-bench); GPU only, ~15 GB in bf16. Opt-in feature.
+[[asset]]
+repo = "ByteDance-Seed/Seed-X-PPO-7B"
+revision = "6ef78fc034ec86c0036d7a7ca2bfc24607f48050"
+license = "OpenMDW-1.0"
+component = "mt:seedx-7b"
+langs = ["en", "ru"]
+feature = "translate"
+files = ["config.json", "generation_config.json", "model.safetensors", "tokenizer.json"]
+[asset.sha256]
+"config.json" = "b8bf55e43e15a0950885606a9435dd2dc21f67c354013b1c2324a2a9c9d312a4"
+"generation_config.json" = "afcf2a1da583dbeb66bb367a759713901e23ce19ed83ed8f5a21b0e877addd5b"
+"model.safetensors" = "3807f2e8e7d4d6320bdb197fdb640a4e08f55ace45df741ed37ebd086b77d609"
+"tokenizer.json" = "35e68fc21e58581cff0ff98d9ca54fccbd8d0f0dd72c05a5bca8510eaf072ee1"
+
+# NLLB-200 3.3B (seq2seq): book translation sentence by sentence — the fallback for
+# paragraphs Seed-X fails the checks on, and for machines without room for Seed-X.
+# The .bin shards are read with weights_only (§6.12). Opt-in feature.
+[[asset]]
+repo = "facebook/nllb-200-3.3B"
+revision = "1a07f7d195896b2114afcb79b7b57ab512e7b43e"
+license = "CC-BY-NC-4.0"
+component = "mt:nllb-3.3b"
+langs = ["en", "ru"]
+feature = "translate"
+files = ["config.json", "generation_config.json", "pytorch_model-00001-of-00003.bin", "pytorch_model-00002-of-00003.bin", "pytorch_model-00003-of-00003.bin", "pytorch_model.bin.index.json", "sentencepiece.bpe.model", "special_tokens_map.json", "tokenizer.json", "tokenizer_config.json"]
+[asset.sha256]
+"config.json" = "24027fbba45b65c168cc22f5afa3561476691e0e9a06286e1430ffff74e418eb"
+"generation_config.json" = "0bb604cdb8392649176935a447ce994128f170a6908c135a17d0e3dfb8113cb2"
+"pytorch_model-00001-of-00003.bin" = "06aec913c891950ff0c59bd018c1b46dc95be6e106c36df87d13175418b3972c"
+"pytorch_model-00002-of-00003.bin" = "1c5a44acb0287e905a62a506cf3e5af37956607f4c667d891ec069aa276be0be"
+"pytorch_model-00003-of-00003.bin" = "2cf744009996251567d7972f4436d65cf94380c5ddd8f524cb878e090b27bb50"
+"pytorch_model.bin.index.json" = "c1290129b7a4156bfeb180501a37729dafddec3233d58e52ab0465eb03bf5ead"
+"sentencepiece.bpe.model" = "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a"
+"special_tokens_map.json" = "992bd4ed610d644d6823081937bcc91bb8878dd556cea4ae5327f2480361330e"
+"tokenizer.json" = "e316b82de11d0f951f370943b3c438311629547285129b0b81dadabd01bca665"
+"tokenizer_config.json" = "d1aa8c3697d3e35674f97b5b7e9c99d22b010f528e80140257d97316be90d044"
+
+# Tower-Plus-9B (Gemma-2-based LLM, safetensors): book translation en→ru paragraph by
+# paragraph, the owner's choice by blind reading (§6.11, spikes/mt-bench); GPU only,
+# ~19 GB in bf16. Opt-in feature.
+[[asset]]
+repo = "Unbabel/Tower-Plus-9B"
+revision = "c59d17c5bbf5eb6d9f0f8ba67e0ee76b4b106ecc"
+license = "CC-BY-NC-SA-4.0"
+component = "mt:towerplus-9b"
+langs = ["en", "ru"]
+feature = "translate"
+files = ["config.json", "generation_config.json", "model-00001-of-00004.safetensors", "model-00002-of-00004.safetensors", "model-00003-of-00004.safetensors", "model-00004-of-00004.safetensors", "model.safetensors.index.json", "special_tokens_map.json", "tokenizer.json", "tokenizer.model", "tokenizer_config.json"]
+[asset.sha256]
+"config.json" = "5b65602c1bea8ae08b1d0de89dffcb009d9fbe49b1cdb9312e8c84b3db16385a"
+"generation_config.json" = "bf68dd2be5385d9c1d62c21b29755633b84817c378b38e0b3cbd4f705f733409"
+"model-00001-of-00004.safetensors" = "eec497db1ac3e62ee899cc45505737c257d3f7f94a044ca2a9916544b836291e"
+"model-00002-of-00004.safetensors" = "1390d49fbf816cd47783b30a7ebf274f6f29473e60fd0bd4adc53365f225d81a"
+"model-00003-of-00004.safetensors" = "0bc92d223f177fc5599ea79dc49469f4284315d4c8e086bada285e23cfea6e18"
+"model-00004-of-00004.safetensors" = "fcac97e4b249ba836aee840cc23f6f93baf761be6b6c43d418c1d536f0805fb8"
+"model.safetensors.index.json" = "c38b39b80b2d7aa422464a9b816af4c30d2177e471b89e5325df1336a23ad284"
+"special_tokens_map.json" = "f65f1b09194276efdce220a63853039f7677e8f23d52a61e34e4089bf18eba2e"
+"tokenizer.json" = "cff2ad68719a416bf520aac5d71e574862465f0cdb7c98fc00906c8117e9021c"
+"tokenizer.model" = "61a7b147390c64585d6c3543dd6fc636906c9af3865a5548f27f31aee1d4c8e2"
+"tokenizer_config.json" = "266632916b1ebf97cd2358fd6364c55167f203ad3e261749d2a52bb52a6c4c87"
+

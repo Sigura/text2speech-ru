@@ -31,7 +31,9 @@ PROFILE = LanguageProfile(
     voices={},  # role → backend → voice, e.g. {"narrator": {"piper": "…"}}
     pauses_ms={},  # overrides of the core's structural pauses
     qa=QaProfile(asr=None, wer_threshold=0.15, chars_per_sec=(8.0, 25.0)),
-    translator=None,  # a `text2audio.translators` component into English (cover prompts)
+    # Target language → `text2audio.translators` components in order of preference
+    # (`translate`; the first for English also translates cover prompts).
+    translators={},
     lexicon=str(Path(__file__).parent / "lexicon.tsv"),
     part_title="{title} (part {n} of {total})",
 )

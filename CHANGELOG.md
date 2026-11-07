@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-07
+
 ### Added
 
 - Project specification ([SPEC.md](SPEC.md)), approved for milestone M0.
@@ -237,9 +239,37 @@ All notable changes to this project are documented here. The format follows
   folder>… [--mode …]` chooses a cover again without re-conversion (SPEC 4.9-M5).
 - The translator runs on a GPU when one has room, else on CPU: a whole novel in 1 min
   14 s instead of 72 min (SPEC 4.11-M5).
+- en→ru book translation (`translate --to ru`, `en2ru`): Tower-Plus-9B (the owner's
+  choice by blind reading; Seed-X-PPO-7B when it has no room) by paragraph, checked,
+  with NLLB-200 3.3B by sentence for failed pieces; Latin abbreviations kept;
+  resumable; weights via `models pull --feature translate` (ADR-0011, SPEC 4.14–4.15-M5).
+- ru→en book translation (`translate --to en`, `ru2en`): Seed-X-PPO-7B by paragraph,
+  NLLB-200 3.3B fallback, Opus-MT where those are not installed; uninstalled or
+  device-less translators are skipped with a warning; cover prompts use the lightest
+  (SPEC 4.16-M5).
+- `text2audio revoice <book, .md, audio or video>`: re-voice English in Russian.
+  - Books chain `translate` and `run`.
+  - Audio comes out in the same format.
+  - Video keeps its picture and gets a Russian track timed to the original (at most
+    1.3× faster), plus `.srt` subtitles.
+  - Whisper has a new `timed` op that returns word times (ADR-0012, SPEC 4.17-M5).
+- `text2audio bundle export` / `bundle import` and `./install.sh --bundle`: install on a
+  machine with no network from one archive with the models, the Python packages of the
+  environments they need, CPython and uv; `scripts/test-bundle.sh` checks the round
+  trip with networking blocked (FR-16, SPEC 4.19-M5).
+- `text2audio doctor --lang --tier` checks only the models installed for them.
+- PDFs are read in a child process that is stopped after 5000 s (§6.12); tests for
+  hostile EPUBs, ZIP limits and forged headers, and a source check that weights load
+  safely (`tests/test_model_loading.py`); `scripts/audit.sh` runs pip-audit over the
+  main and every plugin env lock (SPEC 4.20-M5).
+- Definition of Done review (SPEC 4.21-M5): the e2e runs check MP3 tags, the cover and
+  M4B chapters; `tests/test_zero_config_audio.py` renders a book per language with no
+  configuration; the ru and en packs are checked to use different components; README
+  section on voices and expression levels.
 
 ### Changed
 
+- Voice cloning needs no consent flag: `--i-have-consent` is dropped from the spec at the owner's decision (personal use; SPEC 4.18-M5).
 - README rewritten as a solution description with usage examples, open questions and
   a TODO list; Russian narrator voice defaults to female.
 - README keeps the solution description, installation, usage and open questions; the
@@ -280,6 +310,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `install.sh --lang ru` ended with a failing `doctor`, which checked the models of
+  every language; it also ran a stray `pip install -r requirements.txt` outside uv.
 - `en` normalization read an amount followed by a comma, such as «$5.20, and», as
   «five dollars.20»: the money rule backed off to the whole units.
 - `en` QA: a lowercase transcript (`on march 5th 1984 mr smith`) is normalized like

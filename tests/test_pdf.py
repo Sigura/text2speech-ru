@@ -85,3 +85,16 @@ def test_pdf_detected_by_content(tmp_path: Path) -> None:
     renamed.write_bytes((FIXTURES / "en/alice.pdf").read_bytes())
     result = convert_one(renamed, tmp_path / "out")
     assert result.format == "pdf" and result.chapters == 2
+
+
+TYPESET = FIXTURES / "ru" / "kapitanskaya-dochka.pdf"
+
+
+def test_a_pdf_that_reads_too_long_is_stopped() -> None:
+    with pytest.raises(InputError, match=r"longer than the 0\.05 s limit"):
+        read_pdf(TYPESET.read_bytes(), time_limit=0.05)
+
+
+def test_a_pdf_over_the_page_limit_is_refused() -> None:
+    with pytest.raises(InputError, match=r"2 pages \(limit 1\)"):
+        read_pdf(TYPESET.read_bytes(), max_pages=1)

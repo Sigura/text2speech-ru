@@ -96,18 +96,31 @@ def test_cli_plugins_and_models(
     assert verify.exit_code == ExitCode.MISSING_ASSET
 
 
+def test_doctor_checks_only_the_languages_it_is_given(
+    tmp_path: Path, store: ModelStore, make_asset: Callable[..., ModelAsset]
+) -> None:
+    ru = make_asset()
+    en = make_asset(install=False, langs=("en",)).model_copy(update={"repo": "org/english"})
+    lock = write_lock(tmp_path / "models.lock", [ru, en])
+    every = _doctor(store, lock, ON_PATH)
+    assert not every.ok
+    report = run_doctor(
+        store,
+        lock,
+        which=ON_PATH.get,
+        resources=resources(gpus=(gpu(0, 24000),)),
+        env=OFFLINE_ENV,
+        langs=["ru"],
+    )
+    assert report.ok, [c for c in report.checks if c.status == "fail"]
+
+
 def test_cli_resources_json() -> None:
     result = runner.invoke(app, ["resources", "--json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["plan"]["tier"] in ("fast", "expressive")
     assert data["plan"]["slots"]
-
-
-def test_planned_commands_explain_their_milestone() -> None:
-    result = runner.invoke(app, ["bundle", "output/Война и мир"])
-    assert result.exit_code == ExitCode.USAGE
-    assert "M5" in result.output
 
 
 def test_synthesize_rejects_a_folder_that_is_not_a_book(tmp_path: Path) -> None:

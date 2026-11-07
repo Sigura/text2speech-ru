@@ -15,6 +15,8 @@ class OpusMtRuEn:
     env = "mt-opus"
     env_project = HERE / "env"
     languages = ("ru",)
+    pairs = (("ru", "en"),)
+    unit = "sentence"
     # One worker: a GPU when one has room (a whole book in about a minute), else CPU.
     capabilities = Capabilities(
         languages=("ru",), devices=("cpu", "cuda"), vram_mb=1500, ram_mb=1500, threads=4

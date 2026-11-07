@@ -12,8 +12,8 @@ from typing import Annotated, Any
 import typer
 from rich.markup import escape
 
-from text2audio.console import StageProgress, duration
-from text2audio.core.offline import enforce_offline
+from text2audio.console import StageProgress, duration, plural
+from text2audio.core.offline import allow_network, enforce_offline
 from text2audio.models.store import default_store
 
 
@@ -31,6 +31,8 @@ models_app = typer.Typer(no_args_is_help=True, help="Manage the local model stor
 app.add_typer(models_app, name="models")
 envs_app = typer.Typer(no_args_is_help=True, help="Manage plugin worker environments.")
 app.add_typer(envs_app, name="envs")
+bundle_app = typer.Typer(no_args_is_help=True, help="Move an install to an offline machine.")
+app.add_typer(bundle_app, name="bundle")
 config_app = typer.Typer(no_args_is_help=True, help="Inspect the configuration of a book.")
 app.add_typer(config_app, name="config")
 
@@ -38,6 +40,10 @@ LangOpt = Annotated[str | None, typer.Option("--lang", help="Language code(s), e
 TierOpt = Annotated[str | None, typer.Option("--tier", help="fast | expressive")]
 JsonOpt = Annotated[bool, typer.Option("--json", help="Machine-readable output.")]
 LockOpt = Annotated[Path | None, typer.Option("--lock", help="Path to models.lock.")]
+FeatureOpt = Annotated[
+    list[str] | None,
+    typer.Option("--feature", help="Opt-in assets too, e.g. translate (repeatable)."),
+]
 
 
 @app.callback()
@@ -86,11 +92,14 @@ def version() -> None:
 
 
 @app.command()
-def doctor(json_out: JsonOpt = False, lock: LockOpt = None) -> None:
-    """Check tools, hardware, models and plugins; exit 3 if something is missing."""
+def doctor(
+    json_out: JsonOpt = False, lock: LockOpt = None, lang: LangOpt = None, tier: TierOpt = None
+) -> None:
+    """Check tools, hardware, models and plugins; exit 3 if something is missing.
+    `--lang` / `--tier` check only the models installed for them (default: all)."""
     from text2audio import api
 
-    report = api.doctor(lock=lock)
+    report = api.doctor(lock=lock, lang=lang, tier=_tier(tier))
     if json_out:
         typer.echo(json.dumps(_sets([asdict(c) for c in report.checks]), indent=2))
     else:
@@ -141,20 +150,24 @@ def plugins() -> None:
 
 
 @models_app.command("list")
-def models_list(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_list(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """List pinned assets from models.lock."""
     from text2audio import api
 
-    for a in api.models_list(lang, _tier(tier), lock):
+    for a in api.models_list(lang, _tier(tier), lock, tuple(feature or ())):
         typer.echo(f"{a.owner}\t{a.source}\t{len(a.files)} file(s)\t{a.license}")
 
 
 @models_app.command("verify")
-def models_verify(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_verify(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """Verify SHA-256 of every pinned asset in the store."""
     from text2audio import api
 
-    problems = api.models_verify(lang, _tier(tier), lock=lock)
+    problems = api.models_verify(lang, _tier(tier), lock=lock, features=tuple(feature or ()))
     for p in problems:
         typer.echo(str(p), err=True)
     if problems:
@@ -163,17 +176,70 @@ def models_verify(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = No
 
 
 @models_app.command("pull")
-def models_pull(lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None) -> None:
+def models_pull(
+    lang: LangOpt = None, tier: TierOpt = None, lock: LockOpt = None, feature: FeatureOpt = None
+) -> None:
     """Download pinned assets (uses the network)."""
     from text2audio import api
     from text2audio.models.pull import PullError
 
     try:
-        fetched = api.models_pull(lang, _tier(tier), lock=lock)
+        fetched = api.models_pull(lang, _tier(tier), lock=lock, features=tuple(feature or ()))
     except PullError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.MISSING_ASSET) from exc
     typer.echo(f"{len(fetched)} file(s) downloaded")
+
+
+@bundle_app.command("export")
+def bundle_export(
+    output: Annotated[Path, typer.Option("-o", "--output", help="The .tar to write.")],
+    lang: LangOpt = None,
+    tier: TierOpt = None,
+    feature: FeatureOpt = None,
+) -> None:
+    """Pack the installed models, the Python packages of every environment, Python and uv
+    into one tar for an offline machine (uses the network for the packages, FR-16).
+    Default: every language and tier."""
+    from text2audio import api
+    from text2audio.core.envs import EnvMissing
+    from text2audio.models.bundle import BundleError
+
+    allow_network()
+    try:
+        api.bundle_export(
+            output,
+            lang,
+            _tier(tier),
+            tuple(feature or ()),
+            progress=lambda step: typer.echo(f"== {step}"),
+        )
+    except (BundleError, EnvMissing) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+    typer.echo(f"{output}: {output.stat().st_size / 1e9:.1f} GB")
+    typer.echo("on the offline machine: tar xf it, then ./text2audio/install.sh --bundle")
+
+
+@bundle_app.command("import")
+def bundle_import(
+    folder: Annotated[Path, typer.Argument(help="The bundle/ folder of an unpacked export.")],
+) -> None:
+    """Copy the bundle's models into the model store and verify them (offline)."""
+    from text2audio import api
+    from text2audio.models.bundle import BundleError
+    from text2audio.models.pull import PullError
+
+    try:
+        manifest, copied = api.bundle_import(folder)
+    except BundleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.USAGE) from exc
+    except PullError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+    langs = ",".join(manifest.langs) or "all languages"
+    typer.echo(f"{len(copied)} file(s) copied ({langs}, tier {manifest.tier or 'all'})")
 
 
 @app.command()
@@ -232,7 +298,9 @@ OutputOpt = Annotated[
 ]
 
 
-def _translate(source: Path, output: Path | None, source_lang: str | None, target: str) -> None:
+def _translate(
+    source: Path, output: Path | None, source_lang: str | None, target: str | None
+) -> Path:
     from text2audio import api
     from text2audio.core.envs import EnvMissing
     from text2audio.core.translate import TranslateError
@@ -249,17 +317,28 @@ def _translate(source: Path, output: Path | None, source_lang: str | None, targe
         except (EnvMissing, WorkerError) as exc:
             ui.print(f"[red]error:[/] {escape(str(exc))}")
             raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+        s = r.stats
+        extra = [f"{n} by {name}" for name, n in s.by.items() if name != r.translator]
+        if s.placeholders:
+            extra.append(f"{s.placeholders} redone to keep abbreviations")
         ui.result(
-            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator} on {r.device}, "
-            f"{r.sentences} sentences"
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator} on {r.device}: "
+            f"{s.pieces} pieces, {s.translated} translated now, {s.cached} cached"
+            + (f" ({'; '.join(extra)})" if extra else "")
         )
+        for w in s.warnings:
+            ui.warn(w)
+    return r.output
 
 
 @app.command()
 def translate(
     source: SourceArg,
     output: OutputOpt = None,
-    to: Annotated[str, typer.Option("--to", help="Target language.")] = "en",
+    to: Annotated[
+        str | None,
+        typer.Option("--to", help="Target language (default: the first the source has)."),
+    ] = None,
     source_lang: Annotated[
         str | None, typer.Option("--from", help="Source language (default: guessed).")
     ] = None,
@@ -272,6 +351,12 @@ def translate(
 def ru2en(source: SourceArg, output: OutputOpt = None) -> None:
     """Same as `translate --from ru --to en`."""
     _translate(source, output, "ru", "en")
+
+
+@app.command(hidden=True)
+def en2ru(source: SourceArg, output: OutputOpt = None) -> None:
+    """Same as `translate --from en --to ru`."""
+    _translate(source, output, "en", "ru")
 
 
 _COVER_MODES = ("auto", "embedded-only", "generate", "typographic")
@@ -496,6 +581,83 @@ def run(
     raise typer.Exit(max(codes, default=ExitCode.INPUT))
 
 
+def _revoice_media(source: Path, output: Path | None, source_lang: str, target: str | None) -> None:
+    from text2audio import api
+    from text2audio.audio.encode import FfmpegError
+    from text2audio.core.envs import EnvMissing
+    from text2audio.core.revoice import RevoiceError
+    from text2audio.core.synthesize import SynthesisError
+    from text2audio.core.translate import TranslateError
+    from text2audio.workers.process import WorkerError
+
+    with StageProgress() as ui:
+        try:
+            r = api.revoice(
+                source, output, source_lang=source_lang, target_lang=target, progress=ui
+            )
+        except (RevoiceError, TranslateError, SynthesisError) as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.INPUT) from exc
+        except (EnvMissing, WorkerError, FfmpegError) as exc:
+            ui.print(f"[red]error:[/] {escape(str(exc))}")
+            raise typer.Exit(ExitCode.MISSING_ASSET) from exc
+        ui.result(
+            f"{r.output} — {r.source_lang} → {r.target_lang} by {r.translator}: "
+            f"{r.phrases} phrases, {duration(r.duration_s)}"
+            + (f"; subtitles {r.subtitles.name}" if r.subtitles else "")
+        )
+        for w in r.stats.warnings:
+            ui.warn(w)
+        if r.late:
+            more = f" (+{len(r.late) - 5} more)" if len(r.late) > 5 else ""
+            ui.warn(
+                f"{plural(len(r.late), 'phrase')} over 1 s behind the original: "
+                + ", ".join(r.late[:5])
+                + more
+            )
+
+
+@app.command()
+def revoice(
+    source: Annotated[Path, typer.Argument(help="A book, Markdown, audio or video file.")],
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "-o",
+            "--output",
+            help="Audio/video: the output file (default <name>.<lang>.<ext>). "
+            "Books: the output root (default ./output).",
+        ),
+    ] = None,
+    to: Annotated[
+        str | None,
+        typer.Option("--to", help="Target language (default: the first the source has)."),
+    ] = None,
+    source_lang: Annotated[str, typer.Option("--from", help="Language spoken or written.")] = "en",
+    tier: TierFlag = None,
+    workers: WorkersFlag = None,
+    qa: QaFlag = None,
+) -> None:
+    """Re-voice in another language: a book → its translation and audiobook, audio →
+    audio, video → the same video with a track timed to the original."""
+    from text2audio.core.revoice import media_kind
+
+    if media_kind(source) is not None:
+        _revoice_media(source, output, source_lang, to)
+        return
+    text = source
+    if source.is_file() and source.suffix.lower() != ".md":
+        from text2audio import api
+
+        converted = api.convert([source], output, lang=source_lang)[0]
+        if converted.folder is None:
+            typer.echo(f"error: {converted.error}", err=True)
+            raise typer.Exit(ExitCode.INTERNAL if converted.internal else ExitCode.INPUT)
+        text = converted.folder
+    translated = _translate(text, None, source_lang, to)
+    run([translated], output, None, False, None, tier, workers, qa, None)
+
+
 @app.command()
 def preview(
     folder: Annotated[Path, typer.Argument(help="Book folder made by `convert`.")],
@@ -583,25 +745,6 @@ def voices(
     typer.echo("backends:")
     for name, voice_ids in found.backends.items():
         typer.echo(f"  {name}: {', '.join(voice_ids) or '-'}")
-
-
-_PLANNED = {
-    "bundle": "M5",
-}
-
-
-def _planned(name: str, milestone: str) -> None:
-    def command() -> None:
-        typer.echo(f"`{name}` is not implemented yet (planned for {milestone}).", err=True)
-        raise typer.Exit(ExitCode.USAGE)
-
-    command.__doc__ = f"Not implemented yet ({milestone})."
-    settings = {"ignore_unknown_options": True, "allow_extra_args": True}
-    app.command(name, context_settings=settings)(command)
-
-
-for _name, _milestone in _PLANNED.items():
-    _planned(_name, _milestone)
 
 
 def main() -> None:

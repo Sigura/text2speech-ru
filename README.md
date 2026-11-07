@@ -1,280 +1,179 @@
 # Text2Audio
 
-**Offline document-to-audiobook pipeline. Russian first, English next.**
+**Offline books → audiobooks, in Russian and English, with local neural voices.**
 
 Text2Audio turns `.fb2` / `.fb2.zip`, `.epub`, `.txt`, `.pdf` and `.md` files into an
-editable Markdown text and then into an audiobook: MP3 files, one per book section,
-with tags and a cover. It uses local neural text-to-speech (TTS) and needs no network
-after installation. It is for personal use only (ADR-0007).
+editable Markdown text and then into an audiobook: one MP3 per chapter with subtitles,
+an M4B of the whole book, tags and a cover. It can also translate a book between
+English and Russian first. Everything runs on your machine; after installation nothing
+touches the network. Personal use only ([ADR-0007](docs/adr/0007-personal-use-offline-quality-priority.md)).
 
-> **Status:** M0 (scaffold), M1 (conversion) and **M2 (Russian speech) are done**:
-> `text2audio run` turns FB2, EPUB, TXT, PDF and Markdown into a Russian audiobook —
-> MP3 per section with subtitles, an M4B of the whole book, cover, `report.json` — on
-> the CPU (Silero `xenia`) or the GPU hybrid (Silero → Chatterbox), with an ASR quality
-> check. A full novel renders in about 0.13× real time on either tier, with ≤ 2 % of
-> the checked segments flagged. The voices were chosen by a benchmark and blind listening
-> ([ru-bench](spikes/ru-bench/FINDINGS.md)). Next: expression — pauses, a dialogue voice,
-> directives (M3). Plans and ideas: [TODO.md](TODO.md); full specification: [SPEC.md](SPEC.md).
+**Status:** milestones M0–M4 are done (conversion, Russian and English speech,
+expression); M5 (hardening, air-gapped bundle) is in progress — see [TODO.md](TODO.md).
 
-## Solution overview
+## Install
+
+```bash
+./install.sh                              # Russian: Python env, worker envs, weights, doctor
+./install.sh --lang ru,en                 # Russian and English
+./install.sh --lang ru --tier fast        # CPU voices only (smaller)
+text2audio models pull --feature translate   # optional: book translation models (~51 GB)
+text2audio doctor                         # everything ready? exit 0 = offline-ready
+```
+
+**A machine without internet:** make a bundle where text2audio is installed, carry it
+over, and install from it. Nothing is downloaded on the target.
+
+```bash
+text2audio bundle export -o t2a.tar --lang ru --tier fast   # default: every language and tier
+# on the offline machine (FFmpeg and espeak-ng from its own packages):
+tar xf t2a.tar && text2audio/install.sh --bundle             # ends with doctor
+```
+
+Needs Linux, FFmpeg and espeak-ng; a GPU is optional (CPU voices are fast). Every
+downloaded file is pinned by revision and SHA-256 in `models.lock`. Other setups (uv,
+conda, pip): [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Use
+
+**A book → an audiobook**
+
+```bash
+text2audio run "Мастер и Маргарита.epub"     # → output/Мастер и Маргарита/
+text2audio run books/ -o ~/Audiobooks        # every book in a folder
+```
+
+The language is read from the book (or `--lang`). Without a GPU it uses the fast CPU
+voices; with one, the expressive tier where it is the language's default
+(`--tier fast|expressive`). Every sentence is transcribed back and re-generated if
+words were lost (`--qa off` to skip). An interrupted run resumes where it stopped.
+
+**Check the text first, then listen**
+
+```bash
+text2audio convert "Мастер и Маргарита.epub"                         # editable Markdown only
+$EDITOR "output/Мастер и Маргарита/Мастер и Маргарита.md"             # fix typos, drop front matter
+text2audio preview "output/Мастер и Маргарита" --chapter 3 --seconds 30   # a short sample
+text2audio synthesize "output/Мастер и Маргарита"                    # re-renders only what changed
+```
+
+**Fix how a word is read** — add `word<TAB>replacement` (`+` before the stressed vowel)
+to the book's `_work/lexicon.tsv`, or to `~/.config/text2audio/lexicon/ru.tsv` for all
+books, and run `synthesize` again:
 
 ```text
-book.fb2 ─► detect & parse ─► <book>.md ─► normalize ─► stress/ё ─► segments ─► TTS workers ─► ASR check ─► MP3 per section
-             (M1)            (editable)     (numbers,     (RUAccent)              (one per GPU    (GigaAM)      + cover + tags
-                                            English                               / CPU slot)
-                                            terms…)
-```
-
-| Principle | What it means |
-|---|---|
-| **Offline by contract** | Downloads happen only in `models pull` / install. Every model file is pinned by revision and SHA-256 in `models.lock` ([ADR-0002](docs/adr/0002-offline-runtime-contract.md)). |
-| **No universal model** | Each language picks its own normalizer, stress/G2P, TTS, QA ASR and emotion model as plugins ([ADR-0003](docs/adr/0003-per-language-components.md)). |
-| **Isolated backends** | Every TTS model runs as a worker process in its own environment, so conflicting `torch` pins never collide ([ADR-0004](docs/adr/0004-isolated-backend-workers.md)). |
-| **Uses the whole machine** | The resource planner gives each GPU with enough *free* VRAM its own worker, pinned to that GPU's NUMA CPUs. Shared GPUs, cgroup limits and `taskset` are respected (SPEC §9.1). |
-| **Editable and re-convertible** | `<book>.md` sits next to the audio; edit it and re-run, and only changed parts are re-synthesized. The original input is kept in `_work/` for `convert --reconvert` (SPEC §5.2). |
-| **Verifiable quality** | Every segment is transcribed back (GigaAM for Russian) and re-generated if words were skipped or invented (SPEC §6.9). |
-| **Two-stage speech** | On a GPU, a fast TTS (Silero) gets words and stress right and voice conversion (Chatterbox VC) makes it sound natural: the quality of a large TTS model at 1/6 of its time. The ASR check runs on the result (SPEC §6.6.6). |
-| **English words in Russian text** | Brands, terms and acronyms (*Docker*, *iPhone*, *HTTP*) are found by script and read correctly instead of being skipped (SPEC FR-24). |
-| **Always a cover** | Embedded cover → generated by a local Stable Diffusion WebUI on the first free GPU → typographic fallback ([ADR-0009](docs/adr/0009-covers-and-local-services.md)). |
-
-### Russian (first language, M2)
-
-| Stage | Choice | Why |
-|---|---|---|
-| Stress + ё | RUAccent (silero-stress fallback) | Context homographs (*зáмок / замóк*), *все / всё*. |
-| Normalization | Own rules + num2words + pymorphy3 (rutextnorm failed the audit) | Numbers must agree in case and gender (*с 5 книгами* → «с пятью книгами»). |
-| Narrator voice | **Silero `xenia`** (female), chosen by listening | Used directly on CPU and as the cloning reference on GPU, so both tiers sound like one narrator. |
-| TTS, CPU tier | **Silero v5.6 `xenia`** | Russian-trained, built-in stress/ё; 12× real time on 4 CPU cores, no word errors once numbers are spelled out ([findings](spikes/ru-smoke/FINDINGS.md)). |
-| TTS, GPU tier | **Hybrid**: Silero → Chatterbox VC; Chatterbox Multilingual for sentences with English words | Same naturalness as Chatterbox TTS alone (UTMOS 3.80 vs 3.81) at RTF 0.20 vs 1.32 on an RTX 4090, and no word errors ([findings](spikes/ru-polish/FINDINGS.md)). Preferred to Silero, XTTS-v2 and ESpeech in blind listening, tied with Qwen3-TTS ([benchmark](spikes/ru-bench/FINDINGS.md)). |
-| English terms | Lexicon → acronym spelling → Chatterbox (GPU) or transliteration (CPU) | Silero silently drops Latin-script words; Chatterbox reads them well. |
-| QA ASR | GigaAM-v3 `rnnt` (Sber, open weights) | Best open Russian ASR; the `rnnt` branch writes numbers as words, so correctly read numbers are not flagged. |
-
-Yandex SpeechKit and Sber SaluteSpeech synthesis are cloud-only, so they cannot be
-used. Sber's open model GigaAM (speech recognition) is used for the quality check.
-
-## Installation and usage
-
-### Installation
-
-One command installs everything, including the model weights (≈ 1.1 GB for Russian):
-
-```bash
-./install.sh                              # uv env + worker envs + Russian weights + doctor
-./install.sh --lang ru,en --tier fast     # other languages / one tier
-./install.sh --no-models                  # Python environment only
-```
-
-Every weight it downloads is pinned in `models.lock` (revision or URL + SHA-256); after
-that, nothing touches the network. Each model runs in its own worker environment
-(Silero ≈ 0.8 GB, RUAccent ≈ 0.2 GB, GigaAM ≈ 5.4 GB with CUDA), kept outside the
-repository in `~/.local/share/text2audio/envs/`:
-
-```bash
-text2audio envs sync                      # create/update every plugin environment
-text2audio envs list                      # which are installed
-``` Other ways to get the Python environment, all from
-the same `uv.lock`:
-
-```bash
-# uv
-uv sync                                   # creates .venv with Python 3.11 + dev tools
-
-# conda — Python and FFmpeg from conda-forge, Python packages from the lock
-conda env create -f environment.yaml && conda activate text2audio
-text2audio models pull --lang ru          # the weights (what install.sh does)
-
-# plain pip, into an existing Python ≥ 3.11 environment
-pip install -r requirements.txt           # runtime only
-pip install -r requirements-dev.txt       # + tests, lint, the sine test backend
-```
-
-`requirements*.txt` are generated from `uv.lock` by `scripts/export-requirements.sh`;
-CI fails when they are stale.
-
-### Usage examples
-
-Available now (M0–M2):
-
-```bash
-CUDA_VISIBLE_DEVICES="2,3" text2audio run "./inputs/Бэнкс. Выбор Оружия.fb2" --workers 4        # convert + synthesize → MP3s, playlist, report.json
-CUDA_VISIBLE_DEVICES="" text2audio run book.fb2    # CPU only (Silero is CPU-only anyway)
-text2audio synthesize "output/Станции Ангелов"     # after editing the .md: only changed sentences
-text2audio run book.fb2 --workers 4                # at most 4 TTS workers (default: up to 8)
-text2audio run book.fb2 --qa sample=10%            # QA gate on every 10th segment (default: all; --qa off)
-text2audio convert "inputs/Станции Ангелов.fb2"    # → output/Станции Ангелов/Станции Ангелов.md
-text2audio convert inputs/ -o ~/Audiobooks         # every book in a folder, one sub-folder each
-text2audio convert book.txt --lang ru              # language of untagged text (default: guessed)
-text2audio convert --reconvert "output/Станции Ангелов"   # read the stored source again
-text2audio doctor                 # tools, GPUs, model hashes, plugins → "offline-ready", exit 0
-text2audio resources              # usable CPUs/RAM/GPUs and planned TTS workers
-text2audio resources --json
-CUDA_VISIBLE_DEVICES="" taskset -c 0-3 text2audio resources   # simulate the 4-core CPU tier
-text2audio plugins                # discovered languages, backends, normalizers, covers…
-text2audio models list --lang ru  # pinned assets for Russian
-text2audio models pull --lang ru  # download them (the only command that uses the network)
-text2audio models verify          # SHA-256 check of the model store
-```
-
-Example `resources` output on the development machine (GPUs shared with other jobs):
-
-```text
-CPUs: 128 usable (0-127); RAM: 314/377 GiB available
-  GPU0 NVIDIA GeForce RTX 4090 (24080/24564 MiB free), NUMA CPUs 8-15,72-79
-  GPU2 NVIDIA GeForce RTX 4090 (5677/24564 MiB free), NUMA CPUs 24-31,88-95
-Tier: expressive
-  worker cuda:0: 4 threads on CPUs 8-11
-  - GPU2 skipped: 5677 MiB free < 8192 needed
-```
-
-`convert` writes one folder per book. The editable text sits next to where the audio
-will go; `_work/` keeps a copy of the source, metadata, the cover and the segment list.
-Library banners, page numbers, running headers and tables of contents are dropped;
-the warnings say what was skipped:
-
-```text
-output/Станции Ангелов/Станции Ангелов.md — fb2, 22 chapter(s), 4712 segments
-  warning: dropped elements outside the FB2 schema: <myfooter>×1, <myheader>×1
-```
-
-Re-running `convert` on the same file resumes in the same folder. If you edited the
-`.md`, a re-conversion never overwrites it: the new text goes to
-`<book>.reconverted.md` next to it.
-
-`synthesize` (and `run`) normalize the text (numbers, dates, Roman numerals,
-abbreviations), mark stress and ё with RUAccent, read it with Silero `xenia`, and
-assemble MP3s: one per chapter when the structure allows it, otherwise one file with
-chapter marks (−19 LUFS, ID3 tags, cover, `.m3u`). Every sentence's audio is cached by a
-hash of its text and settings, so an interrupted run resumes and an edit re-renders
-only what changed:
-
-```text
-output/Бэнкс. Выбор Оружия: 18 file(s), 8.97 h, 4014 of 4088 segments rendered, RTF 0.1422; split: 18 files at heading level 2
-```
-
-The examples below follow the CLI in SPEC §6.11; everything works except `voices`,
-`config show` (M3) and `bundle` (M5).
-
-**Many books at once:**
-
-```bash
-text2audio run books/ -o ~/Audiobooks       # every book in a folder, one sub-folder each
-```
-
-**Check the text first, then synthesize:**
-
-```bash
-text2audio convert "Мастер и Маргарита.epub"                  # the editable Markdown (now)
-$EDITOR "output/Мастер и Маргарита/Мастер и Маргарита.md"      # fix typos, drop front matter
-text2audio preview "output/Мастер и Маргарита" --chapter 3 --seconds 30   # hear a sample
-text2audio synthesize "output/Мастер и Маргарита"               # re-renders only what changed
-```
-
-**Fix how a word is read** (names, English terms, wrong stress). Add a line to the
-book's lexicon — `word<TAB>replacement`, with `+` before the stressed vowel — and run
-`synthesize` again; only the affected sentences are re-rendered:
-
-```text
-# output/Мастер и Маргарита/_work/lexicon.tsv   (this book)
-# ~/.config/text2audio/lexicon/ru.tsv           (all Russian books)
 Воланд	Вол+анд
-Docker	д+окер
 Kubernetes	кубер+нетис
-SQL	эс-кью-+эль
 ```
 
-English words without an entry are still read: acronyms are spelled out
-(*HTTP* → «эйч-ти-ти-пи́»), other words go to Chatterbox on a GPU or are transliterated
-on the CPU tier. `report.json` lists each one and how it was read, so you can add
-entries for the ones you don't like.
+English words in Russian text are read without entries (acronyms spelled out, words
+transliterated or voiced by the GPU model); `report.md` lists how each one was read.
 
-**Choose speed or quality:**
+**Direct the reading** with comments in the `.md` — a voice, a pause, a rate, an emotion,
+or text to skip; one on its own line holds until `reset` (SPEC §6.4.1):
+
+```markdown
+<!-- t2a: voice=dialogue emotion=fearful -->
+— Кто там? — прошептала она.
+<!-- t2a: reset pause=2000 -->
+```
+
+**Voices and expression.** Each language pack picks its voices: Russian reads with
+Silero `xenia` (narration and dialogue), English with Kokoro `af_nicole` and
+`am_michael` for dialogue. On a GPU the expressive tier re-voices them with Chatterbox
+from the pack's reference clips. `text2audio voices` lists every voice; a `voice=`
+directive picks another. How much the reading follows the text is set by
+`[synthesis] expression`:
+
+| Level | What it does |
+|---|---|
+| `E0` | Neutral: dialogue stays in the narration; sentence, paragraph and chapter pauses only |
+| `E1` *(default)* | Structure: pause lengths by boundary (remark, stanza, quote, scene), dialogue voice |
+
+The `<!-- t2a: … -->` directives above work on both (they are level E3). E2, emotion
+inferred by a model, is not built.
+
+**Translate a book, then listen to it**
 
 ```bash
-CUDA_VISIBLE_DEVICES="" text2audio run book.fb2   # CPU only: Silero, ≈ 12× real time on 4 cores
-text2audio run book.fb2 --qa off                  # skip the ASR check (faster, no retries)
-text2audio run book.fb2 --qa sample=10%           # check a sample of segments
+text2audio en2ru "Adventures of Sherlock Holmes.md"   # → Adventures of Sherlock Holmes.ru.md
+text2audio run "Adventures of Sherlock Holmes.ru.md"  # a Russian audiobook of it
+text2audio translate "output/Книга" --to en           # a book folder, any direction (ru2en)
 ```
 
-**PDFs:** text-layer PDFs only (no OCR yet); scanned and password-protected files are
-refused with a message. If a better PDF reader is added later, convert the stored
-copy again — your edits to `<book>.md` are kept:
+Translation keeps headings, quotes, poems, footnotes and directives; English → Russian
+uses Tower-Plus-9B paragraph by paragraph on a GPU with 20 GB free (Seed-X or NLLB with
+less), Russian → English Seed-X (Opus-MT without the translation models); every
+paragraph is checked and abbreviations are kept as they are ([ADR-0011](docs/adr/0011-book-translation-pipeline.md)).
+A run resumes from its cache.
+
+**Re-voice English speech in Russian**: one command for a book, a recording or a video.
 
 ```bash
-text2audio convert --reconvert "output/report"
+text2audio revoice lecture.mp4     # → lecture.ru.mp4 (+ lecture.ru.srt), timed to the original
+text2audio revoice podcast.mp3     # → podcast.ru.mp3
+text2audio revoice "Book.epub"     # → the Russian .md and its audiobook
 ```
 
-**Air-gapped machine:** export the installed models once, import them there:
+Video keeps its picture, and the original audio track is replaced. Each phrase starts
+at its original time and is sped up by at most 1.3× to fit; phrases that still run more
+than 1 s late are listed ([ADR-0012](docs/adr/0012-revoicing-recordings.md)).
+
+**A new cover** without converting again:
 
 ```bash
-text2audio bundle export --lang ru --tier fast,expressive -o t2a-bundle.tar.zst
-text2audio bundle import t2a-bundle.tar.zst
+text2audio cover "output/Мастер и Маргарита" --mode generate   # auto | embedded-only | generate | typographic
 ```
 
-Configuration is optional; every key has an automatic value (SPEC §6.6.5). Settings
-for one book go into `_work/text2audio.toml`, defaults for all books into
-`~/.config/text2audio/config.toml`:
+Covers come from the book, from a local Stable Diffusion WebUI (`[cover.sd] dir`), or are
+drawn from the title. `synthesize` then puts the new cover into the audio files.
 
-```toml
-[synthesis]
-tier       = "expressive"            # fast (Silero only) | expressive (GPU hybrid)
-expression = "E1"                    # E0 neutral … E3 manual directions
-
-[output]
-formats = ["mp3", "m4b"]             # default: MP3 per section + one M4B of the book
-split   = "auto"                     # auto | section | none
-
-[resources]
-devices     = ["cuda:0", "cuda:3"]   # keep the other GPUs free
-max_workers = 2
-
-[lang.ru]
-g2p = "silero-stress"                # override one stage for one language
-```
-
-`text2audio config show "output/Война и мир"` prints the effective value of every
-setting and where it came from.
-
-### Book folder
+## What you get
 
 ```text
 output/Война и мир/
-├── 01 - Том первый. Часть первая.mp3   # one MP3 per section (or one file)
-├── 01 - Том первый. Часть первая.srt   # subtitles: the book text, timed to the MP3
+├── 01 - Том первый. Часть первая.mp3   # one MP3 per section (or one file with chapters)
+├── 01 - Том первый. Часть первая.srt   # subtitles with the book's text
 ├── …
+├── Война и мир.m4b                     # the whole book with chapter marks
 ├── Война и мир.m3u
-├── Война и мир.md                      # editable text — edit, then re-run
-├── report.json                         # QA, timings, split decision
-├── report.md                           # the same, readable: files, flagged segments, timings
-└── _work/                              # source copy, metadata, cover, segments, cache
+├── Война и мир.md                      # the editable text
+├── report.md / report.json             # quality check, timings, flagged sentences
+└── _work/                              # source copy, metadata, cover, cache
 ```
 
-Every audio file — MP3 parts, the M4B, previews and listening clips — starts with 1.5 s
-of silence, because many players start playback late and clip the first words.
+## Settings
 
-## Open questions
+Nothing needs configuring. To change a default, put it in
+`~/.config/text2audio/config.toml` (all books) or the book's `_work/text2audio.toml`:
 
-| # | Question | Decided by |
-|---|---|---|
-| 1 | Does Silero's own stress beat RUAccent's marks? Listen to `spikes/ru-smoke/out/listen/`; WER cannot tell. | Owner listening, M3 |
-| 2 | ~~Does a Russian-trained model (ESpeech / F5-TTS, XTTS-v2) or Qwen3-TTS beat the GPU hybrid?~~ **Decided:** no; Qwen3-TTS ties and is an M3 candidate for dialogue (SPEC §13.1). | M2 benchmark |
-| 3 | ~~Does rutextnorm pass the code audit?~~ **Decided:** no (gender agreement, Roman numerals, ranges); the `ru` pack owns its rules (SPEC §13.1). | M2 step 1 |
-| 4 | ~~Cover prompts for Russian books?~~ **Decided:** genre keywords plus title and description translated offline by Opus-MT `ru-en` (SPEC §13.1). | M2 |
-| 5 | Network namespaces are blocked by AppArmor on this machine; enable them (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) for a strict local offline test? | Owner |
-| 6 | Dialogue voice: a second Russian voice that contrasts with `xenia` (may be male). | Owner listening, M3 |
-| 7 | Can Chatterbox be made faster than real time (fp16, `torch.compile`)? Only matters for sentences with English words. | M3 |
+```toml
+[synthesis]
+tier = "expressive"                  # fast (CPU voices) | expressive (GPU)
+
+[output]
+formats = ["mp3", "m4b"]
+split   = "auto"                     # auto | section | none
+
+[resources]
+devices     = ["cuda:0"]             # leave other GPUs to other jobs
+max_workers = 4
+```
+
+`text2audio config show <book>` prints every effective setting and where it came from;
+`text2audio voices` lists the voices; `text2audio resources` shows the CPUs, RAM and
+GPUs it may use and the workers it would start.
 
 ## Documentation
 
 | Document | Purpose |
 |---|---|
-| [TODO.md](TODO.md) | Roadmap checklist and improvement ideas |
-| [SPEC.md](SPEC.md) | Requirements, architecture, roadmap, decision log |
-| [spikes/ru-smoke/FINDINGS.md](spikes/ru-smoke/FINDINGS.md) | Russian offline smoke test: results and lessons |
-| [spikes/ru-polish/FINDINGS.md](spikes/ru-polish/FINDINGS.md) | Two-stage speech, Chatterbox, English words in Russian text |
-| [spikes/pdf-readers/FINDINGS.md](spikes/pdf-readers/FINDINGS.md) | PDF reader benchmark: pymupdf4llm vs Docling vs Marker |
-| [docs/adr/](docs/adr/) | Architecture decision records (0010: plugin worker environments) |
-| [docs/adding-a-language.md](docs/adding-a-language.md) | How to add a language pack |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and conventions |
+| [SPEC.md](SPEC.md) | Requirements, architecture, CLI (§6.11), decision log (§13.1) |
+| [TODO.md](TODO.md) | Roadmap and open items |
+| [docs/adr/](docs/adr/) | Architecture decisions |
+| [docs/adding-a-language.md](docs/adding-a-language.md) | Adding a language pack |
+| `spikes/*/FINDINGS.md` | Benchmarks behind the model choices (voices, PDF readers, translation) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, conventions, checks |
 | [CHANGELOG.md](CHANGELOG.md) | Change history |
 
 ## License

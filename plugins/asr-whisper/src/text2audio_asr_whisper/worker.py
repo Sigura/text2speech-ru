@@ -18,6 +18,7 @@ from spoken import spoken  # next to this file: the worker runs as a script
 
 WEIGHTS = "model.bin"
 TURBO_MARKER = "preprocessor_config.json"
+PUNCTUATED = "Hello. This is a recording, with punctuation."
 state: dict[str, Any] = {}
 
 
@@ -85,5 +86,35 @@ def transcribe(msg: dict[str, Any]) -> dict[str, Any]:
     return {"texts": [_transcribe(p) for p in msg["paths"]]}
 
 
+def timed(msg: dict[str, Any]) -> dict[str, Any]:
+    """A whole recording → its words with start and end seconds, as Whisper writes them
+    (digits kept: this text is translated, not compared).
+
+    No VAD: with it, large-v3-turbo dropped a whole sentence after a 2 s pause in the
+    test clip. Without punctuation in the prompt it writes lowercase words with no
+    stops, which leaves nothing to split sentences at. Hallucinations over long silences
+    are skipped by `hallucination_silence_threshold`.
+    """
+    if "model" not in state:
+        raise RuntimeError("timed before load")
+    segments, info = state["model"].transcribe(
+        msg["path"],
+        language=msg.get("language", "en"),
+        beam_size=5,
+        condition_on_previous_text=False,
+        word_timestamps=True,
+        vad_filter=False,
+        initial_prompt=PUNCTUATED,
+        hallucination_silence_threshold=2.0,
+    )
+    words = [
+        [round(w.start, 3), round(w.end, 3), w.word.strip()]
+        for s in segments
+        for w in s.words or []
+        if w.word.strip()
+    ]
+    return {"words": words, "duration": info.duration}
+
+
 if __name__ == "__main__":
-    t2a_worker.serve("whisper", {"load": load, "transcribe": transcribe})
+    t2a_worker.serve("whisper", {"load": load, "transcribe": transcribe, "timed": timed})

@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -89,8 +90,15 @@ def find_uv() -> str:
     return found
 
 
-def sync(env: PluginEnv, *, uv: str | None = None, quiet: bool = False) -> None:
-    """Create or update the environment from its lock file (install time only)."""
+def sync(
+    env: PluginEnv,
+    *,
+    uv: str | None = None,
+    quiet: bool = False,
+    extra_env: Mapping[str, str] | None = None,
+) -> None:
+    """Create or update the environment from its lock file (install time only).
+    `extra_env` overrides uv's variables, e.g. another target dir or cache (bundle)."""
     if not (env.project / "uv.lock").is_file():
         raise EnvMissing(f"{env.project}: no uv.lock; run `uv lock --project {env.project}`")
     cmd = [
@@ -105,7 +113,7 @@ def sync(env: PluginEnv, *, uv: str | None = None, quiet: bool = False) -> None:
     ]
     if quiet:
         cmd.append("--quiet")
-    run_env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(env.path)}
+    run_env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(env.path), **(extra_env or {})}
     for var in ("VIRTUAL_ENV", "HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
         run_env.pop(var, None)
     subprocess.run(cmd, check=True, env=run_env)

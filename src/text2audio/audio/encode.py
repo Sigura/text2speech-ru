@@ -222,6 +222,65 @@ def _mux(
         tmp.unlink(missing_ok=True)
 
 
+_AAC = ["-c:a", "aac", "-b:a", "128k"]
+# Codecs by output extension; FFmpeg's defaults pick e.g. Vorbis for .webm.
+_TRACK_CODEC = {
+    ".mp3": ["-c:a", "libmp3lame", "-b:a", "128k"],
+    ".m4a": _AAC,
+    ".m4b": _AAC,
+    ".aac": _AAC,
+    ".mp4": _AAC,
+    ".mov": _AAC,
+    ".mkv": _AAC,
+    ".avi": ["-c:a", "libmp3lame", "-b:a", "128k"],
+    ".webm": ["-c:a", "libopus", "-b:a", "96k"],
+    ".opus": ["-c:a", "libopus", "-b:a", "96k"],
+    ".ogg": ["-c:a", "libvorbis", "-q:a", "5"],
+    ".flac": ["-c:a", "flac"],
+    ".wav": ["-c:a", "pcm_s16le"],
+}
+_SUBTITLE_CODEC = {".mp4": "mov_text", ".mov": "mov_text", ".mkv": "srt", ".webm": "webvtt"}
+TRACK_FORMATS = frozenset(_TRACK_CODEC)
+
+
+def replace_track(
+    ffmpeg: str,
+    wav: Path,
+    out: Path,
+    *,
+    video: Path | None = None,
+    subtitles: Path | None = None,
+    language: str = "und",
+) -> None:
+    """A voiced track, loudness-normalized, written as `out`'s format. With `video`, its
+    picture streams are copied and the new track (and `subtitles`, where the container
+    takes them) replaces every audio and subtitle track."""
+    ext = out.suffix.lower()
+    if ext not in _TRACK_CODEC:
+        raise FfmpegError(f"cannot write {ext or 'extension-less'} files")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(f".{out.stem}.partial{out.suffix}")
+    cmd = [ffmpeg, "-hide_banner", "-nostats", "-y"]
+    if video is not None:
+        cmd += ["-i", str(video)]
+    cmd += ["-i", str(wav)]
+    sub = _SUBTITLE_CODEC.get(ext) if video is not None and subtitles is not None else None
+    if sub:
+        cmd += ["-i", str(subtitles)]
+    if video is not None:
+        cmd += ["-map", "0:v?", "-map", "1:a", "-c:v", "copy"]
+        if sub:
+            cmd += ["-map", "2:s", "-c:s", sub, "-metadata:s:s:0", f"language={language}"]
+    rate = "48000" if ext in (".webm", ".opus") else str(OUTPUT_RATE)
+    cmd += ["-af", _loudnorm(measure(ffmpeg, wav)), "-ar", rate, "-ac", "1"]
+    cmd += [*_TRACK_CODEC[ext], "-metadata:s:a:0", f"language={language}", str(tmp)]
+    try:
+        _run(cmd)
+        tmp.replace(out)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def write_m3u(path: Path, entries: list[tuple[str, int, str]]) -> None:
     """Extended M3U playlist: (file name, duration in ms, title) in reading order."""
     lines = ["#EXTM3U"]
