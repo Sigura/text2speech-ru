@@ -173,10 +173,13 @@ defined in [SPEC.md §11](SPEC.md); open decisions live in the
     `scripts/test-bundle.sh` (FR-16, SPEC 4.19-M5). ru fast: 9.4 GB, export ~30 min
     in the devbox (packages at ~5 MB/s), offline install 12 s, `doctor` offline-ready,
     a short text → MP3 + M4B in 46 s.
-  - [ ] Security tests (§6.12): hostile XML, PDF time limit, safe weight loading,
-    pip-audit in CI.
-  - [ ] Definition of Done (§14) line by line; a test for each gap.
-  - [ ] Docs: README offline install.
+  - [x] Security tests (§6.12): hostile XML, PDF time limit, safe weight loading
+    (SPEC 4.20-M5).
+  - [ ] pip-audit in CI: `scripts/audit.sh` finds advisories in 5 env locks
+    (transformers 4.57.6; Chatterbox's pins); owner to choose how to handle them.
+  - [x] Definition of Done (§14) line by line; a test for each gap (SPEC 4.21-M5).
+    Not met as written: the English pack needed one `core/` change (`quote` dialogue).
+  - [x] Docs: README offline install, voices and expression levels.
   - [ ] Owner: `install.sh` on a clean machine, the bundle on a second machine, OK for
     v1.0.0.
 

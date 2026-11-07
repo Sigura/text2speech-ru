@@ -260,6 +260,10 @@ All notable changes to this project are documented here. The format follows
   hostile EPUBs, ZIP limits and forged headers, and a source check that weights load
   safely (`tests/test_model_loading.py`); `scripts/audit.sh` runs pip-audit over the
   main and every plugin env lock (SPEC 4.20-M5).
+- Definition of Done review (SPEC 4.21-M5): the e2e runs check MP3 tags, the cover and
+  M4B chapters; `tests/test_zero_config_audio.py` renders a book per language with no
+  configuration; the ru and en packs are checked to use different components; README
+  section on voices and expression levels.
 
 ### Changed
 

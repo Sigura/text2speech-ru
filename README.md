@@ -78,6 +78,21 @@ or text to skip; one on its own line holds until `reset` (SPEC §6.4.1):
 <!-- t2a: reset pause=2000 -->
 ```
 
+**Voices and expression.** Each language pack picks its voices: Russian reads with
+Silero `xenia` (narration and dialogue), English with Kokoro `af_nicole` and
+`am_michael` for dialogue. On a GPU the expressive tier re-voices them with Chatterbox
+from the pack's reference clips. `text2audio voices` lists every voice; a `voice=`
+directive picks another. How much the reading follows the text is set by
+`[synthesis] expression`:
+
+| Level | What it does |
+|---|---|
+| `E0` | Neutral: dialogue stays in the narration; sentence, paragraph and chapter pauses only |
+| `E1` *(default)* | Structure: pause lengths by boundary (remark, stanza, quote, scene), dialogue voice |
+
+The `<!-- t2a: … -->` directives above work on both (they are level E3). E2, emotion
+inferred by a model, is not built.
+
 **Translate a book, then listen to it**
 
 ```bash

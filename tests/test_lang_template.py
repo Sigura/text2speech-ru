@@ -64,3 +64,15 @@ def test_generator_refuses_bad_input_and_overwrites(tmp_path: Path) -> None:
     (tmp_path / "c").mkdir()
     with pytest.raises(FileExistsError):
         generate("de", "Deutsch", "Latn", tmp_path / "c")
+
+
+def test_english_and_russian_differ_in_the_language_stages() -> None:
+    """§14: the English pack uses components of its own in normalization, stress/G2P
+    and QA ASR; none is shared with Russian."""
+    from text2audio.core.languages import profiles
+
+    packs = profiles()
+    ru, en = packs["ru"], packs["en"]
+    assert ru.normalizer and en.normalizer and ru.normalizer != en.normalizer
+    assert ru.g2p == "ruaccent" and en.g2p is None  # English phonemes: Kokoro's misaki
+    assert ru.qa.asr and en.qa.asr and ru.qa.asr != en.qa.asr

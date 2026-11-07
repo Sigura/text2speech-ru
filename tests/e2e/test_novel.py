@@ -104,6 +104,20 @@ def _excerpt(novel: Path, folder: Path, paragraphs: int) -> Path:
     return path
 
 
+def _probe(path: Path) -> dict[str, Any]:
+    out = subprocess.run(
+        [
+            *("ffprobe", "-v", "error", "-show_format", "-show_streams", "-show_chapters"),
+            *("-of", "json", str(path)),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    data: dict[str, Any] = json.loads(out)
+    return data
+
+
 def _run(
     limits: list[str],
     env: dict[str, str],
@@ -146,6 +160,12 @@ def _run(
     assert len(parts) >= chapters  # one MP3 per chapter (long ones may be split)
     assert all(m.with_suffix(".srt").is_file() for m in parts)
     assert (book / "report.md").is_file()
+    for part in parts:  # §14: tagged MP3s with the cover
+        info = _probe(part)
+        assert {"album", "title", "track"} <= set(info["format"]["tags"])
+        assert any(s["disposition"].get("attached_pic") == 1 for s in info["streams"])
+    [m4b] = book.glob("*.m4b")  # the default formats: mp3 + m4b, a chapter per file
+    assert len(_probe(m4b)["chapters"]) == len(parts)
     assert report["segments"]["total"] <= SEGMENTS
     assert report["segments"]["failed"] == 0
     qa = report["qa"]
