@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Document version | 4.21-M5 |
+| Document version | 5.0 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
 | Last updated | 2026-11-07 |
 | Primary language | Python 3.11+ |
@@ -90,6 +90,7 @@
 | 4.19-M5 | 2026-11-07 | **Offline bundle as built** (FR-16, §6.10): one plain `.tar` with the tracked repository, the chosen models, a uv cache for the worker environments those models need, the CPython builds and uv; `./install.sh --bundle` installs from it with uv offline. `doctor --lang/--tier` checks only the models installed for them. §6.12: cloning uses only the reference clips shipped in the language packs. |
 | 4.20-M5 | 2026-11-07 | Security (§6.12) as built: the PDF time limit (a child process, 5000 s); tests for hostile EPUBs, every ZIP limit, forged ZIP size headers and the input size; a source check of how weights are loaded. |
 | 4.21-M5 | 2026-11-07 | Definition of Done reviewed line by line (§14, §13.1): the reference corpus is the e2e excerpts; the e2e runs check tags, cover and M4B chapters; zero-config audio and the per-language components have tests. |
+| 5.0 | 2026-11-07 | **v1.0.0** tagged at the owner's word ("Tag it, all works"), with M5 done as in §13.1. Still open after the release: pip-audit in CI (advisories in 5 env locks), `install.sh` on a clean machine with network, the bundle on a second machine, and the one §14 line not met as written (one `core/` change for the English pack). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
