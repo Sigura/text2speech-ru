@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `--events` on `convert`, `synthesize`, `run`, `preview` and `translate`: JSON lines on
+  stdout with progress, stages, warnings, results and errors, for programs that drive
+  the CLI (SPEC 5.1).
+- `--deepseek-key` (or `T2A_DEEPSEEK_KEY`) on `translate`, `ru2en`, `en2ru`, `run`,
+  `synthesize` and `preview`: translation and Russian stress marks use the DeepSeek API
+  first, the offline models redo what fails or everything when the API fails; no key,
+  no network (ADR-0013, SPEC 5.2).
+- DeepSeek V4 models (`deepseek-chat` was retired): `deepseek-v4-pro` translates,
+  `deepseek-flash` marks stress, both without thinking (SPEC 5.3).
+
+### Changed
+
+- NLLB-200 3.3B runs on a GPU only: on CPU a book takes hours, and ru→en has Opus-MT
+  for that (SPEC 5.3).
+
 ## [1.0.0] - 2026-11-07
 
 ### Added

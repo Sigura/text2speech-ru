@@ -19,5 +19,6 @@ Every ADR also appears in the SPEC.md decision log (§13.1).
 | [0010](0010-plugin-worker-environments.md) | Plugin worker environments and the worker runtime | Accepted |
 | [0011](0011-book-translation-pipeline.md) | Book translation: an LLM by paragraph, checked, with a sentence-level fallback | Accepted |
 | [0012](0012-revoicing-recordings.md) | Re-voicing recordings: timed phrases, translated in context, placed at their time | Accepted |
+| [0013](0013-deepseek-api-opt-in.md) | DeepSeek API for translation and stress, opt-in by key | Accepted |
 
 New ADR: copy [template.md](template.md), take the next number, open a PR.

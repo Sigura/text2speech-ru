@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -119,3 +120,19 @@ def test_cli_matches_api_and_reports_failures(tmp_path: Path) -> None:
     assert bad.exit_code == ExitCode.INPUT
     two = runner.invoke(app, ["convert", str(FB2), str(QUIRKS), "--name", "x"])
     assert two.exit_code == ExitCode.USAGE
+
+
+def test_cli_events_are_json_lines(tmp_path: Path) -> None:
+    runner = CliRunner()
+    ok = runner.invoke(app, ["convert", str(FB2), "-o", str(tmp_path), "--events"])
+    assert ok.exit_code == ExitCode.OK, ok.output
+    [event] = [json.loads(line) for line in ok.stdout.splitlines()]
+    assert event["event"] == "converted"
+    assert event["folder"] == str(tmp_path / "kapitanskaya-dochka")
+    assert event["markdown"] == str(tmp_path / "kapitanskaya-dochka/kapitanskaya-dochka.md")
+    assert (event["format"], event["chapters"], event["status"]) == ("fb2", 2, "converted")
+    evil = FIXTURES / "evil/xxe.fb2"
+    bad = runner.invoke(app, ["convert", str(evil), "-o", str(tmp_path), "--events"])
+    assert bad.exit_code == ExitCode.INPUT
+    [error] = [json.loads(line) for line in bad.stdout.splitlines()]
+    assert error["event"] == "error" and error["input"] == str(evil) and error["message"]

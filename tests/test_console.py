@@ -4,6 +4,7 @@ interrupt hint."""
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 from typing import Any
 
@@ -76,3 +77,31 @@ def test_ctrl_c_explains_how_to_resume(tmp_path: Path, monkeypatch: pytest.Monke
     result = runner.invoke(app, ["synthesize", str(tmp_path)])
     assert result.exit_code == INTERRUPTED
     assert "run the same command again to resume" in result.output
+
+
+def test_events_go_to_stdout_as_json_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    out = io.StringIO()
+    progress = StageProgress(Console(file=out, width=200), events=True)
+    progress.book("Книга", Path("out/k"))
+    progress.detail("plan", lang="ru", tier="fast", backend="sine", voice=None)
+    progress("synthesize", 0, 2)
+    progress("synthesize", 2, 2)
+    progress.warn("слово")
+    progress.result("out/k: 1 file(s)")
+    progress.fail("✗ failed:", "no [voice]")
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [e["event"] for e in events] == [
+        "book",
+        "detail",
+        "progress",
+        "progress",
+        "stage",
+        "warning",
+        "error",
+    ]
+    assert events[0] == {"event": "book", "title": "Книга", "path": "out/k"}
+    assert events[1]["fields"]["backend"] == "sine"
+    assert events[3] == {"event": "progress", "stage": "synthesize", "done": 2, "total": 2}
+    assert events[4]["stage"] == "synthesize" and events[4]["seconds"] >= 0
+    assert events[6] == {"event": "error", "message": "no [voice]"}
+    assert "✗ failed: no [voice]" in out.getvalue()  # stderr lines stay, markup escaped
