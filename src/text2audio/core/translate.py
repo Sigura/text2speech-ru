@@ -37,6 +37,8 @@ from typing import Any, Literal
 
 from text2audio.core import resources as res
 from text2audio.core.contracts import Capabilities
+from text2audio.core.deepseek import PARALLEL as DEEPSEEK_PARALLEL
+from text2audio.core.deepseek import DeepSeek, DeepSeekError
 from text2audio.core.envs import EnvMissing, plugin_env
 from text2audio.core.languages import guess_language, profile
 from text2audio.core.plugins import discover
@@ -74,6 +76,7 @@ class Engine:
     name: str
     unit: Unit
     run: Translate
+    batch: int | None = None  # texts per call, default by unit (BATCH)
 
 
 EngineFactory = Callable[[], AbstractContextManager[Engine]]
@@ -303,7 +306,7 @@ def _translate_pieces(
     # book order (a heading next to a long paragraph) wastes most of the GPU time.
     todo = sorted((t for t in unique if not cache.has(engine.name, t)), key=len)
     stats.cached += len(unique) - len(todo)
-    batch = BATCH[engine.unit]
+    batch = engine.batch or BATCH[engine.unit]
     for start in range(0, len(todo), batch):
         cache.run(engine, todo[start : start + batch], stats)
         if progress:
@@ -424,6 +427,16 @@ def open_translator(
         worker.close()
 
 
+@contextmanager
+def open_deepseek(deepseek: DeepSeek, source: str, target: str) -> Iterator[Engine]:
+    """The DeepSeek API as a paragraph-unit `Engine`; requests run in parallel per batch."""
+
+    def run(texts: list[str]) -> list[str]:
+        return deepseek.translate(texts, source, target)
+
+    yield Engine(deepseek.translate_name, "paragraph", run, batch=4 * DEEPSEEK_PARALLEL)
+
+
 def _chain(source: str, target: str) -> list[Any]:
     """Discovered translators for the pair, in the source language's order of preference."""
     prof = profile(source)
@@ -493,8 +506,13 @@ def translate_file(
     target_lang: str | None,
     store: ModelStore,
     progress: Progress | None = None,
+    deepseek: DeepSeek | None = None,
 ) -> TranslateResult:
     """A Markdown file, or a book folder's `<book>.md`, into `target_lang`.
+
+    With `deepseek`, the API translates first and the local translator re-translates
+    the pieces that fail the checks; if the API fails, the whole text is translated
+    locally (ADR-0013).
 
     The source language comes from the argument, the book's metadata or the text's
     script; the target defaults to the first one the source language translates into.
@@ -518,19 +536,30 @@ def translate_file(
         raise TranslateError(f"no target language: {lang!r} translates into none; pass --to")
     if lang == target_lang:
         raise TranslateError(f"the text is already in {lang!r}")
-    if not _chain(lang, target_lang):
+    if not _chain(lang, target_lang) and deepseek is None:
         raise TranslateError(f"no {lang!r} → {target_lang!r} translator installed")
     output = output or source.with_name(f"{source.stem}.{target_lang}.md")
     if output.resolve() == source.resolve():
         raise TranslateError("the output would overwrite the input")
-    factories, lead, lead_slot, skipped = engine_chain(lang, target_lang, store)
+    offline: TranslateError | None = None
+    factories: list[EngineFactory] = []
+    skipped: list[str] = []
+    local_name = local_device = ""
+    try:
+        factories, lead, lead_slot, skipped = engine_chain(lang, target_lang, store)
+        local_name, local_device = lead.name, lead_slot.device
+    except TranslateError as exc:
+        if deepseek is None:
+            raise
+        offline = exc
     tgt_prof = profile(target_lang)
     cache_dir = work if work is not None else output.parent
     cache_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        result, stats = translate_markdown(
+
+    def run(engines: list[EngineFactory]) -> tuple[str, Stats]:
+        return translate_markdown(
             text,
-            factories,
+            engines,
             src_prof.abbreviations if src_prof else (),
             tgt_prof.abbreviations if tgt_prof else (),
             cache_dir / f".{output.stem}.translate.jsonl"
@@ -538,6 +567,25 @@ def translate_file(
             else cache_dir / f"translate-{target_lang}.jsonl",
             progress,
         )
+
+    try:
+        if deepseek is None:
+            result, stats = run(factories)
+            translator, device = local_name, local_device
+        else:
+
+            def remote() -> AbstractContextManager[Engine]:
+                return open_deepseek(deepseek, lang, target_lang)
+
+            try:
+                result, stats = run([remote, *factories[:1]])
+                translator, device = deepseek.translate_name, "api"
+            except DeepSeekError as exc:
+                if offline is not None:
+                    raise TranslateError(f"{exc}; {offline}") from exc
+                result, stats = run(factories)
+                translator, device = local_name, local_device
+                stats.warnings.insert(0, f"{exc}; translated offline by {local_name}")
     except EnvMissing as exc:
         raise TranslateError(str(exc)) from exc
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -545,4 +593,4 @@ def translate_file(
     partial.write_text(result, encoding="utf-8")
     partial.replace(output)
     stats.warnings[:0] = [f"skipped {why}" for why in skipped]
-    return TranslateResult(source, output, lang, target_lang, lead.name, lead_slot.device, stats)
+    return TranslateResult(source, output, lang, target_lang, translator, device, stats)

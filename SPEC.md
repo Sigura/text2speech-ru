@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 5.0 |
+| Document version | 5.3 |
 | Status | **M4 closed, M5 next** (open decisions in §13.1) |
-| Last updated | 2026-11-07 |
+| Last updated | 2026-11-08 |
 | Primary language | Python 3.11+ |
 | Usage / license | **Personal use only** — license is not a selection criterion (§13.1, ADR-0007) |
 
@@ -91,6 +91,9 @@
 | 4.20-M5 | 2026-11-07 | Security (§6.12) as built: the PDF time limit (a child process, 5000 s); tests for hostile EPUBs, every ZIP limit, forged ZIP size headers and the input size; a source check of how weights are loaded. |
 | 4.21-M5 | 2026-11-07 | Definition of Done reviewed line by line (§14, §13.1): the reference corpus is the e2e excerpts; the e2e runs check tags, cover and M4B chapters; zero-config audio and the per-language components have tests. |
 | 5.0 | 2026-11-07 | **v1.0.0** tagged at the owner's word ("Tag it, all works"), with M5 done as in §13.1. Still open after the release: pip-audit in CI (advisories in 5 env locks), `install.sh` on a clean machine with network, the bundle on a second machine, and the one §14 line not met as written (one `core/` change for the English pack). |
+| 5.1 | 2026-11-08 | `--events` on `convert`, `synthesize`, `run`, `preview` and `translate`: stdout carries JSON lines (progress, stages, warnings, results, errors) for programs that drive the CLI, such as the owner's Telegram bot (§6.11, §13.1). |
+| 5.2 | 2026-11-08 | **Decision:** DeepSeek API opt-in by key (`--deepseek-key` / `T2A_DEEPSEEK_KEY`): translation and Russian stress marks go to the API first, the offline models are the fallback; no key, no network (ADR-0013, §6.10). |
+| 5.3 | 2026-11-08 | DeepSeek V4 models (`deepseek-chat` was retired): `deepseek-v4-pro` translates, `deepseek-flash` marks stress, both without thinking; NLLB-200 3.3B runs on a GPU only (§6.11, ADR-0013). |
 
 The key words **MUST**, **SHOULD** and **MAY** are used as described in
 [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -1202,6 +1205,10 @@ hash, so a changed upstream file can never replace a pinned one.
 - **Local services** (ADR-0009): a plugin may talk HTTP to a process that text2audio
   started itself on the loopback interface (e.g. the SD WebUI for covers, §6.8.2). Any
   other host is an offline violation.
+- **DeepSeek API** (ADR-0013): the only exception, and only when a key is given with
+  `--deepseek-key` or `T2A_DEEPSEEK_KEY`. Translation and Russian stress marks then go
+  to api.deepseek.com first; the offline components redo what fails or all of it when
+  the API fails. Without a key the runtime stays offline.
 
 **Air-gapped install (FR-16)**
 
@@ -1241,7 +1248,7 @@ CLI built with [Typer](https://typer.tiangolo.com/):
 | `text2audio synthesize <book folder>` | Book folder → audio (incremental). |
 | `text2audio run <input>… [-o <output root>] [--name <folder>] [--overwrite]` | Convert + synthesize in one step (batch-capable). |
 | `text2audio preview <book folder> [--chapter N] [--seconds 30] [--tier] [--workers]` | Quick sample to audition voice and tier: the opening segments of the chapter (default: the first after the front matter) whose estimated length (14 characters/s) reaches `--seconds`, through normalize → stress → synthesize → polish, **no QA**, one MP3 in `<book>/_work/preview/chapter-NN.mp3`. Rendered segments go into the book's segment cache, so a later `run` reuses them. |
-| `text2audio translate <book folder or .md> [--to ru] [--from en] [-o <file>]` | The book's Markdown in another language, offline (ADR-0011): the source pack's `translators` for the target in order (default target: the pack's first), the first that can run here leading — `en→ru` Tower-Plus-9B on a GPU with 20 GB free, paragraph by paragraph, else Seed-X-PPO-7B (16 GB), else NLLB-200 3.3B by sentence; `ru→en` Seed-X, else NLLB, else Opus-MT (installed by default). Translators without their environment or files, or without a device, are skipped with a warning. Headings, quotes, poems, scene breaks, footnotes and `<!-- t2a: … -->` directives keep their place; a piece with an inner footnote or directive goes by sentence; emphasis is dropped. Each piece is checked (Latin abbreviations kept — redone with placeholders when lost —, no mixed-script word, length, sentence count) and a failed one is re-translated by sentence by the first sentence-unit translator that can run (NLLB). Cached per translator and text in the book's `_work/translate-<lang>.jsonl` (else `.<name>.translate.jsonl` next to the output), so runs resume. Default output `<name>.<lang>.md`. `en2ru` / `ru2en <file> [-o]` are the fixed-pair forms. Weights: `models pull --feature translate`. |
+| `text2audio translate <book folder or .md> [--to ru] [--from en] [-o <file>]` | The book's Markdown in another language, offline (ADR-0011): the source pack's `translators` for the target in order (default target: the pack's first), the first that can run here leading — `en→ru` Tower-Plus-9B on a GPU with 20 GB free, paragraph by paragraph, else Seed-X-PPO-7B (16 GB), else NLLB-200 3.3B by sentence (GPU only, 14 GB); `ru→en` Seed-X, else NLLB, else Opus-MT (installed by default, the only one on CPU). Translators without their environment or files, or without a device, are skipped with a warning. Headings, quotes, poems, scene breaks, footnotes and `<!-- t2a: … -->` directives keep their place; a piece with an inner footnote or directive goes by sentence; emphasis is dropped. Each piece is checked (Latin abbreviations kept — redone with placeholders when lost —, no mixed-script word, length, sentence count) and a failed one is re-translated by sentence by the first sentence-unit translator that can run (NLLB). Cached per translator and text in the book's `_work/translate-<lang>.jsonl` (else `.<name>.translate.jsonl` next to the output), so runs resume. Default output `<name>.<lang>.md`. `en2ru` / `ru2en <file> [-o]` are the fixed-pair forms. Weights: `models pull --feature translate`. |
 | `text2audio revoice <book, .md, audio or video> [--to ru] [--from en] [-o <file or root>]` | Re-voice in another language (ADR-0012). **Books and `.md`:** `translate`, then `run` on the translation (the translated Markdown plus its audiobook). **Audio** (mp3, m4a, ogg, opus, flac, wav) → the same format; **video** (mp4, mkv, mov, webm, avi) → the same container with its picture copied, every audio track replaced by the new one, and a `<name>.<lang>.srt` (also muxed where the container takes subtitles). Steps: the source pack's QA ASR transcribes with word times (Whisper `timed`: no VAD, punctuated prompt); words become phrases (sentence ends, 0.8 s pauses; a 1.5 s pause starts a paragraph); each paragraph is translated whole and its sentences go back to its phrases, phrase by phrase when the counts differ; the target pack's voice renders them in a work book folder `<name>.<lang>/`; on video each phrase starts at its original time, a clip longer than its slot is sped up at most 1.3×, and a phrase more than 1 s late is reported; on audio the original pauses are kept. Default output `<name>.<lang>.<ext>`. Transcript, translation and voice clips are cached in the work folder. |
 | `text2audio cover <book folder>… [--mode auto\|embedded-only\|generate\|typographic]` | Choose the cover again (§6.8.2) under each book's `[cover]` settings, `--mode` overriding the mode, without touching `<book>.md`: the embedded picture is read from the stored source. `synthesize` then re-encodes the audio files with it (their fingerprint includes the cover). |
 | `text2audio voices [--lang en]` | Voice roles per installed language pack (backend → voice id) and the voices each installed backend declares; cloning backends are listed as cloning a reference clip. A `voice=` directive accepts either (§6.4.1). |
@@ -1314,6 +1321,23 @@ terminal the running stage also has a live bar with rate, ETA, audio rendered an
 × realtime; without one only the stage lines are written. Result lines go to stdout.
 The core reports through the `Progress` callable `(stage, done, total)`; it may also
 have `detail(stage, **fields)` for the facts above.
+
+Events: with `--events`, `convert`, `synthesize`, `run`, `preview` and `translate`
+write to stdout one JSON object per line instead of result lines; stderr keeps the
+stage lines. Each object has an `event` key, paths are strings:
+
+| `event` | Fields |
+|---|---|
+| `book` | `title`, `path` — a book starts (`synthesize`, `run`, `preview`) |
+| `progress` | `stage`, `done`, `total` — every `Progress` call |
+| `detail` | `stage`, `fields` — every `detail` call (`plan`: `lang`, `tier`, `backend`, `voice`) |
+| `stage` | `stage`, `summary`, `seconds` — a ✓ line |
+| `warning` | `message` |
+| `converted` | `input`, `folder`, `markdown`, `format`, `chapters`, `segments`, `status`, `warnings` |
+| `synthesized` | `folder`, `files` (MP3 parts), `m4b`, `duration_ms`, `segments`, `rendered_now`, `failed`, `flagged`, `rtf`, `wall_s`, `report` |
+| `preview` | `path` |
+| `translated` | `source`, `output`, `source_lang`, `target_lang`, `translator`, `device`, `pieces`, `translated`, `cached`, `by`, `placeholders`, `warnings` |
+| `error` | `message` (and `input` for a book `convert` could not read) |
 
 ### 6.12 Security and Responsible Use
 
@@ -1647,6 +1671,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-11-07 | **No voice-cloning consent flag** (owner, option C of three: the flag as specified, a hash-only record, or neither). The tool is for personal use only (ADR-0007), so `--i-have-consent` is removed from FR-19 and §6.12. It was never implemented; M5 drops it. |
 | 2026-11-07 | **Offline bundle** (FR-16, owner: keep it in M5): a plain `.tar`, not `.tar.zst` (weights do not compress; no zstd in the 3.11 standard library). Packages travel as a uv cache filled by real syncs, so custom indexes (Kokoro's CPU torch) and wheels built from source are covered; the bundle ships its own uv and CPython. Only the environments of the plugins whose models are bundled go in: the first try with all nine downloaded 14 GB in 23 min and had three done (owner: "tests so long"). `doctor --lang/--tier`: before, `install.sh --lang ru` always ended with a failing doctor, since it checked the English models too. | Decided |
 | 2026-11-07 | **Definition of Done review** (§14, M5 step 3). Each line → its proof: install.sh on a clean machine — no automated test, the owner's manual check; bundle — `tests/test_bundle.py` + `scripts/test-bundle.sh`; golden readers — `test_readers_golden.py`; tagged MP3 with cover, M4B chapters, both tiers, ru and en — `tests/e2e` (slow; the tag, cover and chapter checks added now); network-disabled suite — CI `offline` job; QA ≤ 5 % — `tests/e2e` on the excerpts, which are now named the reference corpus; zero config — `test_zero_config_audio.py` (new); resume — `test_resume_kill.py`; book folders — `test_workspace_convert.py`; packs differ in normalization, stress/G2P and QA ASR — `test_lang_template.py` (new; English G2P is Kokoro's own misaki). Not met as written: "the English pack required no change to `core/`" — one was needed, the `quote` dialogue convention (`docs/adding-a-language.md`). | Decided |
+| 2026-11-07 | **Machine-readable progress** (owner: proxy text2audio to the Telegram bot with progress like its painting status): `--events` writes one JSON object per line to stdout from the same `StageProgress` that draws the terminal output, so a caller needs neither a terminal nor the Python API in its own environment. Stage lines stay on stderr; the exit codes are unchanged. | Decided |
 | 2026-10-26 | **M4B by default** (owner): every run writes `<book folder>.m4b` — the whole book, AAC-LC 64 kbps mono, one chapter per MP3 of the split plan, cover and tags — next to the MP3s; `[output] formats = ["mp3"]` turns it off. As built: one loudnorm pass over the whole book, FFmpeg's `ipod` muxer, narrator in the `composer` tag (`use_metadata_tags` drops the cover in FFmpeg 4.3); re-encoded only when its segments, chapters, tags or cover change. | Decided |
 | 2026-10-26 | **M2 benchmark winners** (metrics, `spikes/ru-bench/FINDINGS.md`): every system passes the intelligibility floor (GigaAM WER on 100 shared segments: Silero 0.024, hybrid 0.032, Qwen3-TTS 0.037, XTTS-v2 0.043, ESpeech 0.051). T0 stays Silero `xenia`: no challenger fits the 4-core budget (RTF 5.5–165). Owner's blind listening, 39 A/B pairs (hybrid preferred – other preferred – tie): vs Silero 6–3–1, vs XTTS-v2 6–3, vs ESpeech 6–4, vs Qwen3-TTS 5–5. **T1 default stays the hybrid** (Silero → Chatterbox VC, Chatterbox TTS for Latin spans). **ESpeech and XTTS-v2 are dropped** (XTTS-v2 also truncates Russian text over 182 characters). **Qwen3-TTS is an M3 candidate** for expressive and dialogue segments: it won dialogue, poem and numbers and lost homographs and Latin words. It would need stress marks, Latin routing and speed work (RTF 2.5 on a 4090). | Decided |
 | 2026-10-24 | Spike `ru-smoke`: Silero v5.6 `xenia` WER 0.00 on everything but digits, RTF 0.008 (GPU) / 0.08 (4 cores) → **fast-tier candidate**; QA ASR = GigaAM-v3 `rnnt`; normalization before Silero is mandatory; RUAccent wrapped by the pack (pinned files, no `load()` downloads). Details: `spikes/ru-smoke/FINDINGS.md`. | Decided — confirmed by the M2 benchmark and listening (`spikes/ru-bench/FINDINGS.md`) |
@@ -1678,6 +1703,7 @@ Commits](https://www.conventionalcommits.org/), and
 | 2026-10-24 | Yandex SpeechKit and Sber SaluteSpeech TTS are cloud-only and excluded (offline contract); Sber's open GigaAM is used for QA ASR. | Decided |
 | 2026-10-24 | Offline CI: `unshare -rn` + pytest-socket. Locally, AppArmor blocks unprivileged user namespaces, so `scripts/test-offline.sh` falls back to pytest-socket with a warning; CI enables namespaces and is strict. | Decided |
 | 2026-10-25 | CLI progress uses **rich** (already pulled in by typer) instead of tqdm: several stages, live notes and log-friendly output without a terminal from one library (FR-17). | Decided |
+| 2026-11-07 | **DeepSeek API, opt-in by key**: translation and Russian stress go to DeepSeek first, offline components as fallback; without a key nothing changes ([ADR-0013](docs/adr/0013-deepseek-api-opt-in.md)). | Decided |
 
 ---
 

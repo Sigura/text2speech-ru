@@ -51,6 +51,7 @@ from text2audio.core.contracts import (
     TierRoute,
     Transliterator,
 )
+from text2audio.core.deepseek import STRESS_LANGS, DeepSeek, DeepSeekError
 from text2audio.core.errors import SynthesisError
 from text2audio.core.journal import Journal
 from text2audio.core.languages import profile as language_profile
@@ -278,6 +279,7 @@ def prepare(
     progress: Progress | None = None,
     timings: Timings | None = None,
     select: Callable[[list[Segment]], list[Segment]] | None = None,
+    deepseek: DeepSeek | None = None,
 ) -> tuple[list[Segment], list[dict[str, str]], dict[str, Segment], list[dict[str, str]]]:
     """Segments with normalized, stressed text, route and hash; uncertain spans; the
     backend-rendered source of every segment on a polish route, by the segment's hash;
@@ -350,7 +352,7 @@ def prepare(
                 progress("normalize", i, len(segments))
     _detail(progress, "normalize", segments=len(segments), uncertain=len(uncertain))
     with timings.stage("stress"):
-        stressed = _stress(folder, plan, store, list(marked.values()), progress)
+        stressed = _stress(folder, plan, store, list(marked.values()), progress, deepseek)
     lock = load_lock()
     backend = plan.route.backend
     model = _model_id(backend, lock)
@@ -476,17 +478,72 @@ def _stress(
     store: ModelStore,
     texts: list[str],
     progress: Progress | None,
+    deepseek: DeepSeek | None = None,
 ) -> dict[str, str]:
-    """Stress-marked text per unmarked text, cached in `_work/stress.jsonl`."""
+    """Stress-marked text per unmarked text, cached in `_work/stress.jsonl`: by DeepSeek
+    when a key is given, by the pack's stress component for the rest."""
     if plan.g2p is None:
         return {}
+    plain = list(dict.fromkeys(strip_marks(t) for t in texts))
+    done: dict[str, str] = {}
+    if deepseek is not None and plan.lang in STRESS_LANGS:
+        done = _stress_remote(folder, deepseek, plain, progress)
+    rest = [t for t in plain if t not in done]
+    return {**_stress_local(folder, plan, store, rest, progress), **done}
+
+
+def _stress_remote(
+    folder: BookFolder, deepseek: DeepSeek, plain: list[str], progress: Progress | None
+) -> dict[str, str]:
+    """DeepSeek's marks for the texts it marked without changing them; a rejected answer
+    is journaled as `null`, so it is not asked again and the component marks that text."""
+    journal = Journal(folder.work / "stress.jsonl", key="key")
+
+    def key(text: str) -> str:
+        return hashlib.sha256(f"{deepseek.stress_name}\0{text}".encode()).hexdigest()
+
+    todo = [t for t in plain if key(t) not in journal]
+    _detail(
+        progress,
+        "stress",
+        texts=len(plain),
+        cached=len(plain) - len(todo),
+        component=deepseek.stress_name,
+    )
+    if todo and progress:
+        progress("stress", 0, len(todo))
+    try:
+        for start in range(0, len(todo), STRESS_BATCH):
+            batch = todo[start : start + STRESS_BATCH]
+            for src, dst in zip(batch, deepseek.stress(batch), strict=True):
+                journal.add({"key": key(src), "text": dst})
+            if progress:
+                progress("stress", start + len(batch), len(todo))
+    except DeepSeekError as exc:
+        _detail(progress, "stress", deepseek_error=str(exc))
+    out = {}
+    for t in plain:
+        entry = journal.get(key(t))
+        if entry is not None and entry["text"] is not None:
+            out[t] = str(entry["text"])
+    _detail(progress, "stress", deepseek_marked=len(out), fallback=len(plain) - len(out))
+    return out
+
+
+def _stress_local(
+    folder: BookFolder,
+    plan: Plan,
+    store: ModelStore,
+    plain: list[str],
+    progress: Progress | None,
+) -> dict[str, str]:
+    assert plan.g2p is not None
     name = plan.g2p.name
     journal = Journal(folder.work / "stress.jsonl", key="key")
 
     def key(text: str) -> str:
         return hashlib.sha256(f"{name}\0{text}".encode()).hexdigest()
 
-    plain = list(dict.fromkeys(strip_marks(t) for t in texts))
     todo = [t for t in plain if key(t) not in journal]
     _detail(progress, "stress", texts=len(plain), cached=len(plain) - len(todo), component=name)
     if todo:
@@ -1177,6 +1234,7 @@ def synthesize(
     tier: Tier | None = None,
     max_workers: int | None = None,
     progress: Progress | None = None,
+    deepseek: DeepSeek | None = None,
 ) -> SynthesisReport:
     folder = BookFolder(path)
     if not folder.markdown.is_file():
@@ -1201,7 +1259,7 @@ def synthesize(
         notes=plan.notes,
     )
     segments, uncertain, sources, directive_warnings = prepare(
-        folder, plan, config, store, progress, timings
+        folder, plan, config, store, progress, timings, deepseek=deepseek
     )
     write_manifest(folder.work / "segments.jsonl", segments)
     journal = Journal(folder.work / "render.jsonl")
@@ -1379,6 +1437,7 @@ def render_selection(
     tier: Tier | None = None,
     max_workers: int | None = None,
     progress: Progress | None = None,
+    deepseek: DeepSeek | None = None,
 ) -> list[Segment]:
     """Render the segments `select` picks through the stages up to polish, no QA, into
     the book's segment cache (`preview`, listening tests)."""
@@ -1387,7 +1446,9 @@ def render_selection(
         raise SynthesisError(f"{path}: not a book folder (no {folder.markdown.name})")
     store = store or ModelStore()
     plan = make_plan(folder, config, tier)
-    segments, _, sources, _ = prepare(folder, plan, config, store, progress, select=select)
+    segments, _, sources, _ = prepare(
+        folder, plan, config, store, progress, select=select, deepseek=deepseek
+    )
     if not segments:
         return []
     journal = Journal(folder.work / "render.jsonl")
@@ -1471,6 +1532,7 @@ def preview(
     tier: Tier | None = None,
     max_workers: int | None = None,
     progress: Progress | None = None,
+    deepseek: DeepSeek | None = None,
 ) -> Path:
     """A short sample of a chapter (§6.11): the pipeline up to polish, no QA, one MP3 in
     `_work/preview/`. Rendered segments go into the book's cache, so `run` reuses them."""
@@ -1482,6 +1544,7 @@ def preview(
         tier=tier,
         max_workers=max_workers,
         progress=progress,
+        deepseek=deepseek,
     )
     if not segments:
         raise SynthesisError(f"chapter {chapter} has no text")

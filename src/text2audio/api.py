@@ -13,6 +13,7 @@ from text2audio.core.contracts import Capabilities, ModelAsset, Tier
 from text2audio.core.convert import ConvertResult, CoverResult
 from text2audio.core.convert import convert as _convert
 from text2audio.core.convert import remake_covers as _remake_covers
+from text2audio.core.deepseek import DeepSeek
 from text2audio.core.doctor import DoctorReport, run_doctor
 from text2audio.core.effective import View, Voices, effective_config
 from text2audio.core.effective import voices as _voices
@@ -98,6 +99,7 @@ def translate(
     target_lang: str | None = None,
     store: Path | None = None,
     progress: Progress | None = None,
+    deepseek_key: str | None = None,
 ) -> TranslateResult:
     """A Markdown file or a book folder's `<book>.md` into another language, offline;
     the Markdown structure is kept (default output `<name>.<target>.md`)."""
@@ -108,6 +110,7 @@ def translate(
         target_lang=target_lang,
         store=ModelStore(store),
         progress=progress,
+        deepseek=DeepSeek(deepseek_key) if deepseek_key else None,
     )
 
 
@@ -227,6 +230,7 @@ def synthesize(
     max_workers: int | None = None,
     store: Path | None = None,
     progress: Progress | None = None,
+    deepseek_key: str | None = None,
 ) -> SynthesisReport:
     """Book folder → audio; only segments whose text or settings changed are rendered."""
     config = config or load_config(_book_config_files(folder))
@@ -237,6 +241,7 @@ def synthesize(
         tier=tier,
         max_workers=max_workers,
         progress=progress,
+        deepseek=DeepSeek(deepseek_key) if deepseek_key else None,
     )
 
 
@@ -250,6 +255,7 @@ def preview(
     tier: Tier | None = None,
     max_workers: int | None = None,
     progress: Progress | None = None,
+    deepseek_key: str | None = None,
 ) -> Path:
     """A short MP3 sample of a chapter in `<book>/_work/preview/` (§6.11)."""
     config = config or load_config(_book_config_files(folder))
@@ -262,6 +268,7 @@ def preview(
         tier=tier,
         max_workers=max_workers,
         progress=progress,
+        deepseek=DeepSeek(deepseek_key) if deepseek_key else None,
     )
 
 

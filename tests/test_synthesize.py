@@ -433,6 +433,38 @@ def test_preview_cli(book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert bad.exit_code == 2, bad.output
 
 
+def test_synthesize_cli_events(book: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer.testing import CliRunner
+
+    from text2audio.cli import app
+
+    (book / "_work" / "text2audio.toml").write_text(
+        '[synthesis]\ntier = "fast"\n[lang.ru]\ng2p = "backend"\n'
+        '[lang.ru.backend]\nfast = "sine"\n',
+        "utf-8",
+    )
+    monkeypatch.setenv("T2A_MODEL_HOME", str(tmp_path / "store"))
+    result = CliRunner().invoke(app, ["synthesize", str(book), "--qa", "off", "--events"])
+    assert result.exit_code == 0, result.output
+    events = [json.loads(line) for line in result.stdout.splitlines()]  # nothing but JSON lines
+    kinds = [e["event"] for e in events]
+    assert kinds[0] == "book"
+    assert {"detail", "progress", "stage"} <= set(kinds)
+    plan = next(e for e in events if e["event"] == "detail" and e["stage"] == "plan")
+    assert plan["fields"]["backend"] == "sine"
+    synth = [e for e in events if e["event"] == "progress" and e["stage"] == "synthesize"]
+    assert synth[-1]["done"] == synth[-1]["total"] > 0
+    done = events[-1]
+    assert done["event"] == "synthesized"
+    assert done["files"] and all(Path(f).is_file() for f in done["files"])
+    assert done["folder"] == str(book) and done["segments"] > 0 and done["flagged"] == 0
+
+    bad = CliRunner().invoke(app, ["preview", str(book), "--chapter", "99", "--events"])
+    assert bad.exit_code == 2
+    error = json.loads(bad.stdout.splitlines()[-1])
+    assert error["event"] == "error" and "chapter 99" in error["message"]
+
+
 def test_segment_hash_covers_voice_role_and_emotion() -> None:
     seg = Segment(id="s", text="Привет.", lang="ru", backend="sine", route="sine")
     plain = {"v": HASH_VERSION, "text": "Привет.", "voice": "x", "route": "sine"}

@@ -59,7 +59,5 @@ class Nllb(_HfTranslator):
     component = "mt:nllb-3.3b"
     kind = "nllb"
     unit = "sentence"
-    # 12.8 GB peak in bf16 on a GPU; fp32 on CPU.
-    capabilities = Capabilities(
-        languages=("en", "ru"), devices=("cpu", "cuda"), vram_mb=13500, ram_mb=16000, threads=8
-    )
+    # 12.8 GB peak in bf16. GPU only: on CPU a book takes hours, and ru→en has Opus-MT for that.
+    capabilities = Capabilities(languages=("en", "ru"), devices=("cuda",), vram_mb=13500)

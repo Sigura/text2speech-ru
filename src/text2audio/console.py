@@ -4,10 +4,12 @@ Layout, per book: a header, the plan (language, tier, backend, voice), then one 
 per finished stage with its numbers and time, and a live bar for the running stage
 (count, rate, elapsed, ETA). Progress goes to stderr so stdout keeps only results;
 without a terminal there are no bars, just the stage lines, so logs stay readable.
+With `--events`, stdout carries JSON lines instead of result lines (§6.11).
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from typing import Any
@@ -50,6 +52,11 @@ STARTING = {
 }
 
 
+def emit(event: str, **fields: Any) -> None:
+    """One `--events` line on stdout."""
+    print(json.dumps({"event": event, **fields}, ensure_ascii=False, default=str), flush=True)
+
+
 def plural(n: int, word: str) -> str:
     return f"{n} {word}{'s' * (n != 1)}"
 
@@ -78,8 +85,9 @@ class _Eta(ProgressColumn):
 class StageProgress:
     """A `Progress` callable for `api.synthesize` (see `core.synthesize.Progress`)."""
 
-    def __init__(self, console: Console | None = None) -> None:
+    def __init__(self, console: Console | None = None, events: bool = False) -> None:
         self.console = console or Console(stderr=True, highlight=False)
+        self.events = events
         self.live = self.console.is_terminal and not self.console.is_dumb_terminal
         self.bars = Progress(
             SpinnerColumn(),
@@ -112,8 +120,18 @@ class StageProgress:
         """A line above the bars (rich markup)."""
         self.console.print(message, soft_wrap=True)  # never break paths or errors
 
+    def event(self, event: str, **fields: Any) -> None:
+        if self.events:
+            emit(event, **fields)
+
+    def fail(self, label: str, message: str, indent: str = "  ") -> None:
+        self.print(f"{indent}[red]{label}[/] {escape(message)}")
+        self.event("error", message=message)
+
     def result(self, line: str) -> None:
         """A result line for stdout; on a shared terminal it goes above the bars."""
+        if self.events:
+            return
         if self.live and sys.stdout.isatty():
             self.console.print(escape(line), soft_wrap=True)
         else:
@@ -124,21 +142,25 @@ class StageProgress:
         self.books += 1
         self.facts.clear()
         self.last.clear()
+        self.event("book", title=title, path=path)
         prefix = f"[dim][{index}/{count}][/] " if count > 1 else ""
         self.print(f"{gap}{prefix}[bold]{escape(title)}[/]  [dim]{escape(str(path))}[/]")
 
     def stage(self, stage: str, summary: str, seconds: float | None = None) -> None:
         """A finished stage: ✓ label, its numbers and the time it took."""
         label = LABELS.get(stage, stage)
+        self.event("stage", stage=stage, summary=summary, seconds=seconds)
         took = f"  [dim]{duration(seconds)}[/]" if seconds is not None else ""
         self.print(f"  [green]✓[/] {label:<{WIDTH}}  {summary}{took}")
 
     def warn(self, message: str) -> None:
+        self.event("warning", message=message)
         self.print(f"  [yellow]![/] {escape(message)}")
 
     # ------------------------------------------------------------------ events
 
     def __call__(self, stage: str, done: int, total: int) -> None:
+        self.event("progress", stage=stage, done=done, total=total)
         self.last[stage] = done
         if stage not in self.tasks:
             self.started[stage] = time.monotonic()
@@ -152,12 +174,15 @@ class StageProgress:
             self._finish(stage)
 
     def detail(self, stage: str, **fields: Any) -> None:
+        self.event("detail", stage=stage, fields=fields)
         facts = self.facts.setdefault(stage, {})
         facts.update(fields)
         if stage == "plan":
             self._plan(facts)
         elif "failed" in fields:
             self.warn(f"segment {fields['failed']} failed: {fields['error']}")
+        elif stage == "stress" and "deepseek_error" in fields:
+            self.warn(f"{fields['deepseek_error']}; stress by the offline model")
         elif stage == "stress" and "cached" in fields and fields["cached"] == fields["texts"]:
             self.stage(stage, f"{fields['texts']} texts, all cached")
         elif stage == "synthesize" and fields.get("pending") == 0:
